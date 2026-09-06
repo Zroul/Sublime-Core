@@ -1,0 +1,10 @@
+{
+  "name": "sublime-core",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Private AI-powered website builder",
+  "type": "module",
+  "scripts": {
+    "start": "node app/backend/index.js"
+  }
+}

@@ -1,0 +1,1 @@
+console.log("Sublime Core is online.");
