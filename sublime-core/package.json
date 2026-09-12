@@ -10,6 +10,7 @@
     "nova:fake": "tsx core/nova/run-fake-test.ts",
     "nova:media": "tsx core/nova/run-media-test.ts",
     "nova:cli": "tsx core/nova/cli.ts",
+    "nova:full": "tsx core/nova/run-full-local-test.ts",
     "nova:typecheck": "tsc --noEmit"
   },
   "devDependencies": {
