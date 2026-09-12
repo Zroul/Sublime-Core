@@ -56,7 +56,7 @@ export class NovaOrchestrator {
   }
 
   async run(job: NovaJob): Promise<NovaJob> {
-    let current: NovaJob = { ...job, status: "running" };
+    let current: NovaJob = { ...job, status: "running", error: undefined };
     await this.writeJson(current.outputDir, "job.json", current);
 
     try {
@@ -64,7 +64,7 @@ export class NovaOrchestrator {
 
       for (let index = startIndex; index < pipeline.length; index += 1) {
         const stage = pipeline[index];
-        current = { ...current, stage };
+        current = { ...current, stage, failedFromStage: undefined };
         await this.writeJson(current.outputDir, "job.json", current);
 
         const result = await this.runStage(current, stage);
@@ -80,14 +80,17 @@ export class NovaOrchestrator {
         stage: "ready_to_review",
         status: "completed",
         error: undefined,
+        failedFromStage: undefined,
       };
       await this.writeJson(current.outputDir, "job.json", current);
       return current;
     } catch (error) {
+      const failedStage = current.stage === "failed" ? undefined : current.stage;
       current = {
         ...current,
         stage: "failed",
         status: "failed",
+        failedFromStage: failedStage,
         error: error instanceof Error ? error.message : String(error),
       };
       await this.writeJson(current.outputDir, "job.json", current);
@@ -100,7 +103,8 @@ export class NovaOrchestrator {
       return 0;
     }
 
-    const failedStageIndex = pipeline.indexOf(job.stage);
+    const resumeStage = job.failedFromStage ?? job.stage;
+    const failedStageIndex = pipeline.indexOf(resumeStage);
     return failedStageIndex >= 0 ? failedStageIndex : 0;
   }
 
@@ -218,12 +222,18 @@ export class NovaOrchestrator {
   }
 }
 
-function extractDecision(output: string): "PASS" | "NEEDS_REVIEW" | "FAIL" | null {
-  const normalized = output.toUpperCase();
+function extractDecision(
+  output: string,
+): "PASS" | "NEEDS_REVIEW" | "FAIL" | null {
+  const explicit = output.match(/(?:^|\n)\s*(?:decision|result)\s*:\s*(PASS|NEEDS_REVIEW|FAIL)\b/i);
+  if (explicit) {
+    return explicit[1].toUpperCase() as "PASS" | "NEEDS_REVIEW" | "FAIL";
+  }
 
-  if (/\bPASS\b/.test(normalized)) return "PASS";
+  const normalized = output.toUpperCase();
   if (/\bNEEDS_REVIEW\b/.test(normalized)) return "NEEDS_REVIEW";
   if (/\bFAIL\b/.test(normalized)) return "FAIL";
+  if (/\bPASS\b/.test(normalized)) return "PASS";
 
   return null;
 }
