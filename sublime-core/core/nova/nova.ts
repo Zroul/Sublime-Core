@@ -1,10 +1,12 @@
 import { randomUUID } from "node:crypto";
 import { promises as fs } from "node:fs";
 import path from "node:path";
+
 import type { LocalBrain, NovaJob, NovaStage, NovaStageResult } from "./types.js";
 import { NOVA_SYSTEM_PROMPT, buildStagePrompt } from "./prompt.js";
 import { STAGE_CONTRACTS } from "./stage-contracts.js";
 import { parseBrainOutput } from "./structured.js";
+import { parseQualityReport } from "./quality.js";
 import { createManifest, recordArtifact, recordManifestError, updateManifest } from "./manifest.js";
 import type { NovaAbilities } from "./abilities/types.js";
 import { createNovaAbilities } from "./abilities/registry.js";
@@ -14,13 +16,21 @@ import { readControlState } from "./job-state.js";
 
 const NOVA_WORKSPACE = path.resolve("workspace", "nova");
 const MAX_CONTEXT_CHARS = 24_000;
-const pipeline: NovaStage[] = ["trend_scout", "research", "rank", "script", "voice", "visuals", "video_build", "captions", "quality_check", "ready_to_review"];
 
-export interface NovaOrchestratorOptions { abilities?: NovaAbilities; media?: MediaAbilities; }
+const pipeline: NovaStage[] = [
+  "trend_scout", "research", "rank", "script", "voice", "visuals",
+  "video_build", "captions", "quality_check", "ready_to_review",
+];
+
+export interface NovaOrchestratorOptions {
+  abilities?: NovaAbilities;
+  media?: MediaAbilities;
+}
 
 export class NovaOrchestrator {
   private readonly abilities: NovaAbilities;
   private readonly media: MediaAbilities;
+
   constructor(private readonly brain: LocalBrain, options: NovaOrchestratorOptions = {}) {
     this.abilities = options.abilities ?? createNovaAbilities();
     this.media = options.media ?? {};
@@ -29,12 +39,21 @@ export class NovaOrchestrator {
   async createJob(topic: string): Promise<NovaJob> {
     const cleanTopic = topic.trim();
     if (!cleanTopic) throw new Error("NOVA needs a topic.");
+
     const id = randomUUID();
     const outputDir = path.join(NOVA_WORKSPACE, id);
     await fs.mkdir(outputDir, { recursive: true });
-    const job: NovaJob = { id, topic: cleanTopic, createdAt: new Date().toISOString(), stage: "trend_scout", outputDir, status: "queued" };
+
+    const job: NovaJob = {
+      id, topic: cleanTopic, createdAt: new Date().toISOString(),
+      stage: "trend_scout", outputDir, status: "queued",
+    };
+
     await this.writeJson(outputDir, "job.json", job);
-    await createManifest(outputDir, { jobId: id, topic: cleanTopic, createdAt: job.createdAt, currentStage: job.stage, status: job.status });
+    await createManifest(outputDir, {
+      jobId: id, topic: cleanTopic, createdAt: job.createdAt,
+      currentStage: job.stage, status: job.status,
+    });
     return job;
   }
 
@@ -42,6 +61,7 @@ export class NovaOrchestrator {
     let current: NovaJob = { ...job, status: "running", error: undefined };
     await this.writeJson(current.outputDir, "job.json", current);
     await updateManifest(current.outputDir, { currentStage: current.stage, status: current.status });
+
     try {
       const startIndex = this.getResumeIndex(current);
       for (let index = startIndex; index < pipeline.length; index += 1) {
@@ -50,6 +70,7 @@ export class NovaOrchestrator {
         current = { ...current, stage, failedFromStage: undefined };
         await this.writeJson(current.outputDir, "job.json", current);
         await updateManifest(current.outputDir, { currentStage: stage, status: "running" });
+
         const result = await this.runStage(current, stage);
         await this.throwIfStopRequested(current);
         const artifactFile = `${stage}.json`;
@@ -57,6 +78,7 @@ export class NovaOrchestrator {
         await recordArtifact(current.outputDir, { stage, file: artifactFile, createdAt: new Date().toISOString() });
         if (!result.ok) throw new Error(`${stage} failed: ${result.summary}`);
       }
+
       current = { ...current, stage: "ready_to_review", status: "completed", error: undefined, failedFromStage: undefined };
       await this.writeJson(current.outputDir, "job.json", current);
       await updateManifest(current.outputDir, { currentStage: "ready_to_review", status: "completed" });
@@ -81,25 +103,65 @@ export class NovaOrchestrator {
 
   private async runStage(job: NovaJob, stage: NovaStage): Promise<NovaStageResult> {
     await this.throwIfStopRequested(job);
+
     if (stage === "ready_to_review") {
       const quality = await this.readStageResult(job.outputDir, "quality_check");
       const output = quality?.data?.output;
-      if (typeof output !== "string" || output.trim().length === 0) return { stage, ok: false, summary: "Quality check produced no usable result." };
+      const parsedQuality = quality?.data?.parsed;
+      const report = parseQualityReport(parsedQuality);
+
+      if (report) {
+        if (report.decision !== "PASS") {
+          return { stage, ok: false, summary: `Quality check decision was ${report.decision}.`, data: { qualityCheck: output, report } };
+        }
+        return { stage, ok: true, summary: "Strict quality report passed. Job is ready for human review.", data: { qualityCheck: output, report } };
+      }
+
+      if (typeof output !== "string" || output.trim().length === 0) {
+        return { stage, ok: false, summary: "Quality check produced no usable result." };
+      }
+
       const decision = extractDecision(output);
-      if (decision !== "PASS") return { stage, ok: false, summary: `Quality check decision was ${decision ?? "unresolved"}.`, data: { qualityCheck: output, decision } };
+      if (decision !== "PASS") {
+        return { stage, ok: false, summary: `Quality check decision was ${decision ?? "unresolved"}.`, data: { qualityCheck: output, decision } };
+      }
       return { stage, ok: true, summary: "Quality check passed. Job is ready for human review.", data: { qualityCheck: output, decision: "PASS" } };
     }
+
     if (stage === "failed") return { stage, ok: false, summary: "Pipeline entered the failure state." };
+
     const context = await this.buildContext(job.outputDir, stage);
-    const output = await this.brain.complete({ system: NOVA_SYSTEM_PROMPT, prompt: buildStagePrompt(stage, job.topic, context) });
+    const prompt = buildStagePrompt(stage, job.topic, context);
+    const output = await this.brain.complete({ system: NOVA_SYSTEM_PROMPT, prompt });
     await this.throwIfStopRequested(job);
     const parsed = parseBrainOutput(output);
     const cleanOutput = parsed.raw;
+
     if (stage === "research") {
-      const research = await collectResearch(job.topic, this.abilities, { jobId: job.id, topic: job.topic, outputDir: job.outputDir });
-      return { stage, ok: cleanOutput.length > 0, summary: cleanOutput.length > 0 ? "Research reasoning completed and tool evidence collected." : "Brain returned no research reasoning.", data: { output: cleanOutput, format: parsed.format, ...(parsed.format === "json" ? { parsed: parsed.parsed } : {}), toolResearch: { ...research, mediaCapabilities: Object.keys(this.media).filter(key => typeof this.media[key as keyof MediaAbilities] === "function") } } };
+      const research = await collectResearch(job.topic, this.abilities, {
+        jobId: job.id, topic: job.topic, outputDir: job.outputDir,
+      });
+      return {
+        stage, ok: cleanOutput.length > 0,
+        summary: cleanOutput.length > 0 ? "Research reasoning completed and tool evidence collected." : "Brain returned no research reasoning.",
+        data: {
+          output: cleanOutput, format: parsed.format,
+          ...(parsed.format === "json" ? { parsed: parsed.parsed } : {}),
+          toolResearch: {
+            ...research,
+            mediaCapabilities: Object.keys(this.media).filter((key) => typeof this.media[key as keyof MediaAbilities] === "function"),
+          },
+        },
+      };
     }
-    return { stage, ok: cleanOutput.length > 0, summary: cleanOutput.length > 0 ? "Stage completed." : "Brain returned no output.", data: parsed.format === "json" ? { output: cleanOutput, parsed: parsed.parsed, format: parsed.format } : { output: cleanOutput, format: parsed.format } };
+
+    return {
+      stage, ok: cleanOutput.length > 0,
+      summary: cleanOutput.length > 0 ? "Stage completed." : "Brain returned no output.",
+      data: parsed.format === "json"
+        ? { output: cleanOutput, parsed: parsed.parsed, format: parsed.format }
+        : { output: cleanOutput, format: parsed.format },
+    };
   }
 
   private async throwIfStopRequested(job: NovaJob): Promise<void> {
@@ -111,16 +173,25 @@ export class NovaOrchestrator {
     const contract = STAGE_CONTRACTS[stage];
     const chunks: string[] = [];
     for (const file of contract.inputFiles) {
-      try { chunks.push(`--- ${file} ---\n${await fs.readFile(path.join(directory, file), "utf8")}`); }
-      catch { chunks.push(`--- ${file} ---\n[MISSING INPUT]`); }
+      try {
+        const raw = await fs.readFile(path.join(directory, file), "utf8");
+        chunks.push(`--- ${file} ---\n${raw}`);
+      } catch {
+        chunks.push(`--- ${file} ---\n[MISSING INPUT]`);
+      }
     }
     const context = chunks.join("\n\n");
-    return context.length <= MAX_CONTEXT_CHARS ? context || "No previous stage output is required for this stage." : `${context.slice(0, MAX_CONTEXT_CHARS)}\n\n[Context truncated by NOVA.]`;
+    if (context.length <= MAX_CONTEXT_CHARS) return context || "No previous stage output is required for this stage.";
+    return `${context.slice(0, MAX_CONTEXT_CHARS)}\n\n[Context truncated by NOVA.]`;
   }
 
   private async readStageResult(directory: string, stage: NovaStage): Promise<NovaStageResult | null> {
-    try { return JSON.parse(await fs.readFile(path.join(directory, `${stage}.json`), "utf8")) as NovaStageResult; }
-    catch { return null; }
+    try {
+      const raw = await fs.readFile(path.join(directory, `${stage}.json`), "utf8");
+      return JSON.parse(raw) as NovaStageResult;
+    } catch {
+      return null;
+    }
   }
 
   private async writeJson(directory: string, filename: string, value: unknown): Promise<void> {
