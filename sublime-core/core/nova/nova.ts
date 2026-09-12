@@ -11,6 +11,7 @@ import type {
 import { NOVA_SYSTEM_PROMPT, buildStagePrompt } from "./prompt.js";
 
 const NOVA_WORKSPACE = path.resolve("workspace", "nova");
+const MAX_CONTEXT_CHARS = 24_000;
 
 const pipeline: NovaStage[] = [
   "trend_scout",
@@ -63,11 +64,7 @@ export class NovaOrchestrator {
         await this.writeJson(current.outputDir, "job.json", current);
 
         const result = await this.runStage(current, stage);
-        await this.writeJson(
-          current.outputDir,
-          `${stage}.json`,
-          result,
-        );
+        await this.writeJson(current.outputDir, `${stage}.json`, result);
 
         if (!result.ok) {
           throw new Error(`${stage} failed: ${result.summary}`);
@@ -97,20 +94,36 @@ export class NovaOrchestrator {
     job: NovaJob,
     stage: NovaStage,
   ): Promise<NovaStageResult> {
-    if (stage === "ready_to_review" || stage === "failed") {
+    if (stage === "ready_to_review") {
+      const quality = await this.readStageResult(job.outputDir, "quality_check");
+      const output = quality?.data?.output;
+
+      if (typeof output !== "string" || output.trim().length === 0) {
+        return {
+          stage,
+          ok: false,
+          summary: "Quality check produced no usable result.",
+        };
+      }
+
       return {
         stage,
         ok: true,
-        summary: "Pipeline reached its review checkpoint.",
+        summary: "Quality check exists. Job is ready for human review.",
+        data: { qualityCheck: output },
       };
     }
 
-    const previousContext = await this.readPreviousStageOutputs(
-      job.outputDir,
-      stage,
-    );
+    if (stage === "failed") {
+      return {
+        stage,
+        ok: false,
+        summary: "Pipeline entered the failure state.",
+      };
+    }
 
-    const prompt = buildStagePrompt(stage, job.topic, previousContext);
+    const context = await this.buildContext(job.outputDir, stage);
+    const prompt = buildStagePrompt(stage, job.topic, context);
     const output = await this.brain.complete({
       system: NOVA_SYSTEM_PROMPT,
       prompt,
@@ -121,42 +134,68 @@ export class NovaOrchestrator {
     return {
       stage,
       ok: cleanOutput.length > 0,
-      summary: cleanOutput.length > 0 ? "Stage completed." : "Brain returned no output.",
+      summary:
+        cleanOutput.length > 0
+          ? "Stage completed."
+          : "Brain returned no output.",
       data: { output: cleanOutput },
     };
   }
 
-  private async readPreviousStageOutputs(
+  private async buildContext(
     directory: string,
-    currentStage: NovaStage,
+    stage: NovaStage,
   ): Promise<string> {
-    const currentIndex = pipeline.indexOf(currentStage);
-    const previousStages = pipeline.slice(0, currentIndex);
-
-    if (previousStages.length === 0) {
-      return "";
-    }
-
+    const files = await this.listStageFiles(directory, stage);
     const chunks: string[] = [];
 
-    for (const stage of previousStages) {
+    for (const file of files) {
       try {
-        const file = await fs.readFile(
-          path.join(directory, `${stage}.json`),
-          "utf8",
-        );
-        const parsed = JSON.parse(file) as NovaStageResult;
-        const output = parsed.data?.output;
-
-        if (typeof output === "string" && output.trim()) {
-          chunks.push(`--- ${stage} ---\n${output.trim()}`);
-        }
+        const raw = await fs.readFile(path.join(directory, file), "utf8");
+        chunks.push(`--- ${file} ---\n${raw}`);
       } catch {
-        // A missing previous result should not crash the whole pipeline.
+        // A missing optional context file should not crash the whole job.
       }
     }
 
-    return chunks.join("\n\n");
+    const context = chunks.join("\n\n");
+    if (context.length <= MAX_CONTEXT_CHARS) {
+      return context || "No previous stage output is available.";
+    }
+
+    return `${context.slice(0, MAX_CONTEXT_CHARS)}\n\n[Context truncated by NOVA.]`;
+  }
+
+  private async listStageFiles(
+    directory: string,
+    currentStage: NovaStage,
+  ): Promise<string[]> {
+    const all = await fs.readdir(directory);
+    const stageIndex = pipeline.indexOf(currentStage);
+
+    return all
+      .filter((file) => file.endsWith(".json") && file !== "job.json")
+      .filter((file) => {
+        const name = file.slice(0, -5) as NovaStage;
+        const index = pipeline.indexOf(name);
+        return index >= 0 && index < stageIndex;
+      })
+      .sort();
+  }
+
+  private async readStageResult(
+    directory: string,
+    stage: NovaStage,
+  ): Promise<NovaStageResult | null> {
+    try {
+      const raw = await fs.readFile(
+        path.join(directory, `${stage}.json`),
+        "utf8",
+      );
+      return JSON.parse(raw) as NovaStageResult;
+    } catch {
+      return null;
+    }
   }
 
   private async writeJson(
