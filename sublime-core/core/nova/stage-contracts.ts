@@ -11,24 +11,26 @@ export interface StageContract {
 export const STAGE_CONTRACTS: Record<NovaStage, StageContract> = {
   trend_scout: {
     stage: "trend_scout",
-    goal: "Identify promising content angles without pretending that live trend data was collected.",
+    goal: "Identify promising content angles and clearly distinguish ideas from verified live trend data.",
     inputFiles: [],
     outputFile: "trend_scout.json",
     instructions: [
       "Return 3 to 5 candidate angles.",
       "Separate ideas from verified facts.",
-      "Mark missing live-data requirements clearly.",
+      "State when live search data is unavailable.",
+      "Prefer angles with a clear audience payoff.",
     ],
   },
   research: {
     stage: "research",
-    goal: "Turn available research material into verified facts and source requirements.",
+    goal: "Turn available research material into verified facts and explicit source requirements.",
     inputFiles: ["trend_scout.json"],
     outputFile: "research.json",
     instructions: [
       "Use only supplied research data.",
-      "Never invent sources or statistics.",
+      "Never invent sources, statistics, quotes, or events.",
       "List claims that still need external verification.",
+      "Separate sourced facts from reasoning or interpretation.",
     ],
   },
   rank: {
@@ -37,8 +39,9 @@ export const STAGE_CONTRACTS: Record<NovaStage, StageContract> = {
     inputFiles: ["trend_scout.json", "research.json"],
     outputFile: "rank.json",
     instructions: [
-      "Give each candidate a transparent score.",
+      "Give each candidate a transparent score out of 100.",
       "Explain the strongest and weakest factor briefly.",
+      "Select one primary angle and keep alternatives visible.",
     ],
   },
   script: {
@@ -51,6 +54,7 @@ export const STAGE_CONTRACTS: Record<NovaStage, StageContract> = {
       "Keep claims tied to supplied evidence.",
       "Do not fabricate quotations.",
       "Return narration plus on-screen text suggestions.",
+      "Prefer a clear beginning, escalation, payoff, and ending.",
     ],
   },
   voice: {
@@ -60,7 +64,8 @@ export const STAGE_CONTRACTS: Record<NovaStage, StageContract> = {
     outputFile: "voice.json",
     instructions: [
       "Preserve the script meaning.",
-      "Add pacing and pronunciation notes only when useful.",
+      "Add pacing, emphasis, and pronunciation notes only when useful.",
+      "Do not claim audio exists unless a voice tool actually produced it.",
     ],
   },
   visuals: {
@@ -71,6 +76,7 @@ export const STAGE_CONTRACTS: Record<NovaStage, StageContract> = {
     instructions: [
       "Describe each shot and its purpose.",
       "Flag assets that require sourcing or licensing.",
+      "Prefer original graphics, generated assets, public-domain material, or properly licensed media.",
       "Do not request copyrighted clips as if they were automatically safe to use.",
     ],
   },
@@ -80,7 +86,8 @@ export const STAGE_CONTRACTS: Record<NovaStage, StageContract> = {
     inputFiles: ["script.json", "voice.json", "visuals.json"],
     outputFile: "video_build.json",
     instructions: [
-      "Return a timeline plan with durations, layers, and transitions.",
+      "Return a timeline plan with durations, layers, transitions, and aspect ratio.",
+      "Keep the plan executable by a future renderer.",
       "Do not claim a video file was rendered unless a renderer actually ran.",
     ],
   },
@@ -92,6 +99,7 @@ export const STAGE_CONTRACTS: Record<NovaStage, StageContract> = {
     instructions: [
       "Keep caption chunks short and readable.",
       "Return timing as a plan unless actual audio timing exists.",
+      "Do not claim an SRT/VTT file exists unless a caption tool generated it.",
     ],
   },
   quality_check: {
@@ -100,23 +108,25 @@ export const STAGE_CONTRACTS: Record<NovaStage, StageContract> = {
     inputFiles: ["research.json", "script.json", "visuals.json", "video_build.json", "captions.json"],
     outputFile: "quality_check.json",
     instructions: [
-      "Return PASS, NEEDS_REVIEW, or FAIL.",
+      "Return exactly one decision: PASS, NEEDS_REVIEW, or FAIL.",
       "List concrete issues instead of vague warnings.",
       "Block unsupported factual claims.",
+      "Block missing required production inputs.",
+      "A PASS requires no blocking issue.",
     ],
   },
   ready_to_review: {
     stage: "ready_to_review",
-    goal: "Mark the job as ready for human review.",
+    goal: "Mark the job as ready for human review only after a passing quality check.",
     inputFiles: ["quality_check.json"],
     outputFile: "job.json",
-    instructions: ["Never skip a failed quality check."],
+    instructions: ["Never skip a failed or unresolved quality check."],
   },
   failed: {
     stage: "failed",
     goal: "Record a recoverable pipeline failure.",
     inputFiles: [],
     outputFile: "job.json",
-    instructions: ["Preserve the error message."],
+    instructions: ["Preserve the error message and current stage."],
   },
 };
