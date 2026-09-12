@@ -17,6 +17,9 @@ import {
   recordManifestError,
   updateManifest,
 } from "./manifest.js";
+import type { NovaAbilities, NovaAbilityContext } from "./abilities/types.js";
+import { createNovaAbilities } from "./abilities/registry.js";
+import type { MediaAbilities } from "./abilities/media-types.js";
 
 const NOVA_WORKSPACE = path.resolve("workspace", "nova");
 const MAX_CONTEXT_CHARS = 24_000;
@@ -34,8 +37,22 @@ const pipeline: NovaStage[] = [
   "ready_to_review",
 ];
 
+export interface NovaOrchestratorOptions {
+  abilities?: NovaAbilities;
+  media?: MediaAbilities;
+}
+
 export class NovaOrchestrator {
-  constructor(private readonly brain: LocalBrain) {}
+  private readonly abilities: NovaAbilities;
+  private readonly media: MediaAbilities;
+
+  constructor(
+    private readonly brain: LocalBrain,
+    options: NovaOrchestratorOptions = {},
+  ) {
+    this.abilities = options.abilities ?? createNovaAbilities();
+    this.media = options.media ?? {};
+  }
 
   async createJob(topic: string): Promise<NovaJob> {
     const cleanTopic = topic.trim();
@@ -200,6 +217,24 @@ export class NovaOrchestrator {
     const parsed = parseBrainOutput(output);
     const cleanOutput = parsed.raw;
 
+    if (stage === "research") {
+      const research = await this.collectResearch(job);
+      return {
+        stage,
+        ok: cleanOutput.length > 0,
+        summary:
+          cleanOutput.length > 0
+            ? "Research reasoning completed and tool evidence collected."
+            : "Brain returned no research reasoning.",
+        data: {
+          output: cleanOutput,
+          format: parsed.format,
+          ...(parsed.format === "json" ? { parsed: parsed.parsed } : {}),
+          toolResearch: research,
+        },
+      };
+    }
+
     return {
       stage,
       ok: cleanOutput.length > 0,
@@ -211,6 +246,53 @@ export class NovaOrchestrator {
         parsed.format === "json"
           ? { output: cleanOutput, parsed: parsed.parsed, format: parsed.format }
           : { output: cleanOutput, format: parsed.format },
+    };
+  }
+
+  private async collectResearch(job: NovaJob) {
+    const context: NovaAbilityContext = {
+      jobId: job.id,
+      topic: job.topic,
+      outputDir: job.outputDir,
+    };
+
+    if (!this.abilities.webSearch && !this.abilities.sourceFetch) {
+      return {
+        available: false,
+        reason: "No research abilities are configured.",
+        results: [],
+        sources: [],
+        failedUrls: [],
+      };
+    }
+
+    const results = this.abilities.webSearch
+      ? await this.abilities.webSearch(job.topic, context)
+      : [];
+    const sources = [];
+    const failedUrls: Array<{ url: string; error: string }> = [];
+
+    if (this.abilities.sourceFetch) {
+      for (const result of results) {
+        try {
+          sources.push(await this.abilities.sourceFetch(result.url, context));
+        } catch (error) {
+          failedUrls.push({
+            url: result.url,
+            error: error instanceof Error ? error.message : String(error),
+          });
+        }
+      }
+    }
+
+    return {
+      available: true,
+      results,
+      sources,
+      failedUrls,
+      mediaCapabilities: Object.keys(this.media).filter(
+        (key) => typeof this.media[key as keyof MediaAbilities] === "function",
+      ),
     };
   }
 
