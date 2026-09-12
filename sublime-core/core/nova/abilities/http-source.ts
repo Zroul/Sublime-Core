@@ -59,20 +59,20 @@ export async function fetchSource(
 }
 
 function extractTitle(html: string): string {
-  const match = html.match(/<title[^>]*>([\\s\\S]*?)<\\/title>/i);
+  const match = html.match(/<title[^>]*>([\s\S]*?)<\/title>/i);
   return match ? decodeEntities(match[1].replace(/<[^>]+>/g, "").trim()) : "";
 }
 
 function htmlToText(html: string): string {
   return decodeEntities(
     html
-      .replace(/<script[\\s\\S]*?<\\/script>/gi, " ")
-      .replace(/<style[\\s\\S]*?<\\/style>/gi, " ")
-      .replace(/<noscript[\\s\\S]*?<\\/noscript>/gi, " ")
-      .replace(/<br\\s*\\/?>(?=.)/gi, "\\n")
-      .replace(/<\\/p>/gi, "\\n")
+      .replace(/<script[\s\S]*?<\/script>/gi, " ")
+      .replace(/<style[\s\S]*?<\/style>/gi, " ")
+      .replace(/<noscript[\s\S]*?<\/noscript>/gi, " ")
+      .replace(/<br\s*\/?>(?=.)/gi, "\n")
+      .replace(/<\/p>/gi, "\n")
       .replace(/<[^>]+>/g, " ")
-      .replace(/\\s+/g, " "),
+      .replace(/\s+/g, " "),
   );
 }
 
