@@ -105,7 +105,12 @@ export class NovaOrchestrator {
       };
     }
 
-    const prompt = buildStagePrompt(stage, job.topic);
+    const previousContext = await this.readPreviousStageOutputs(
+      job.outputDir,
+      stage,
+    );
+
+    const prompt = buildStagePrompt(stage, job.topic, previousContext);
     const output = await this.brain.complete({
       system: NOVA_SYSTEM_PROMPT,
       prompt,
@@ -119,6 +124,39 @@ export class NovaOrchestrator {
       summary: cleanOutput.length > 0 ? "Stage completed." : "Brain returned no output.",
       data: { output: cleanOutput },
     };
+  }
+
+  private async readPreviousStageOutputs(
+    directory: string,
+    currentStage: NovaStage,
+  ): Promise<string> {
+    const currentIndex = pipeline.indexOf(currentStage);
+    const previousStages = pipeline.slice(0, currentIndex);
+
+    if (previousStages.length === 0) {
+      return "";
+    }
+
+    const chunks: string[] = [];
+
+    for (const stage of previousStages) {
+      try {
+        const file = await fs.readFile(
+          path.join(directory, `${stage}.json`),
+          "utf8",
+        );
+        const parsed = JSON.parse(file) as NovaStageResult;
+        const output = parsed.data?.output;
+
+        if (typeof output === "string" && output.trim()) {
+          chunks.push(`--- ${stage} ---\n${output.trim()}`);
+        }
+      } catch {
+        // A missing previous result should not crash the whole pipeline.
+      }
+    }
+
+    return chunks.join("\n\n");
   }
 
   private async writeJson(
