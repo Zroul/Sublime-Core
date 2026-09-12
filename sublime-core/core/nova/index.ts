@@ -9,6 +9,7 @@ export { fetchSource, createNovaAbilities } from "./abilities/index.js";
 export { NovaMediaRegistry } from "./abilities/media-registry.js";
 export { clearStopRequest, readControlState, requestStop } from "./job-state.js";
 export { parseBrainOutput } from "./structured.js";
+export { withRetry } from "./retry.js";
 export {
   createManifest,
   readManifest,
@@ -20,7 +21,7 @@ export { collectResearch } from "./research.js";
 export { parseQualityReport } from "./quality.js";
 export type { ParsedBrainOutput } from "./structured.js";
 export type { NovaArtifact, NovaManifest } from "./manifest.js";
-export type { ResearchRecord } from "./research.js";
+export type { ResearchRecord, ResearchProvenance } from "./research.js";
 export type {
   QualityDecision,
   QualityIssue,
