@@ -6,7 +6,8 @@
   "type": "module",
   "scripts": {
     "start": "node app/backend/index.js",
-    "nova:test": "tsx core/nova/run-local-test.ts"
+    "nova:test": "tsx core/nova/run-local-test.ts",
+    "nova:typecheck": "tsc --noEmit"
   },
   "devDependencies": {
     "@types/node": "^26.4.1",
