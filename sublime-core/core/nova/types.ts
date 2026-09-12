@@ -19,6 +19,7 @@ export interface NovaJob {
   outputDir: string;
   status: "queued" | "running" | "completed" | "failed";
   error?: string;
+  failedFromStage?: NovaStage;
 }
 
 export interface NovaStageResult {
