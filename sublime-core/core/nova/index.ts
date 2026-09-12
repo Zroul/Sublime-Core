@@ -17,9 +17,15 @@ export {
   updateManifest,
 } from "./manifest.js";
 export { collectResearch } from "./research.js";
+export { parseQualityReport } from "./quality.js";
 export type { ParsedBrainOutput } from "./structured.js";
 export type { NovaArtifact, NovaManifest } from "./manifest.js";
 export type { ResearchRecord } from "./research.js";
+export type {
+  QualityDecision,
+  QualityIssue,
+  QualityReport,
+} from "./quality.js";
 export type {
   LocalBrain,
   NovaJob,
