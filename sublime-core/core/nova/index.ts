@@ -6,6 +6,16 @@ export { NovaToolRegistry, NOVA_TOOL_NAMES } from "./tools.js";
 export { fetchSource, createNovaAbilities } from "./abilities/index.js";
 export { NovaMediaRegistry } from "./abilities/media-registry.js";
 export { clearStopRequest, readControlState, requestStop } from "./job-state.js";
+export { parseBrainOutput } from "./structured.js";
+export {
+  createManifest,
+  readManifest,
+  recordArtifact,
+  recordManifestError,
+  updateManifest,
+} from "./manifest.js";
+export type { ParsedBrainOutput } from "./structured.js";
+export type { NovaArtifact, NovaManifest } from "./manifest.js";
 export type {
   LocalBrain,
   NovaJob,
