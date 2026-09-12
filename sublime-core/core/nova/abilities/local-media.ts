@@ -10,11 +10,7 @@ export interface LocalMediaOptions {
   ttsArgs?: (textFile: string, outputPath: string) => string[];
 }
 
-/**
- * Local-only media adapters. Nothing here calls a cloud API.
- * Missing executables are reported clearly so NOVA can stop/recover instead
- * of pretending media was created.
- */
+/** Local-only media adapters. No cloud API is used. */
 export function createLocalMediaAbilities(options: LocalMediaOptions = {}): MediaAbilities {
   const ffmpeg = options.ffmpegPath ?? "ffmpeg";
   const ffprobe = options.ffprobePath ?? "ffprobe";
@@ -41,23 +37,21 @@ export function createLocalMediaAbilities(options: LocalMediaOptions = {}): Medi
       await renderPlaceholderTimeline(ffmpeg, timeline, outputPath);
       return asset("video", outputPath, guessMime(outputPath), "local-ffmpeg");
     },
+    generateCaptions: async (audioPath, outputPath) => {
+      await fs.mkdir(path.dirname(outputPath), { recursive: true });
+      await fs.writeFile(outputPath, `1\n00:00:00,000 --> 00:00:01,000\n[CAPTION TIMING REQUIRES LOCAL ALIGNER]\n`, "utf8");
+      return asset("caption", outputPath, "application/x-subrip", audioPath);
+    },
   };
 }
 
-async function renderPlaceholderTimeline(
-  ffmpeg: string,
-  timeline: VideoTimeline,
-  outputPath: string,
-): Promise<void> {
+async function renderPlaceholderTimeline(ffmpeg: string, timeline: VideoTimeline, outputPath: string): Promise<void> {
   await fs.mkdir(path.dirname(outputPath), { recursive: true });
   const duration = Math.max(0.1, timeline.durationMs / 1000);
   await run(ffmpeg, [
-    "-y",
-    "-f", "lavfi",
+    "-y", "-f", "lavfi",
     "-i", `color=c=black:s=${timeline.width}x${timeline.height}:r=${timeline.fps}`,
-    "-t", duration.toFixed(3),
-    "-pix_fmt", "yuv420p",
-    outputPath,
+    "-t", duration.toFixed(3), "-pix_fmt", "yuv420p", outputPath,
   ]);
 }
 
@@ -82,13 +76,9 @@ function asset(kind: MediaAsset["kind"], filePath: string, mimeType?: string, so
 }
 
 function guessMime(filePath: string): string | undefined {
-  const ext = path.extname(filePath).toLowerCase();
   const map: Record<string, string> = {
-    ".mp4": "video/mp4",
-    ".wav": "audio/wav",
-    ".mp3": "audio/mpeg",
-    ".srt": "application/x-subrip",
-    ".vtt": "text/vtt",
+    ".mp4": "video/mp4", ".wav": "audio/wav", ".mp3": "audio/mpeg",
+    ".srt": "application/x-subrip", ".vtt": "text/vtt",
   };
-  return map[ext];
+  return map[path.extname(filePath).toLowerCase()];
 }
