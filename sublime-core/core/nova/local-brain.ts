@@ -32,6 +32,10 @@ export class OllamaBrain implements LocalBrain {
     return this.model;
   }
 
+  getBaseUrl(): string {
+    return this.baseUrl;
+  }
+
   async isReady(): Promise<boolean> {
     try {
       const response = await fetch(`${this.baseUrl}/api/tags`);
@@ -42,14 +46,18 @@ export class OllamaBrain implements LocalBrain {
   }
 
   async hasModel(): Promise<boolean> {
-    const response = await fetch(`${this.baseUrl}/api/tags`);
+    try {
+      const response = await fetch(`${this.baseUrl}/api/tags`);
+      if (!response.ok) {
+        throw new Error(`Ollama is not ready (HTTP ${response.status}).`);
+      }
 
-    if (!response.ok) {
-      throw new Error(`Ollama is not ready (${response.status}).`);
+      const data = (await response.json()) as OllamaTagsResponse;
+      return (data.models ?? []).some((model) => model.name === this.model);
+    } catch (error) {
+      if (error instanceof Error && error.message.startsWith("Ollama is not ready")) throw error;
+      throw new Error(`Cannot reach Ollama at ${this.baseUrl}: ${formatNetworkError(error)}`);
     }
-
-    const data = (await response.json()) as OllamaTagsResponse;
-    return (data.models ?? []).some((model) => model.name === this.model);
   }
 
   async complete(input: {
@@ -77,9 +85,7 @@ export class OllamaBrain implements LocalBrain {
       const data = (await response.json()) as OllamaResponse;
 
       if (!response.ok) {
-        throw new Error(
-          data.error ?? `Local brain request failed (${response.status}).`,
-        );
+        throw new Error(data.error ?? `Local brain request failed (HTTP ${response.status}).`);
       }
 
       if (typeof data.response !== "string") {
@@ -92,9 +98,16 @@ export class OllamaBrain implements LocalBrain {
         throw new Error(`Local brain timed out after ${this.timeoutMs}ms.`);
       }
 
-      throw error;
+      throw new Error(`Local brain request to ${this.baseUrl} failed: ${formatNetworkError(error)}`);
     } finally {
       clearTimeout(timeout);
     }
   }
+}
+
+function formatNetworkError(error: unknown): string {
+  if (!(error instanceof Error)) return String(error);
+  const cause = (error as Error & { cause?: unknown }).cause;
+  if (cause instanceof Error && cause.message) return `${error.message} (${cause.message})`;
+  return error.message || error.name;
 }
