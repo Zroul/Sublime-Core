@@ -9,6 +9,7 @@ import type {
   NovaStageResult,
 } from "./types.js";
 import { NOVA_SYSTEM_PROMPT, buildStagePrompt } from "./prompt.js";
+import { STAGE_CONTRACTS } from "./stage-contracts.js";
 
 const NOVA_WORKSPACE = path.resolve("workspace", "nova");
 const MAX_CONTEXT_CHARS = 24_000;
@@ -59,7 +60,10 @@ export class NovaOrchestrator {
     await this.writeJson(current.outputDir, "job.json", current);
 
     try {
-      for (const stage of pipeline) {
+      const startIndex = this.getResumeIndex(current);
+
+      for (let index = startIndex; index < pipeline.length; index += 1) {
+        const stage = pipeline[index];
         current = { ...current, stage };
         await this.writeJson(current.outputDir, "job.json", current);
 
@@ -75,6 +79,7 @@ export class NovaOrchestrator {
         ...current,
         stage: "ready_to_review",
         status: "completed",
+        error: undefined,
       };
       await this.writeJson(current.outputDir, "job.json", current);
       return current;
@@ -88,6 +93,15 @@ export class NovaOrchestrator {
       await this.writeJson(current.outputDir, "job.json", current);
       return current;
     }
+  }
+
+  private getResumeIndex(job: NovaJob): number {
+    if (job.status !== "failed") {
+      return 0;
+    }
+
+    const failedStageIndex = pipeline.indexOf(job.stage);
+    return failedStageIndex >= 0 ? failedStageIndex : 0;
   }
 
   private async runStage(
@@ -106,11 +120,21 @@ export class NovaOrchestrator {
         };
       }
 
+      const decision = extractDecision(output);
+      if (decision !== "PASS") {
+        return {
+          stage,
+          ok: false,
+          summary: `Quality check decision was ${decision ?? "unresolved"}.`,
+          data: { qualityCheck: output, decision },
+        };
+      }
+
       return {
         stage,
         ok: true,
-        summary: "Quality check exists. Job is ready for human review.",
-        data: { qualityCheck: output },
+        summary: "Quality check passed. Job is ready for human review.",
+        data: { qualityCheck: output, decision: "PASS" },
       };
     }
 
@@ -146,41 +170,24 @@ export class NovaOrchestrator {
     directory: string,
     stage: NovaStage,
   ): Promise<string> {
-    const files = await this.listStageFiles(directory, stage);
+    const contract = STAGE_CONTRACTS[stage];
     const chunks: string[] = [];
 
-    for (const file of files) {
+    for (const file of contract.inputFiles) {
       try {
         const raw = await fs.readFile(path.join(directory, file), "utf8");
         chunks.push(`--- ${file} ---\n${raw}`);
       } catch {
-        // A missing optional context file should not crash the whole job.
+        chunks.push(`--- ${file} ---\n[MISSING INPUT]`);
       }
     }
 
     const context = chunks.join("\n\n");
     if (context.length <= MAX_CONTEXT_CHARS) {
-      return context || "No previous stage output is available.";
+      return context || "No previous stage output is required for this stage.";
     }
 
     return `${context.slice(0, MAX_CONTEXT_CHARS)}\n\n[Context truncated by NOVA.]`;
-  }
-
-  private async listStageFiles(
-    directory: string,
-    currentStage: NovaStage,
-  ): Promise<string[]> {
-    const all = await fs.readdir(directory);
-    const stageIndex = pipeline.indexOf(currentStage);
-
-    return all
-      .filter((file) => file.endsWith(".json") && file !== "job.json")
-      .filter((file) => {
-        const name = file.slice(0, -5) as NovaStage;
-        const index = pipeline.indexOf(name);
-        return index >= 0 && index < stageIndex;
-      })
-      .sort();
   }
 
   private async readStageResult(
@@ -209,4 +216,14 @@ export class NovaOrchestrator {
       "utf8",
     );
   }
+}
+
+function extractDecision(output: string): "PASS" | "NEEDS_REVIEW" | "FAIL" | null {
+  const normalized = output.toUpperCase();
+
+  if (/\bPASS\b/.test(normalized)) return "PASS";
+  if (/\bNEEDS_REVIEW\b/.test(normalized)) return "NEEDS_REVIEW";
+  if (/\bFAIL\b/.test(normalized)) return "FAIL";
+
+  return null;
 }
