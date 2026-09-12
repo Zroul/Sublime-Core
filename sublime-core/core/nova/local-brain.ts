@@ -11,15 +11,45 @@ interface OllamaResponse {
   error?: string;
 }
 
+interface OllamaTagsResponse {
+  models?: Array<{ name?: string }>;
+}
+
 export class OllamaBrain implements LocalBrain {
   private readonly baseUrl: string;
   private readonly model: string;
   private readonly timeoutMs: number;
 
   constructor(options: OllamaBrainOptions = {}) {
-    this.baseUrl = (options.baseUrl ?? "http://127.0.0.1:11434").replace(/\/$/, "");
-    this.model = options.model ?? "qwen3:8b";
+    this.baseUrl = (
+      options.baseUrl ?? process.env.NOVA_OLLAMA_URL ?? "http://127.0.0.1:11434"
+    ).replace(/\/$/, "");
+    this.model = options.model ?? process.env.NOVA_OLLAMA_MODEL ?? "qwen3:8b";
     this.timeoutMs = options.timeoutMs ?? 120_000;
+  }
+
+  getModel(): string {
+    return this.model;
+  }
+
+  async isReady(): Promise<boolean> {
+    try {
+      const response = await fetch(`${this.baseUrl}/api/tags`);
+      return response.ok;
+    } catch {
+      return false;
+    }
+  }
+
+  async hasModel(): Promise<boolean> {
+    const response = await fetch(`${this.baseUrl}/api/tags`);
+
+    if (!response.ok) {
+      throw new Error(`Ollama is not ready (${response.status}).`);
+    }
+
+    const data = (await response.json()) as OllamaTagsResponse;
+    return (data.models ?? []).some((model) => model.name === this.model);
   }
 
   async complete(input: {
