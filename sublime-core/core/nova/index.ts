@@ -7,42 +7,17 @@ export { STAGE_CONTRACTS } from "./stage-contracts.js";
 export { NovaToolRegistry, NOVA_TOOL_NAMES } from "./tools.js";
 export { fetchSource, createNovaAbilities } from "./abilities/index.js";
 export { NovaMediaRegistry } from "./abilities/media-registry.js";
+export { createLocalMediaAbilities } from "./abilities/local-media.js";
 export { clearStopRequest, readControlState, requestStop } from "./job-state.js";
 export { parseBrainOutput } from "./structured.js";
 export { withRetry } from "./retry.js";
-export {
-  createManifest,
-  readManifest,
-  recordArtifact,
-  recordManifestError,
-  updateManifest,
-} from "./manifest.js";
+export { createManifest, readManifest, recordArtifact, recordManifestError, updateManifest } from "./manifest.js";
 export { collectResearch } from "./research.js";
 export { parseQualityReport } from "./quality.js";
 export type { ParsedBrainOutput } from "./structured.js";
 export type { NovaArtifact, NovaManifest } from "./manifest.js";
 export type { ResearchRecord, ResearchProvenance } from "./research.js";
-export type {
-  QualityDecision,
-  QualityIssue,
-  QualityReport,
-} from "./quality.js";
-export type {
-  LocalBrain,
-  NovaJob,
-  NovaStage,
-  NovaStageResult,
-} from "./types.js";
-export type {
-  NovaAbilityContext,
-  NovaAbilities,
-  SourceDocument,
-  WebSearchResult,
-} from "./abilities/types.js";
-export type {
-  MediaAbilities,
-  MediaAsset,
-  MediaKind,
-  TimelineClip,
-  VideoTimeline,
-} from "./abilities/media-types.js";
+export type { QualityDecision, QualityIssue, QualityReport } from "./quality.js";
+export type { LocalBrain, NovaJob, NovaStage, NovaStageResult } from "./types.js";
+export type { NovaAbilityContext, NovaAbilities, SourceDocument, WebSearchResult } from "./abilities/types.js";
+export type { MediaAbilities, MediaAsset, MediaKind, TimelineClip, VideoTimeline } from "./abilities/media-types.js";
