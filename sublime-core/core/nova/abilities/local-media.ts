@@ -33,7 +33,11 @@ export function createLocalMediaAbilities(options: LocalMediaOptions = {}): Medi
       : undefined,
 
     probe: async (filePath) => {
-      await run(ffprobe, ["-v", "error", "-show_entries", "format=duration", "-of", "default=noprint_wrappers=1:nokey=1", filePath], timeoutMs);
+      await run(
+        ffprobe,
+        ["-v", "error", "-show_entries", "format=duration", "-of", "default=noprint_wrappers=1:nokey=1", filePath],
+        timeoutMs,
+      );
       return asset("video", filePath, guessMime(filePath), "local-ffprobe");
     },
 
@@ -43,9 +47,6 @@ export function createLocalMediaAbilities(options: LocalMediaOptions = {}): Medi
     },
 
     generateCaptions: async (audioPath, outputPath) => {
-      // This creates deterministic timing from the narration text when the
-      // orchestrator supplies it later. Until an aligner is configured, the
-      // adapter produces a valid SRT rather than pretending word alignment exists.
       await fs.mkdir(path.dirname(outputPath), { recursive: true });
       await fs.writeFile(
         outputPath,
@@ -82,7 +83,7 @@ async function renderTimeline(
     const escaped = escapeDrawtext(clip.text);
     const fontSize = Math.max(24, Math.round(timeline.width / 24));
     filters.push(
-      `drawtext=text='${escaped}':fontcolor=white:fontsize=${fontSize}:x=(w-text_w)/2:y=(h-text_h)/2:enable='between(t,${start.toFixed(3)},${end.toFixed(3))}'`,
+      `drawtext=text='${escaped}':fontcolor=white:fontsize=${fontSize}:x=(w-text_w)/2:y=(h-text_h)/2:enable='between(t,${start.toFixed(3)},${end.toFixed(3)})'`,
     );
   }
 
@@ -144,8 +145,11 @@ function asset(kind: MediaAsset["kind"], filePath: string, mimeType?: string, so
 
 function guessMime(filePath: string): string | undefined {
   const map: Record<string, string> = {
-    ".mp4": "video/mp4", ".wav": "audio/wav", ".mp3": "audio/mpeg",
-    ".srt": "application/x-subrip", ".vtt": "text/vtt",
+    ".mp4": "video/mp4",
+    ".wav": "audio/wav",
+    ".mp3": "audio/mpeg",
+    ".srt": "application/x-subrip",
+    ".vtt": "text/vtt",
   };
   return map[path.extname(filePath).toLowerCase()];
 }
