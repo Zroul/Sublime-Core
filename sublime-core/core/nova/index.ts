@@ -1,4 +1,6 @@
 export { NovaOrchestrator } from "./nova.js";
+export type { NovaOrchestratorOptions } from "./nova.js";
+export { NovaFakeBrain } from "./fake-brain.js";
 export { OllamaBrain } from "./local-brain.js";
 export { NOVA_SYSTEM_PROMPT, buildStagePrompt } from "./prompt.js";
 export { STAGE_CONTRACTS } from "./stage-contracts.js";
@@ -14,8 +16,10 @@ export {
   recordManifestError,
   updateManifest,
 } from "./manifest.js";
+export { collectResearch } from "./research.js";
 export type { ParsedBrainOutput } from "./structured.js";
 export type { NovaArtifact, NovaManifest } from "./manifest.js";
+export type { ResearchRecord } from "./research.js";
 export type {
   LocalBrain,
   NovaJob,
