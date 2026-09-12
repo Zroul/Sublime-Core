@@ -10,7 +10,7 @@ import { parseQualityReport } from "./quality.js";
 import { createManifest, recordArtifact, recordManifestError, updateManifest } from "./manifest.js";
 import type { NovaAbilities } from "./abilities/types.js";
 import { createNovaAbilities } from "./abilities/registry.js";
-import type { MediaAbilities } from "./abilities/media-types.js";
+import type { MediaAbilities, VideoTimeline } from "./abilities/media-types.js";
 import { collectResearch } from "./research.js";
 import { readControlState } from "./job-state.js";
 
@@ -155,6 +155,62 @@ export class NovaOrchestrator {
       };
     }
 
+    if (stage === "voice") {
+      const narration = extractNarration(parsed.parsed, cleanOutput);
+      const result: Record<string, unknown> = {
+        output: cleanOutput,
+        format: parsed.format,
+        ...(parsed.format === "json" ? { parsed: parsed.parsed } : {}),
+      };
+      if (this.media.textToSpeech && narration) {
+        const audioPath = path.join(job.outputDir, "narration.wav");
+        const asset = await this.media.textToSpeech(narration, audioPath);
+        result.mediaAsset = asset;
+      } else {
+        result.mediaAsset = null;
+        result.mediaNote = "No local text-to-speech ability is configured; narration remains text-only.";
+      }
+      return { stage, ok: cleanOutput.length > 0, summary: result.mediaAsset ? "Voice plan completed and local audio was generated." : "Voice plan completed without generated audio.", data: result };
+    }
+
+    if (stage === "video_build") {
+      const timeline = extractTimeline(parsed.parsed, cleanOutput);
+      const result: Record<string, unknown> = {
+        output: cleanOutput,
+        format: parsed.format,
+        ...(parsed.format === "json" ? { parsed: parsed.parsed } : {}),
+        timeline,
+      };
+      if (this.media.render) {
+        const videoPath = path.join(job.outputDir, "video.mp4");
+        const asset = await this.media.render(timeline, videoPath);
+        result.mediaAsset = asset;
+      } else {
+        result.mediaAsset = null;
+        result.mediaNote = "No renderer is configured; video_build remains a timeline plan.";
+      }
+      return { stage, ok: cleanOutput.length > 0, summary: result.mediaAsset ? "Video timeline built and renderer produced a local video." : "Video timeline built without a renderer.", data: result };
+    }
+
+    if (stage === "captions") {
+      const voice = await this.readStageResult(job.outputDir, "voice");
+      const audioAsset = voice?.data?.mediaAsset as { path?: string } | null | undefined;
+      const result: Record<string, unknown> = {
+        output: cleanOutput,
+        format: parsed.format,
+        ...(parsed.format === "json" ? { parsed: parsed.parsed } : {}),
+      };
+      if (this.media.generateCaptions && audioAsset?.path) {
+        const captionPath = path.join(job.outputDir, "captions.srt");
+        const asset = await this.media.generateCaptions(audioAsset.path, captionPath);
+        result.mediaAsset = asset;
+      } else {
+        result.mediaAsset = null;
+        result.mediaNote = "No generated narration audio is available for caption alignment.";
+      }
+      return { stage, ok: cleanOutput.length > 0, summary: result.mediaAsset ? "Caption plan completed and a local caption artifact was generated." : "Caption plan completed without generated caption timing.", data: result };
+    }
+
     return {
       stage, ok: cleanOutput.length > 0,
       summary: cleanOutput.length > 0 ? "Stage completed." : "Brain returned no output.",
@@ -197,6 +253,31 @@ export class NovaOrchestrator {
   private async writeJson(directory: string, filename: string, value: unknown): Promise<void> {
     await fs.writeFile(path.join(directory, filename), JSON.stringify(value, null, 2), "utf8");
   }
+}
+
+function extractNarration(parsed: unknown, fallback: string): string {
+  if (parsed && typeof parsed === "object") {
+    const value = (parsed as Record<string, unknown>).narration;
+    if (typeof value === "string" && value.trim()) return value.trim();
+  }
+  return fallback.trim();
+}
+
+function extractTimeline(parsed: unknown, fallback: string): VideoTimeline {
+  if (parsed && typeof parsed === "object") {
+    const value = parsed as Record<string, unknown>;
+    const width = numberOr(value.width, 1080);
+    const height = numberOr(value.height, 1920);
+    const fps = numberOr(value.fps, 30);
+    const durationMs = numberOr(value.durationMs, 10_000);
+    const clips = Array.isArray(value.clips) ? value.clips : [];
+    return { width, height, fps, durationMs, clips: clips as VideoTimeline["clips"] };
+  }
+  return { width: 1080, height: 1920, fps: 30, durationMs: Math.max(1000, fallback.length * 45), clips: [] };
+}
+
+function numberOr(value: unknown, fallback: number): number {
+  return typeof value === "number" && Number.isFinite(value) && value > 0 ? value : fallback;
 }
 
 function extractDecision(output: string): "PASS" | "NEEDS_REVIEW" | "FAIL" | null {
