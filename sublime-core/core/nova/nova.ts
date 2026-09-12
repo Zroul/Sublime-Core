@@ -54,7 +54,7 @@ export class NovaOrchestrator {
   }
 
   async run(job: NovaJob): Promise<NovaJob> {
-    let current = { ...job, status: "running" as const };
+    let current: NovaJob = { ...job, status: "running" };
     await this.writeJson(current.outputDir, "job.json", current);
 
     try {
@@ -111,11 +111,13 @@ export class NovaOrchestrator {
       prompt,
     });
 
+    const cleanOutput = output.trim();
+
     return {
       stage,
-      ok: output.trim().length > 0,
-      summary: output.trim().length > 0 ? "Stage completed." : "Brain returned no output.",
-      data: { output },
+      ok: cleanOutput.length > 0,
+      summary: cleanOutput.length > 0 ? "Stage completed." : "Brain returned no output.",
+      data: { output: cleanOutput },
     };
   }
 
