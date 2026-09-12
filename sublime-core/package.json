@@ -5,7 +5,8 @@
   "description": "Private AI-powered website builder",
   "type": "module",
   "scripts": {
-    "start": "node app/backend/index.js"
+    "start": "node app/backend/index.js",
+    "nova:test": "tsx core/nova/run-local-test.ts"
   },
   "devDependencies": {
     "@types/node": "^26.4.1",
