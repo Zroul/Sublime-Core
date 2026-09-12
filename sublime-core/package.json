@@ -7,6 +7,7 @@
   "scripts": {
     "start": "node app/backend/index.js",
     "nova:test": "tsx core/nova/run-local-test.ts",
+    "nova:fake": "tsx core/nova/run-fake-test.ts",
     "nova:typecheck": "tsc --noEmit"
   },
   "devDependencies": {
