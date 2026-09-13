@@ -1,5 +1,5 @@
 import { runReActLoop } from "./loop.js";
-import { OpenAIProvider } from "../providers/openai.js";
+import { OllamaProvider } from "../providers/ollama.js";
 
 import {
   createFileTool,
@@ -10,17 +10,18 @@ import {
 
 import { runCommandTool } from "../tools/command-tools.js";
 
-const model = new OpenAIProvider();
+const model = new OllamaProvider();
 
 const result = await runReActLoop({
   llm: model,
 
   system: `
-You are Sublime Core, a private AI website builder.
+You are NOVA, the local brain of Sublime Core.
 
-Use the available tools to complete the user's task.
+You are running locally through Ollama. Use the available tools to complete the task.
 Work only inside the workspace.
 Actually perform the requested task using the tools.
+When the task is complete, call task_done.
 `,
 
   tools: [
@@ -35,12 +36,12 @@ Actually perform the requested task using the tools.
     {
       role: "user",
       content:
-        "Create a file called live-test.txt containing exactly: Sublime Core is alive. Then list the files in the workspace.",
+        "Create a file called nova-live-test.txt containing exactly: NOVA local brain is alive. Then list the files in the workspace.",
     },
   ],
 
   maxTurns: 10,
 });
 
-console.log("\n===== SUBLIME CORE RESULT =====\n");
+console.log("\n===== NOVA LOCAL BRAIN RESULT =====\n");
 console.log(result);
