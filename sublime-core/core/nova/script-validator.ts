@@ -15,23 +15,55 @@ function isNonEmpty(value: unknown): value is string {
   return typeof value === "string" && value.trim().length > 0;
 }
 
+function scriptText(script: VideoScript): string {
+  return [
+    script.title,
+    script.hook,
+    ...((Array.isArray(script.sections) ? script.sections : []).flatMap((section) => [
+      section?.heading ?? "",
+      section?.narration ?? "",
+    ])),
+    script.ending,
+  ].join(" ");
+}
+
+const unsupportedClaimPatterns: Array<[RegExp, string]> = [
+  [/\bdopamine\b/i, "psychological/neurochemical claim"],
+  [/\baddictive\b|\baddiction\b/i, "addiction claim"],
+  [/\bengineered to\b/i, "intentional-design claim"],
+  [/\bscientifically proven\b|\bproven to\b/i, "proof claim"],
+  [/\bcauses?\b/i, "causal claim"],
+  [/\bleads to\b/i, "causal claim"],
+  [/\bpsychological(?:ly)?\b/i, "psychology claim"],
+  [/\bstudies show\b|\bresearch shows\b/i, "research claim"],
+];
+
+function findUnsupportedClaims(text: string): string[] {
+  const found = new Set<string>();
+
+  for (const [pattern, label] of unsupportedClaimPatterns) {
+    if (pattern.test(text)) found.add(label);
+  }
+
+  return [...found];
+}
+
 export function validateScript(
   script: VideoScript,
   targetSeconds = 60,
 ): ScriptValidationResult {
   const errors: string[] = [];
   const warnings: string[] = [];
+  const sections = Array.isArray(script.sections) ? script.sections : [];
 
   if (!isNonEmpty(script.title)) errors.push("Title is missing.");
   if (!isNonEmpty(script.hook)) errors.push("Hook is missing.");
   if (!isNonEmpty(script.ending)) errors.push("Ending is missing.");
-  if (!Array.isArray(script.sections) || script.sections.length === 0) {
-    errors.push("Script must contain at least one section.");
-  }
+  if (sections.length === 0) errors.push("Script must contain at least one section.");
 
   let narrationWords = wordCount(script.hook) + wordCount(script.ending);
 
-  for (const [index, section] of (script.sections ?? []).entries()) {
+  for (const [index, section] of sections.entries()) {
     if (!isNonEmpty(section?.heading)) {
       errors.push(`Section ${index + 1} has no heading.`);
     }
@@ -58,7 +90,10 @@ export function validateScript(
     );
   }
 
-  if (Math.abs(script.estimatedSeconds - targetSeconds) > Math.max(10, targetSeconds * 0.25)) {
+  if (
+    Math.abs(script.estimatedSeconds - targetSeconds) >
+    Math.max(10, targetSeconds * 0.25)
+  ) {
     warnings.push(
       `Model-estimated duration (${script.estimatedSeconds}s) is far from the target (${targetSeconds}s).`,
     );
@@ -72,13 +107,20 @@ export function validateScript(
     warnings.push("The script may be too dense for the requested runtime.");
   }
 
+  const unsupportedClaims = findUnsupportedClaims(scriptText(script));
+  if (unsupportedClaims.length > 0) {
+    warnings.push(
+      `Potential unsupported claims detected: ${unsupportedClaims.join(", ")}. Verify against research or rewrite more neutrally.`,
+    );
+  }
+
   const score = Math.max(
     0,
     Math.min(100, 100 - errors.length * 30 - warnings.length * 10),
   );
 
   return {
-    valid: errors.length === 0,
+    valid: errors.length === 0 && unsupportedClaims.length === 0,
     score,
     errors,
     warnings,
