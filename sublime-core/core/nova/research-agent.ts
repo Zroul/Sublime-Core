@@ -44,7 +44,9 @@ Research rules:
 10. Save a concise, structured research report to the requested output file.
 11. The report must include: query, research date, strongest sources, key facts, important uncertainty, and a short recommended angle for future content.
 12. Work only inside the workspace.
-13. When the research report is complete, call task_done.
+13. File-tool paths are already relative to the workspace root. If the requested output is "research/example.md", save it to exactly "research/example.md", NOT "workspace/research/example.md".
+14. Before finishing, verify that the requested output file exists by using read_file.
+15. When the research report is complete and verified, call task_done.
 `,
     tools: [
       createFileTool,
@@ -57,7 +59,7 @@ Research rules:
     initialMessages: [
       {
         role: "user",
-        content: `Research this topic: ${options.query}\n\nSave the final research report to workspace/${outputFile}. Use at least 3 distinct web searches and inspect multiple useful sources before writing the report.`,
+        content: `Research this topic: ${options.query}\n\nSave the final research report to exactly this workspace-relative path: ${outputFile}\n\nUse at least 3 distinct web searches and inspect multiple useful sources before writing the report. After saving it, read the same path to verify that it exists and contains the final report.`,
       },
     ],
   });
