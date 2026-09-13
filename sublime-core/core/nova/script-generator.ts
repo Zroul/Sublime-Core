@@ -6,6 +6,7 @@ export interface ScriptRequest {
   targetSeconds?: number;
   tone?: string;
   audience?: string;
+  researchContext?: string;
 }
 
 export interface VideoScript {
@@ -38,17 +39,18 @@ export async function generateScript(
   const targetSeconds = request.targetSeconds ?? (request.format === "long" ? 240 : 60);
   const tone = request.tone ?? "fast, engaging, informative";
   const audience = request.audience ?? "general internet audience";
+  const researchContext = request.researchContext?.trim() || "No research context was supplied.";
 
   const messages: Message[] = [
     {
       role: "user",
-      content: `Create a video script about: ${request.topic}\n\nTarget length: about ${targetSeconds} seconds.\nTone: ${tone}.\nAudience: ${audience}.\n\nReturn ONLY valid JSON with this exact shape:\n{\n  "title": "...",\n  "hook": "...",\n  "sections": [{"heading":"...","narration":"...","visualDirection":"..."}],\n  "ending": "...",\n  "estimatedSeconds": 60\n}\n\nRules:\n- Write original narration, not copied text.\n- Keep factual claims grounded in the supplied topic/context.\n- Make the hook strong without clickbait that promises something the video does not deliver.\n- Visual directions must be practical for a later video-production stage.`,
+      content: `Create a video script about: ${request.topic}\n\nTarget length: about ${targetSeconds} seconds.\nTone: ${tone}.\nAudience: ${audience}.\n\nResearch context:\n${researchContext}\n\nReturn ONLY valid JSON with this exact shape:\n{\n  "title": "...",\n  "hook": "...",\n  "sections": [{"heading":"...","narration":"...","visualDirection":"..."}],\n  "ending": "...",\n  "estimatedSeconds": 60\n}\n\nRules:\n- Write original narration, not copied text.\n- Use research context for factual claims. Never invent studies, statistics, causes, or scientific explanations.\n- If research context does not support a strong claim, use neutral wording instead of guessing.\n- Avoid unsupported psychological or medical claims such as "dopamine hit", "addictive", "engineered to", "proven to", or "causes" unless the supplied research directly supports them.\n- Make the hook strong without clickbait that promises something the video does not deliver.\n- Visual directions must be practical for a later video-production stage.`,
     },
   ];
 
   const response = await llm.complete({
     system:
-      "You are NOVA's script-writing module. Produce concise, original, production-ready scripts. Never add commentary outside the requested JSON.",
+      "You are NOVA's script-writing module. Produce concise, original, production-ready scripts. Never add commentary outside the requested JSON. Treat supplied research as the factual boundary.",
     messages,
     tools: [],
   });
