@@ -57,10 +57,57 @@ function extractPublishedAt(html: string): string | undefined {
   );
 }
 
+function isRetryableError(error: unknown): boolean {
+  if (!(error instanceof Error)) return true;
+  const message = error.message.toLowerCase();
+  return (
+    message.includes("timeout") ||
+    message.includes("fetch failed") ||
+    message.includes("network") ||
+    message.includes("econnreset") ||
+    message.includes("socket")
+  );
+}
+
+async function fetchWithRetry(url: URL): Promise<Response> {
+  const attempts = 3;
+  const timeoutMs = 15_000;
+  let lastError: unknown;
+
+  for (let attempt = 1; attempt <= attempts; attempt += 1) {
+    try {
+      const response = await fetch(url, {
+        headers: {
+          "User-Agent": "Mozilla/5.0 (Sublime Core NOVA source reader)",
+        },
+        redirect: "follow",
+        signal: AbortSignal.timeout(timeoutMs),
+      });
+
+      if (response.ok) return response;
+
+      if (response.status >= 500 && attempt < attempts) {
+        await new Promise((resolve) => setTimeout(resolve, 500 * attempt));
+        continue;
+      }
+
+      throw new Error(`Source fetch failed with HTTP ${response.status}.`);
+    } catch (error) {
+      lastError = error;
+      if (!isRetryableError(error) || attempt === attempts) throw error;
+      await new Promise((resolve) => setTimeout(resolve, 500 * attempt));
+    }
+  }
+
+  throw lastError instanceof Error
+    ? lastError
+    : new Error("Source fetch failed after retries.");
+}
+
 export const sourceFetchTool: Tool = {
   name: "source_fetch",
   description:
-    "Fetch a public webpage and extract readable text plus metadata so NOVA can inspect and verify a research source.",
+    "Fetch a public webpage and extract readable text plus metadata so NOVA can inspect and verify a research source. Network failures should be reported cleanly so NOVA can continue with other sources.",
   parameters: {
     type: "object",
     properties: {
@@ -75,9 +122,7 @@ export const sourceFetchTool: Tool = {
   handler: async (args) => {
     const url = typeof args.url === "string" ? args.url.trim() : "";
 
-    if (!url) {
-      throw new Error("source_fetch requires a non-empty URL.");
-    }
+    if (!url) throw new Error("source_fetch requires a non-empty URL.");
 
     let parsed: URL;
     try {
@@ -90,36 +135,41 @@ export const sourceFetchTool: Tool = {
       throw new Error("source_fetch only supports HTTP and HTTPS URLs.");
     }
 
-    const response = await fetch(parsed, {
-      headers: {
-        "User-Agent": "Mozilla/5.0 (Sublime Core NOVA source reader)",
-      },
-      redirect: "follow",
-      signal: AbortSignal.timeout(20_000),
-    });
+    try {
+      const response = await fetchWithRetry(parsed);
+      const contentType = response.headers.get("content-type") ?? "";
 
-    if (!response.ok) {
-      throw new Error(`Source fetch failed with HTTP ${response.status}.`);
+      if (!contentType.includes("text/html") && !contentType.includes("text/plain")) {
+        return JSON.stringify({
+          requestedUrl: url,
+          finalUrl: response.url,
+          status: response.status,
+          failed: true,
+          error: `Unsupported source content type: ${contentType || "unknown"}.`,
+        });
+      }
+
+      const raw = await response.text();
+      const text = contentType.includes("text/plain") ? raw.trim() : htmlToText(raw);
+      const maxChars = 20_000;
+
+      return JSON.stringify({
+        requestedUrl: url,
+        finalUrl: response.url,
+        status: response.status,
+        contentType,
+        title: contentType.includes("text/html") ? extractTitle(raw) : undefined,
+        publishedAt: contentType.includes("text/html") ? extractPublishedAt(raw) : undefined,
+        truncated: text.length > maxChars,
+        text: text.slice(0, maxChars),
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      return JSON.stringify({
+        requestedUrl: url,
+        failed: true,
+        error: `Source fetch temporarily unavailable: ${message}`,
+      });
     }
-
-    const contentType = response.headers.get("content-type") ?? "";
-    if (!contentType.includes("text/html") && !contentType.includes("text/plain")) {
-      throw new Error(`Unsupported source content type: ${contentType || "unknown"}.`);
-    }
-
-    const raw = await response.text();
-    const text = contentType.includes("text/plain") ? raw.trim() : htmlToText(raw);
-    const maxChars = 20_000;
-
-    return JSON.stringify({
-      requestedUrl: url,
-      finalUrl: response.url,
-      status: response.status,
-      contentType,
-      title: contentType.includes("text/html") ? extractTitle(raw) : undefined,
-      publishedAt: contentType.includes("text/html") ? extractPublishedAt(raw) : undefined,
-      truncated: text.length > maxChars,
-      text: text.slice(0, maxChars),
-    });
   },
 };
