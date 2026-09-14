@@ -18,10 +18,61 @@ function decodeHtml(value: string): string {
     .trim();
 }
 
+function isRetryableError(error: unknown): boolean {
+  if (!(error instanceof Error)) return true;
+
+  const message = error.message.toLowerCase();
+  return (
+    message.includes("timeout") ||
+    message.includes("fetch failed") ||
+    message.includes("network") ||
+    message.includes("econnreset") ||
+    message.includes("socket")
+  );
+}
+
+async function fetchWithRetry(url: string): Promise<Response> {
+  const attempts = 3;
+  const timeoutMs = 12_000;
+  let lastError: unknown;
+
+  for (let attempt = 1; attempt <= attempts; attempt += 1) {
+    try {
+      const response = await fetch(url, {
+        headers: {
+          "User-Agent": "Mozilla/5.0 (Sublime Core NOVA)",
+        },
+        signal: AbortSignal.timeout(timeoutMs),
+      });
+
+      if (response.ok) return response;
+
+      if (response.status >= 500 && attempt < attempts) {
+        await new Promise((resolve) => setTimeout(resolve, 500 * attempt));
+        continue;
+      }
+
+      throw new Error(`Web search failed with HTTP ${response.status}.`);
+    } catch (error) {
+      lastError = error;
+
+      if (!isRetryableError(error) || attempt === attempts) {
+        throw error;
+      }
+
+      await new Promise((resolve) => setTimeout(resolve, 500 * attempt));
+    }
+  }
+
+  throw lastError instanceof Error
+    ? lastError
+    : new Error("Web search failed after retries.");
+}
+
 export const webSearchTool: Tool = {
   name: "web_search",
   description:
-    "Search the public web for current information. Use this for news, trends, research, recent events, and facts that may have changed. Return a small set of useful results.",
+    "Search the public web for current information. Use this for news, trends, research, recent events, and facts that may have changed. Return a small set of useful results. Network failures should be reported cleanly so NOVA can continue with other searches.",
   parameters: {
     type: "object",
     properties: {
@@ -41,35 +92,37 @@ export const webSearchTool: Tool = {
     }
 
     const url = `https://html.duckduckgo.com/html/?q=${encodeURIComponent(query)}`;
-    const response = await fetch(url, {
-      headers: {
-        "User-Agent": "Mozilla/5.0 (Sublime Core NOVA)",
-      },
-      signal: AbortSignal.timeout(15_000),
-    });
 
-    if (!response.ok) {
-      throw new Error(`Web search failed with HTTP ${response.status}.`);
-    }
+    try {
+      const response = await fetchWithRetry(url);
+      const html = await response.text();
+      const results: SearchResult[] = [];
+      const pattern = /<a[^>]+class="result__a"[^>]+href="([^"]+)"[^>]*>([\s\S]*?)<\/a>[\s\S]*?<a[^>]+class="result__snippet"[^>]*>([\s\S]*?)<\/a>/g;
 
-    const html = await response.text();
-    const results: SearchResult[] = [];
-    const pattern = /<a[^>]+class="result__a"[^>]+href="([^"]+)"[^>]*>([\s\S]*?)<\/a>[\s\S]*?<a[^>]+class="result__snippet"[^>]*>([\s\S]*?)<\/a>/g;
+      for (const match of html.matchAll(pattern)) {
+        results.push({
+          title: decodeHtml(match[2]),
+          url: decodeHtml(match[1]),
+          snippet: decodeHtml(match[3]),
+        });
 
-    for (const match of html.matchAll(pattern)) {
-      results.push({
-        title: decodeHtml(match[2]),
-        url: decodeHtml(match[1]),
-        snippet: decodeHtml(match[3]),
+        if (results.length >= 8) break;
+      }
+
+      return JSON.stringify({
+        query,
+        resultCount: results.length,
+        results,
       });
-
-      if (results.length >= 8) break;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      return JSON.stringify({
+        query,
+        resultCount: 0,
+        results: [],
+        failed: true,
+        error: `Web search temporarily unavailable: ${message}`,
+      });
     }
-
-    return JSON.stringify({
-      query,
-      resultCount: results.length,
-      results,
-    });
   },
 };
