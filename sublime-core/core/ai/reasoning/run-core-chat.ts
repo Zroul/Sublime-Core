@@ -24,38 +24,60 @@ while (true) {
 
   try {
     const memory = await readFile(memoryPath, "utf8");
-    let chatLog = "";
 
+    let chatLog = "";
     try {
       chatLog = await readFile(chatLogPath, "utf8");
     } catch {
       chatLog = "";
     }
 
-    const system = `
-You are CORE, the local AI brain of Sublime Core.
+    const history = [];
+    const entries = chatLog.split(/\n## User\n/).slice(1);
 
-Use the following persistent project memory:
+    for (const entry of entries.slice(-20)) {
+      const parts = entry.split(/\n\n## CORE\n/);
+      if (parts.length !== 2) continue;
+
+      const previousUser = parts[0].trim();
+      const previousCore = parts[1].trim();
+
+      if (previousUser) {
+        history.push({
+          role: "user" as const,
+          content: previousUser,
+        });
+      }
+
+      if (previousCore) {
+        history.push({
+          role: "assistant" as const,
+          content: previousCore,
+        });
+      }
+    }
+
+    const result = await model.complete({
+      system: `You are CORE, the local AI brain of Sublime Core.
+
+Use this persistent project memory:
 
 --- CORE MEMORY ---
 ${memory}
 --- END CORE MEMORY ---
 
-Use the following previous conversation history when it is relevant:
-
---- CHAT HISTORY ---
-${chatLog.slice(-12000)}
---- END CHAT HISTORY ---
-
 You are a chat brain, not NOVA and not an autonomous agent.
 Answer the user directly.
 Do not expose hidden chain-of-thought.
-Do not claim to remember something unless it is present in the supplied memory or chat history.
-`;
-
-    const result = await model.complete({
-      system,
-      messages: [{ role: "user", content: user }],
+Treat the supplied conversation history as real previous conversation.
+Do not invent memories.`,
+      messages: [
+        ...history,
+        {
+          role: "user",
+          content: user,
+        },
+      ],
       tools: [],
     });
 
