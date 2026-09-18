@@ -32,8 +32,8 @@ while (true) {
       chatLog = "";
     }
 
-    const history = [];
     const entries = chatLog.split(/\n## User\n/).slice(1);
+    const history = [];
 
     for (const entry of entries.slice(-20)) {
       const parts = entry.split(/\n\n## CORE\n/);
@@ -60,17 +60,18 @@ while (true) {
     const result = await model.complete({
       system: `You are CORE, the local AI brain of Sublime Core.
 
-Use this persistent project memory:
-
+Your persistent memory is below. Treat it as authoritative factual memory.
 --- CORE MEMORY ---
 ${memory}
 --- END CORE MEMORY ---
 
+Conversation history is supplied as actual messages.
+When the user asks what they previously told you, retrieve the exact fact from the conversation history instead of guessing.
+If the fact is present, answer with it exactly.
+If it is absent, say you do not have it.
+
 You are a chat brain, not NOVA and not an autonomous agent.
-Answer the user directly.
-Do not expose hidden chain-of-thought.
-Treat the supplied conversation history as real previous conversation.
-Do not invent memories.`,
+Do not expose hidden chain-of-thought.`,
       messages: [
         ...history,
         {
