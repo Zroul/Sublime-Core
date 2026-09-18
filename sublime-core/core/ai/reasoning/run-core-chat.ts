@@ -110,10 +110,11 @@ while (true) {
         "Answer directly and accurately.\n" +
         "IMPORTANT MEMORY RULES:\n" +
         "1. The PERSISTENT MEMORY section is information you are explicitly allowed to use.\n" +
-        "2. If the user asks about something that appears in PERSISTENT MEMORY, answer using that memory.\n" +
-        "3. Never say you do not have access to memory when the requested fact is present below.\n" +
-        "4. Never guess a fact that is not present in memory or history.\n" +
-        "5. Do not expose hidden chain-of-thought.",
+        "2. Before answering, actively scan PERSISTENT MEMORY for facts relevant to the user's question.\n" +
+        "3. If the requested fact appears in PERSISTENT MEMORY, use it as the answer even if the conversation HISTORY contains a different answer. PERSISTENT MEMORY has priority over HISTORY.\n" +
+        "4. Never say you do not have access to memory when the requested fact is present below.\n" +
+        "5. Never guess a fact that is not present in memory or history.\n" +
+        "6. Do not expose hidden chain-of-thought.",
       messages: [
         ...history,
         { role: "user", content: user },
