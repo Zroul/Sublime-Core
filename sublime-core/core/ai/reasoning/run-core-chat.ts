@@ -18,9 +18,7 @@ while (true) {
     break;
   }
 
-  if (!user.trim()) {
-    continue;
-  }
+  if (!user.trim()) continue;
 
   try {
     const memory = await readFile(memoryPath, "utf8");
@@ -28,9 +26,7 @@ while (true) {
     let chatLog = "";
     try {
       chatLog = await readFile(chatLogPath, "utf8");
-    } catch {
-      chatLog = "";
-    }
+    } catch {}
 
     const entries = chatLog.split(/\n## User\n/).slice(1);
     const history = [];
@@ -39,51 +35,75 @@ while (true) {
       const parts = entry.split(/\n\n## CORE\n/);
       if (parts.length !== 2) continue;
 
-      const previousUser = parts[0].trim();
-      const previousCore = parts[1].trim();
+      history.push(
+        { role: "user" as const, content: parts[0].trim() },
+        { role: "assistant" as const, content: parts[1].trim() },
+      );
+    }
 
-      if (previousUser) {
-        history.push({
-          role: "user" as const,
-          content: previousUser,
-        });
+    const lower = user.toLowerCase();
+
+    if (
+      lower.includes("remember") ||
+      lower.includes("save this") ||
+      lower.includes("remember this")
+    ) {
+      const result = await model.complete({
+        system: `You are CORE's memory extractor.
+
+Extract the single useful fact the user wants CORE to remember.
+Return ONLY one line in this exact format:
+MEMORY: <fact>
+
+Do not explain anything else.
+Do not invent facts.`,
+        messages: [{ role: "user", content: user }],
+        tools: [],
+      });
+
+      const extracted = (result.text ?? "")
+        .replace(/^MEMORY:\s*/i, "")
+        .trim();
+
+      if (extracted) {
+        await appendFile(
+          memoryPath,
+          `\n- ${extracted}\n`,
+          "utf8",
+        );
+        console.log("CORE: Saved to persistent memory.\n");
+      } else {
+        console.log("CORE: I couldn't extract a memory from that.\n");
       }
 
-      if (previousCore) {
-        history.push({
-          role: "assistant" as const,
-          content: previousCore,
-        });
-      }
+      continue;
     }
 
     const result = await model.complete({
       system: `You are CORE, the local AI brain of Sublime Core.
 
-Your persistent memory is below. Treat it as authoritative factual memory.
---- CORE MEMORY ---
+Persistent memory:
+--- MEMORY ---
 ${memory}
---- END CORE MEMORY ---
+--- END MEMORY ---
 
-Conversation history is supplied as actual messages.
-When the user asks what they previously told you, retrieve the exact fact from the conversation history instead of guessing.
-If the fact is present, answer with it exactly.
-If it is absent, say you do not have it.
+Previous conversation:
+--- HISTORY ---
+${history.map((m) => `${m.role.toUpperCase()}: ${m.content}`).join("\n")}
+--- END HISTORY ---
 
-You are a chat brain, not NOVA and not an autonomous agent.
+Answer directly and accurately.
+If the user asks for a fact from memory, use the persistent memory or history.
+Never guess a remembered fact.
 Do not expose hidden chain-of-thought.`,
       messages: [
         ...history,
-        {
-          role: "user",
-          content: user,
-        },
+        { role: "user", content: user },
       ],
       tools: [],
     });
 
     const answer = result.text ?? "";
-
     console.log(`CORE: ${answer}\n`);
 
     await appendFile(
