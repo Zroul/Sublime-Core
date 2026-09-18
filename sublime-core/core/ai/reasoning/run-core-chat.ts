@@ -76,6 +76,50 @@ while (true) {
 
     const memory = await loadMemory();
 
+    const memoryLines = memory
+      .split("\n")
+      .map((line) => line.trim())
+      .filter((line) => line.startsWith("- "));
+
+    const stopWords = new Set([
+      "what", "is", "my", "the", "a", "an", "do", "does", "did",
+      "i", "you", "me", "about", "tell", "know", "remember", "can",
+      "please", "this", "that", "of", "to", "in", "for", "and",
+    ]);
+
+    const questionWords = new Set(
+      lower
+        .replace(/[^a-z0-9\s]/g, " ")
+        .split(/\s+/)
+        .filter((word) => word.length > 1 && !stopWords.has(word)),
+    );
+
+    let directMemoryMatch = "";
+
+    if (questionWords.size > 0) {
+      let bestScore = 0;
+
+      for (const line of memoryLines) {
+        const memoryWords = new Set(
+          line
+            .toLowerCase()
+            .replace(/[^a-z0-9\s]/g, " ")
+            .split(/\s+/)
+            .filter((word) => word.length > 1 && !stopWords.has(word)),
+        );
+
+        let score = 0;
+        for (const word of questionWords) {
+          if (memoryWords.has(word)) score += 1;
+        }
+
+        if (score >= 2 && score > bestScore) {
+          bestScore = score;
+          directMemoryMatch = line.slice(2).trim();
+        }
+      }
+    }
+
     let chatLog = "";
     try {
       chatLog = await readFile(chatLogPath, "utf8");
@@ -104,6 +148,9 @@ while (true) {
         "Persistent memory:\n--- MEMORY ---\n" +
         memory +
         "\n--- END MEMORY ---\n\n" +
+        "DIRECT MEMORY MATCH:\n" +
+        (directMemoryMatch || "NONE") +
+        "\n--- END DIRECT MEMORY MATCH ---\n\n" +
         "Previous conversation:\n--- HISTORY ---\n" +
         historyText +
         "\n--- END HISTORY ---\n\n" +
@@ -111,10 +158,11 @@ while (true) {
         "IMPORTANT MEMORY RULES:\n" +
         "1. The PERSISTENT MEMORY section is information you are explicitly allowed to use.\n" +
         "2. Before answering, actively scan PERSISTENT MEMORY for facts relevant to the user's question.\n" +
-        "3. If the requested fact appears in PERSISTENT MEMORY, use it as the answer even if the conversation HISTORY contains a different answer. PERSISTENT MEMORY has priority over HISTORY.\n" +
-        "4. Never say you do not have access to memory when the requested fact is present below.\n" +
-        "5. Never guess a fact that is not present in memory or history.\n" +
-        "6. Do not expose hidden chain-of-thought.",
+        "3. If a DIRECT MEMORY MATCH is provided below, it is the answer source. Use it instead of saying you do not know.\n" +
+        "4. PERSISTENT MEMORY has priority over HISTORY.\n" +
+        "5. Never say you do not have access to memory when the requested fact is present.\n" +
+        "6. Never guess a fact that is not present in memory or history.\n" +
+        "7. Do not expose hidden chain-of-thought.",
       messages: [
         ...history,
         { role: "user", content: user },
