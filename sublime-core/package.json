@@ -6,7 +6,8 @@
   "type": "module",
   "scripts": {
     "start": "node app/backend/index.js",
-    "nova:research": "tsx core/ai/reasoning/run-test.ts"
+    "nova:research": "tsx core/ai/reasoning/run-test.ts",
+    "core:chat": "tsx core/ai/reasoning/run-core-chat.ts"
   },
   "devDependencies": {
     "@types/node": "^26.4.1",
