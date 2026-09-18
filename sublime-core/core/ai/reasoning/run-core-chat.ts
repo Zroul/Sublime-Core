@@ -108,9 +108,12 @@ while (true) {
         historyText +
         "\n--- END HISTORY ---\n\n" +
         "Answer directly and accurately.\n" +
-        "If the user asks for a fact from memory, use the persistent memory or history.\n" +
-        "Never guess a remembered fact.\n" +
-        "Do not expose hidden chain-of-thought.",
+        "IMPORTANT MEMORY RULES:\n" +
+        "1. The PERSISTENT MEMORY section is information you are explicitly allowed to use.\n" +
+        "2. If the user asks about something that appears in PERSISTENT MEMORY, answer using that memory.\n" +
+        "3. Never say you do not have access to memory when the requested fact is present below.\n" +
+        "4. Never guess a fact that is not present in memory or history.\n" +
+        "5. Do not expose hidden chain-of-thought.",
       messages: [
         ...history,
         { role: "user", content: user },
