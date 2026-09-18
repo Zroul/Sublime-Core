@@ -18,7 +18,7 @@ export class OllamaProvider implements LlmClient {
   private readonly model: string;
 
   constructor(
-    model = process.env.OLLAMA_MODEL ?? "qwen3:8b",
+    model = process.env.OLLAMA_MODEL ?? "core",
     baseUrl = process.env.OLLAMA_BASE_URL ?? "http://127.0.0.1:11434",
   ) {
     this.model = model;
@@ -64,46 +64,76 @@ export class OllamaProvider implements LlmClient {
       }),
     ];
 
-    const response = await fetch(`${this.baseUrl}/api/chat`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        model: this.model,
-        stream: false,
-        messages,
-        tools: input.tools.map((tool) => ({
-          type: "function",
-          function: {
-            name: tool.name,
-            description: tool.description,
-            parameters: tool.parameters,
+    const attempts = 3;
+    const timeoutMs = 120_000;
+    let lastError: unknown;
+
+    for (let attempt = 1; attempt <= attempts; attempt += 1) {
+      try {
+        const response = await fetch(`${this.baseUrl}/api/chat`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
           },
-        })),
-      }),
-    });
+          body: JSON.stringify({
+            model: this.model,
+            stream: false,
+            think: false,
+            messages,
+            tools: input.tools.map((tool) => ({
+              type: "function",
+              function: {
+                name: tool.name,
+                description: tool.description,
+                parameters: tool.parameters,
+              },
+            })),
+          }),
+          signal: AbortSignal.timeout(timeoutMs),
+        });
 
-    const data = (await response.json()) as OllamaResponse;
+        const data = (await response.json()) as OllamaResponse;
 
-    if (!response.ok) {
-      throw new Error(
-        data.error ?? `Ollama request failed with HTTP ${response.status}.`,
-      );
+        if (!response.ok) {
+          throw new Error(
+            data.error ??
+              `Ollama request failed with HTTP ${response.status}.`,
+          );
+        }
+
+        const calls: ToolCall[] = (data.message?.tool_calls ?? []).map(
+          (call, index) => ({
+            id: `ollama-${Date.now()}-${index}`,
+            name: call.function.name,
+            arguments:
+              typeof call.function.arguments === "string"
+                ? JSON.parse(call.function.arguments)
+                : call.function.arguments,
+          }),
+        );
+
+        return {
+          text: data.message?.content ?? "",
+          toolCalls: calls,
+        };
+      } catch (error) {
+        lastError = error;
+
+        if (attempt === attempts) {
+          break;
+        }
+
+        await new Promise((resolve) => setTimeout(resolve, 1000 * attempt));
+      }
     }
 
-    const calls: ToolCall[] = (data.message?.tool_calls ?? []).map(
-      (call, index) => ({
-        id: `ollama-${Date.now()}-${index}`,
-        name: call.function.name,
-        arguments:
-          typeof call.function.arguments === "string"
-            ? JSON.parse(call.function.arguments)
-            : call.function.arguments,
-      }),
-    );
+    const message =
+      lastError instanceof Error
+        ? lastError.message
+        : String(lastError);
 
-    return {
-      text: data.message?.content ?? "",
-      toolCalls: calls,
-    };
+    throw new Error(
+      `Local Ollama request failed after ${attempts} attempts: ${message}`,
+    );
   }
 }
