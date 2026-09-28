@@ -17,6 +17,7 @@ import { sourceFetchTool } from "../ai/tools/source-fetch.js";
 import { webSearchTool } from "../ai/tools/web-search.js";
 import { workspaceStatusTool } from "../ai/tools/workspace-status.js";
 import { verifyArtifactTool } from "../ai/tools/verify-artifact.js";
+import { novaMemoryTool } from "../ai/tools/nova-memory.js";
 import { createNovaGuard } from "./guard.js";
 import { NOVA_SYSTEM_PROMPT } from "./system.js";
 
@@ -55,6 +56,7 @@ async function runTask(task: string): Promise<void> {
       listFilesTool,
       workspaceStatusTool,
       verifyArtifactTool,
+      novaMemoryTool,
       runCommandTool,
     ],
     maxTurns: MAX_TURNS,
