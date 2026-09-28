@@ -116,13 +116,17 @@ export const webSearchTool: Tool = {
       });
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
-      return JSON.stringify({
-        query,
-        resultCount: 0,
-        results: [],
-        failed: true,
-        error: `Web search temporarily unavailable: ${message}`,
-      });
+      return {
+        toolCallId: "",
+        content: JSON.stringify({
+          query,
+          resultCount: 0,
+          results: [],
+          failed: true,
+          error: `Web search temporarily unavailable: ${message}`,
+        }),
+        isError: true,
+      };
     }
   },
 };
