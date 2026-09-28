@@ -17,6 +17,7 @@ export interface NovaGuardLimits {
   maxIdenticalToolCalls: number;
   maxContentJobs: number;
   maxContentArtifactWrites: number;
+  maxVideoEngineRuns: number;
 }
 
 const DEFAULT_LIMITS: NovaGuardLimits = {
@@ -27,6 +28,7 @@ const DEFAULT_LIMITS: NovaGuardLimits = {
   maxIdenticalToolCalls: 2,
   maxContentJobs: 5,
   maxContentArtifactWrites: 20,
+  maxVideoEngineRuns: 3,
 };
 
 function toolSignature(call: ToolCall): string {
@@ -89,6 +91,13 @@ export function createNovaGuard(
         return {
           block: true,
           reason: `NOVA guard: maximum content-job operations per run is ${limits.maxContentJobs}.`,
+        };
+      }
+
+      if (call.name === "video_engine" && count > limits.maxVideoEngineRuns) {
+        return {
+          block: true,
+          reason: `NOVA guard: maximum video-engine operations per run is ${limits.maxVideoEngineRuns}.`,
         };
       }
 
