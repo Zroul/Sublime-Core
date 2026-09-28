@@ -5,7 +5,7 @@ import { stdin as input, stdout as output } from "node:process";
 
 import { OllamaProvider } from "../ai/providers/ollama.js";
 import { runReActLoop } from "../ai/reasoning/loop.js";
-import type { AgentState, ToolCall, Turn } from "../ai/reasoning/types.js";
+import type { Turn } from "../ai/reasoning/types.js";
 import {
   createFileTool,
   editFileTool,
@@ -16,124 +16,12 @@ import { runCommandTool } from "../ai/tools/command-tools.js";
 import { sourceFetchTool } from "../ai/tools/source-fetch.js";
 import { webSearchTool } from "../ai/tools/web-search.js";
 import { workspaceStatusTool } from "../ai/tools/workspace-status.js";
+import { createNovaGuard } from "./guard.js";
 import { NOVA_SYSTEM_PROMPT } from "./system.js";
 
 const MAX_TURNS = 18;
-const MAX_WEB_SEARCHES = 6;
-const MAX_SOURCE_FETCHES = 8;
-const MAX_COMMANDS = 4;
-const MAX_FILE_WRITES = 20;
-const MAX_IDENTICAL_TOOL_CALLS = 2;
-
 const workspace = path.resolve("workspace");
 const logPath = path.join(workspace, "nova", "NOVA_RUN_LOG.md");
-
-function toolSignature(call: ToolCall): string {
-  return JSON.stringify({
-    name: call.name,
-    arguments: call.arguments,
-  });
-}
-
-function createGuard(task: string) {
-  const taskText = task.toLowerCase();
-  const requiresCreation =
-    taskText.includes("create") ||
-    taskText.includes("write") ||
-    taskText.includes("generate");
-  const requiresVerification =
-    taskText.includes("verify") ||
-    taskText.includes("confirm") ||
-    taskText.includes("check");
-  const counts = new Map<string, number>();
-  const successful = new Map<string, number>();
-  const identical = new Map<string, number>();
-
-  return {
-    beforeToolCall(call: ToolCall): { block: boolean; reason?: string } {
-      const count = (counts.get(call.name) ?? 0) + 1;
-      counts.set(call.name, count);
-
-      const signature = toolSignature(call);
-      const sameCount = (identical.get(signature) ?? 0) + 1;
-      identical.set(signature, sameCount);
-
-      if (sameCount > MAX_IDENTICAL_TOOL_CALLS) {
-        return {
-          block: true,
-          reason:
-            "NOVA guard blocked this action because the exact same tool call has already failed or repeated too many times.",
-        };
-      }
-
-      if (call.name === "task_done") {
-        const hasFileChange =
-          (successful.get("create_file") ?? 0) +
-            (successful.get("edit_file") ?? 0) >
-          0;
-        const hasVerification =
-          (successful.get("read_file") ?? 0) +
-            (successful.get("list_files") ?? 0) >
-          0;
-
-        if (requiresCreation && !hasFileChange) {
-          return {
-            block: true,
-            reason:
-              "NOVA guard: the task asks for creation, but no file change has happened yet.",
-          };
-        }
-
-        if (requiresVerification && !hasVerification) {
-          return {
-            block: true,
-            reason:
-              "NOVA guard: the task asks for verification, but NOVA has not inspected the result yet.",
-          };
-        }
-      }
-
-      if (call.name === "web_search" && count > MAX_WEB_SEARCHES) {
-        return {
-          block: true,
-          reason: `NOVA guard: maximum web searches per run is ${MAX_WEB_SEARCHES}.`,
-        };
-      }
-
-      if (call.name === "source_fetch" && count > MAX_SOURCE_FETCHES) {
-        return {
-          block: true,
-          reason: `NOVA guard: maximum source fetches per run is ${MAX_SOURCE_FETCHES}.`,
-        };
-      }
-
-      if (call.name === "run_command" && count > MAX_COMMANDS) {
-        return {
-          block: true,
-          reason: `NOVA guard: maximum commands per run is ${MAX_COMMANDS}.`,
-        };
-      }
-
-      if (
-        (call.name === "create_file" || call.name === "edit_file") &&
-        count > MAX_FILE_WRITES
-      ) {
-        return {
-          block: true,
-          reason: `NOVA guard: maximum file writes per run is ${MAX_FILE_WRITES}.`,
-        };
-      }
-
-      return { block: false };
-    },
-
-    recordResult(toolName: string, isError: boolean) {
-      if (!isError) {
-        successful.set(toolName, (successful.get(toolName) ?? 0) + 1);
-      }
-    },
-  };
-}
 
 async function appendLog(text: string): Promise<void> {
   await fs.mkdir(path.dirname(logPath), { recursive: true });
@@ -142,7 +30,7 @@ async function appendLog(text: string): Promise<void> {
 
 async function runTask(task: string): Promise<void> {
   const provider = new OllamaProvider("core");
-  const guard = createGuard(task);
+  const guard = createNovaGuard(task);
 
   await appendLog(
     `\n## Run ${new Date().toISOString()}\n\n**Task:** ${task}\n\n`,
