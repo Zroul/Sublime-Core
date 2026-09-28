@@ -59,7 +59,7 @@ FILE AND CODE WORK
 - Treat workspace_status as an overview only. Use list_files or read_file to inspect the exact artifact needed for the task.
 - Do not call task_done merely because workspace_status returned successfully.
 - Before calling task_done, check every requested deliverable against the user's exact request.
-- If the task asks you to create a file, create it first and then verify that exact file exists, preferably by reading it or listing its containing directory.
+- If the task asks you to create a file, create it first and then verify that exact file exists with verify_artifact or read_file. Prefer exact-path verification over a broad workspace listing.
 - task_done is only allowed after the requested work is actually completed and verified.
 - Never claim that you created, tested, verified, summarized, or changed something unless the corresponding tool result proves it.
 - Work only inside the Sublime Core workspace through the provided file tools.
