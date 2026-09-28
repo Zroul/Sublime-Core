@@ -38,12 +38,33 @@ function jobPath(id: string): string {
 }
 
 async function readJob(id: string): Promise<ContentJob | undefined> {
+
   try {
     return JSON.parse(await fs.readFile(jobPath(id), "utf8")) as ContentJob;
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code === "ENOENT") return undefined;
     throw error;
   }
+}
+
+async function artifactExists(jobId: string, kind: string): Promise<boolean> {
+  const file = path.join(JOB_DIR, safeId(jobId), kind + ".md");
+  try {
+    await fs.access(file);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+async function requiredArtifact(stage: Stage, id: string): Promise<string | undefined> {
+  const required: Partial<Record<Stage, string>> = {
+    script_check: "script",
+    review: "review",
+  };
+  const kind = required[stage];
+  if (!kind) return undefined;
+  return (await artifactExists(id, kind)) ? undefined : kind;
 }
 
 export const contentJobTool: Tool = {
@@ -105,6 +126,15 @@ export const contentJobTool: Tool = {
       if (job.status !== "active") {
         return { toolCallId: "", content: "Only active jobs can advance.", isError: true };
       }
+      const missingArtifact = await requiredArtifact(job.currentStage, id);
+      if (missingArtifact) {
+        return {
+          toolCallId: "",
+          content: `Cannot advance from ${job.currentStage}: required ${missingArtifact} artifact is missing.`,
+          isError: true,
+        };
+      }
+
       const index = STAGES.indexOf(job.currentStage);
       if (index === STAGES.length - 1) {
         return { toolCallId: "", content: "Job is already at the publish stage.", isError: true };
