@@ -46,6 +46,7 @@ function createGuard(task: string) {
     taskText.includes("confirm") ||
     taskText.includes("check");
   const counts = new Map<string, number>();
+  const successful = new Map<string, number>();
   const identical = new Map<string, number>();
 
   return {
@@ -67,12 +68,12 @@ function createGuard(task: string) {
 
       if (call.name === "task_done") {
         const hasFileChange =
-          (counts.get("create_file") ?? 0) +
-            (counts.get("edit_file") ?? 0) >
+          (successful.get("create_file") ?? 0) +
+            (successful.get("edit_file") ?? 0) >
           0;
         const hasVerification =
-          (counts.get("read_file") ?? 0) +
-            (counts.get("list_files") ?? 0) >
+          (successful.get("read_file") ?? 0) +
+            (successful.get("list_files") ?? 0) >
           0;
 
         if (requiresCreation && !hasFileChange) {
@@ -125,6 +126,12 @@ function createGuard(task: string) {
 
       return { block: false };
     },
+
+    recordResult(toolName: string, isError: boolean) {
+      if (!isError) {
+        successful.set(toolName, (successful.get(toolName) ?? 0) + 1);
+      }
+    },
   };
 }
 
@@ -171,7 +178,18 @@ async function runTask(task: string): Promise<void> {
         }
         return decision;
       },
-      onToolResult(result) {
+      onToolResult(result, state) {
+        const assistant = [...state.messages]
+          .reverse()
+          .find((message) => message.role === "assistant");
+        const call = assistant?.toolCalls?.find(
+          (item) => item.id === result.toolCallId,
+        );
+
+        if (call) {
+          guard.recordResult(call.name, Boolean(result.isError));
+        }
+
         const preview = result.content.replace(/\s+/g, " ").slice(0, 240);
         console.log(
           `[OBSERVE] ${result.isError ? "ERROR " : ""}${preview}`,
