@@ -109,7 +109,7 @@ async function runTask(task: string): Promise<void> {
           `[OBSERVE] ${result.isError ? "ERROR " : ""}${preview}`,
         );
       },
-      persistTurn(turn: Turn) {
+      persistTurn(turn: Turn, state) {
         const toolCalls = turn.assistant.toolCalls ?? [];
         const toolNames = toolCalls.map((call) => call.name);
         const errors = turn.toolResults.filter((item) => item.isError).length;
