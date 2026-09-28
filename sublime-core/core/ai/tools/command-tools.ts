@@ -9,8 +9,11 @@ const WORKSPACE = path.resolve("workspace");
 
 const allowedCommands = new Set([
   "node",
+  "node.exe",
   "npm",
+  "npm.cmd",
   "npx",
+  "npx.cmd",
 ]);
 
 export const runCommandTool: Tool = {
@@ -25,7 +28,7 @@ export const runCommandTool: Tool = {
       command: {
         type: "string",
         description:
-          "Command to run. Only node, npm, and npx commands are allowed.",
+          "Command to run. Only node, npm, and npx commands are allowed (including Windows .cmd variants).",
       },
 
       args: {
@@ -49,7 +52,7 @@ export const runCommandTool: Tool = {
       : [];
 
     if (!allowedCommands.has(command)) {
-      return `Command blocked: ${command}. Allowed commands: node, npm, npx.`;
+      return `Command blocked: ${command}. Allowed commands: node, node.exe, npm, npm.cmd, npx, npx.cmd.`;
     }
 
     try {
