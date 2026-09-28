@@ -35,7 +35,16 @@ function toolSignature(call: ToolCall): string {
   });
 }
 
-function createGuard() {
+function createGuard(task: string) {
+  const taskText = task.toLowerCase();
+  const requiresCreation =
+    taskText.includes("create") ||
+    taskText.includes("write") ||
+    taskText.includes("generate");
+  const requiresVerification =
+    taskText.includes("verify") ||
+    taskText.includes("confirm") ||
+    taskText.includes("check");
   const counts = new Map<string, number>();
   const identical = new Map<string, number>();
 
