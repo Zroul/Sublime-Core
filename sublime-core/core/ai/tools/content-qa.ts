@@ -24,6 +24,9 @@ function checksFor(kind: string, content: string): string[] {
       checks.push("Asset manifest does not state an obvious source or rights field.");
     }
   }
+  if (kind === "qa") {
+    if (!/(pass|fail|issue|finding|check)/i.test(content)) checks.push("QA artifact does not contain an explicit check/result vocabulary.");
+  }
   if (kind === "review") {
     if (!/(pass|fail|block|issue|check)/i.test(content)) {
       checks.push("Review does not contain an explicit check/result vocabulary.");
@@ -40,7 +43,7 @@ export const contentQaTool: Tool = {
     type: "object",
     properties: {
       path: { type: "string", description: "Workspace-relative artifact path." },
-      kind: { type: "string", enum: ["script", "asset_manifest", "review"] },
+      kind: { type: "string", enum: ["script", "qa", "asset_manifest", "review"] },
     },
     required: ["path", "kind"],
     additionalProperties: false,
