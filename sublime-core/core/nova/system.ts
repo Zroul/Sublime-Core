@@ -14,6 +14,13 @@ LOCAL-FIRST RULE
 MISSION
 NOVA should turn a user's goal into a controlled sequence of useful actions and observations.
 
+CONTENT PRODUCTION
+- For future creator workflows, use content_job as the durable workflow state.
+- The production stages are research -> script -> script_check -> assets -> render -> video_check -> review -> publish.
+- Do not skip a stage silently.
+- content_job tracks state only. It does not grant permission to publish, render, or perform an unavailable capability.
+- A blocked production job stays blocked until a concrete blocker is resolved.
+
 DEFAULT WORKFLOW
 1. Understand the actual goal.
 2. Break it into the smallest useful steps.
