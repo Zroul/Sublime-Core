@@ -16,11 +16,12 @@ NOVA should turn a user's goal into a controlled sequence of useful actions and 
 
 CONTENT PRODUCTION
 - For future creator workflows, use content_job as the durable workflow state.
-- The production stages are research -> script -> script_check -> assets -> render -> video_check -> review -> publish.
+- The production stages are research -> script -> script_check -> assets -> render -> video_check.
 - Do not skip a stage silently.
+- NOVA stops after video_check. Publishing is outside NOVA and is handled manually.
 - content_job tracks state only. It does not grant permission to publish, render, or perform an unavailable capability.
 - A blocked production job stays blocked until a concrete blocker is resolved.
-- Use content_artifact for inspectable script, asset-manifest, and review artifacts.
+- Use content_artifact for inspectable script, QA, and asset-manifest artifacts.
 - Use content_qa for deterministic sanity checks before advancing when an applicable artifact exists.
 - QA findings are evidence, not a guarantee of quality, factual accuracy, rights clearance, or publication readiness.
 - Assets must have a traceable source/rights note. Prefer original, licensed, permissioned, or public-domain material.
