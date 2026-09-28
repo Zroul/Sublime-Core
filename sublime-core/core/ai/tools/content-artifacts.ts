@@ -5,7 +5,7 @@ import type { Tool } from "../reasoning/types.js";
 const WORKSPACE = path.resolve("workspace");
 const ROOT = path.join(WORKSPACE, "nova", "jobs");
 
-type ArtifactKind = "script" | "asset_manifest" | "review";
+type ArtifactKind = "script" | "qa" | "asset_manifest" | "review";
 
 function safeId(value: string): string {
   return value.trim().replace(/[^a-zA-Z0-9_-]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 80);
@@ -24,7 +24,7 @@ export const contentArtifactTool: Tool = {
     properties: {
       action: { type: "string", enum: ["read", "write"] },
       jobId: { type: "string", description: "Existing content job ID." },
-      kind: { type: "string", enum: ["script", "asset_manifest", "review"] },
+      kind: { type: "string", enum: ["script", "qa", "asset_manifest", "review"] },
       content: { type: "string", description: "Markdown artifact content when writing." },
     },
     required: ["action", "jobId", "kind"],
