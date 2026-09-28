@@ -78,14 +78,18 @@ export const runCommandTool: Tool = {
         stderr?: string;
       };
 
-      return [
-        "Command failed.",
-        err.message ?? "",
-        err.stdout ? `Output:\n${err.stdout}` : "",
-        err.stderr ? `Error:\n${err.stderr}` : "",
-      ]
-        .filter(Boolean)
-        .join("\n");
+      return {
+        toolCallId: "",
+        content: [
+          "Command failed.",
+          err.message ?? "",
+          err.stdout ? `Output:\n${err.stdout}` : "",
+          err.stderr ? `Error:\n${err.stderr}` : "",
+        ]
+          .filter(Boolean)
+          .join("\n"),
+        isError: true,
+      };
     }
   },
 };
