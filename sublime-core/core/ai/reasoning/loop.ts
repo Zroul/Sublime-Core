@@ -220,7 +220,7 @@ export async function runReActLoop<Ctx = unknown>(
       toolResults,
     };
 
-    await hooks.persistTurn?.(completedTurn);
+    await hooks.persistTurn?.(completedTurn, state);
     await hooks.onTurnEnd?.(state);
 
     if (stopViaTool) {
