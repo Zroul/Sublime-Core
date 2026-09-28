@@ -1,0 +1,16 @@
+{
+  "stage": "rank",
+  "ok": true,
+  "summary": "Stage completed.",
+  "data": {
+    "output": "{\n  \"primary\": \"Three underrated free tools for students\",\n  \"score\": 86,\n  \"alternatives\": [\n    \"Free tools that replace paid student apps\"\n  ]\n}",
+    "parsed": {
+      "primary": "Three underrated free tools for students",
+      "score": 86,
+      "alternatives": [
+        "Free tools that replace paid student apps"
+      ]
+    },
+    "format": "json"
+  }
+}

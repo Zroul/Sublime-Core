@@ -1,0 +1,16 @@
+{
+  "stage": "video_build",
+  "ok": true,
+  "summary": "Stage completed.",
+  "data": {
+    "output": "{\n  \"width\": 1080,\n  \"height\": 1920,\n  \"fps\": 30,\n  \"durationMs\": 7500,\n  \"clips\": []\n}",
+    "parsed": {
+      "width": 1080,
+      "height": 1920,
+      "fps": 30,
+      "durationMs": 7500,
+      "clips": []
+    },
+    "format": "json"
+  }
+}

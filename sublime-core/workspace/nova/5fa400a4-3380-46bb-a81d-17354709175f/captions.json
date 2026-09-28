@@ -1,0 +1,23 @@
+{
+  "stage": "captions",
+  "ok": true,
+  "summary": "Stage completed.",
+  "data": {
+    "output": "{\n  \"chunks\": [\n    {\n      \"startMs\": 0,\n      \"endMs\": 3500,\n      \"text\": \"Here are three useful free tools\"\n    },\n    {\n      \"startMs\": 3500,\n      \"endMs\": 7500,\n      \"text\": \"worth testing for study and productivity.\"\n    }\n  ]\n}",
+    "parsed": {
+      "chunks": [
+        {
+          "startMs": 0,
+          "endMs": 3500,
+          "text": "Here are three useful free tools"
+        },
+        {
+          "startMs": 3500,
+          "endMs": 7500,
+          "text": "worth testing for study and productivity."
+        }
+      ]
+    },
+    "format": "json"
+  }
+}

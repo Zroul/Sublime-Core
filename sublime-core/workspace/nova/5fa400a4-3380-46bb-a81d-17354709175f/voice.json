@@ -1,0 +1,13 @@
+{
+  "stage": "voice",
+  "ok": true,
+  "summary": "Stage completed.",
+  "data": {
+    "output": "{\n  \"narration\": \"Here are three useful free tools worth testing for study and productivity.\",\n  \"pace\": \"natural\"\n}",
+    "parsed": {
+      "narration": "Here are three useful free tools worth testing for study and productivity.",
+      "pace": "natural"
+    },
+    "format": "json"
+  }
+}

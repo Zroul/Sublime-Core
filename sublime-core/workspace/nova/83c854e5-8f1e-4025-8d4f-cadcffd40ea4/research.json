@@ -1,0 +1,25 @@
+{
+  "stage": "research",
+  "ok": true,
+  "summary": "Research reasoning completed and tool evidence collected.",
+  "data": {
+    "output": "{\n  \"facts\": [\n    \"Candidate ideas require verification before publication.\",\n    \"No external source is claimed by this deterministic test brain.\"\n  ],\n  \"claimsNeedingVerification\": [\n    \"Tool availability and current pricing\"\n  ]\n}",
+    "format": "json",
+    "parsed": {
+      "facts": [
+        "Candidate ideas require verification before publication.",
+        "No external source is claimed by this deterministic test brain."
+      ],
+      "claimsNeedingVerification": [
+        "Tool availability and current pricing"
+      ]
+    },
+    "toolResearch": {
+      "available": true,
+      "results": [],
+      "sources": [],
+      "failedUrls": [],
+      "mediaCapabilities": []
+    }
+  }
+}

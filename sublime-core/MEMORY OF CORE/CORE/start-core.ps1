@@ -1,0 +1,1 @@
+ollama run core --think=false

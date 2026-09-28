@@ -1,0 +1,22 @@
+{
+  "stage": "visuals",
+  "ok": true,
+  "summary": "Stage completed.",
+  "data": {
+    "output": "{\n  \"shots\": [\n    {\n      \"durationMs\": 2500,\n      \"description\": \"Title card with the topic\"\n    },\n    {\n      \"durationMs\": 5000,\n      \"description\": \"Original screen-style graphics for each tool\"\n    }\n  ],\n  \"assetPolicy\": \"Use original, licensed, public-domain, or user-provided assets.\"\n}",
+    "parsed": {
+      "shots": [
+        {
+          "durationMs": 2500,
+          "description": "Title card with the topic"
+        },
+        {
+          "durationMs": 5000,
+          "description": "Original screen-style graphics for each tool"
+        }
+      ],
+      "assetPolicy": "Use original, licensed, public-domain, or user-provided assets."
+    },
+    "format": "json"
+  }
+}

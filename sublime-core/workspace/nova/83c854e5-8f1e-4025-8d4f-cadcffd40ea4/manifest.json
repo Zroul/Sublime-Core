@@ -1,0 +1,61 @@
+{
+  "jobId": "83c854e5-8f1e-4025-8d4f-cadcffd40ea4",
+  "topic": "3 underrated free tools for students",
+  "createdAt": "2026-09-12T13:57:02.611Z",
+  "currentStage": "ready_to_review",
+  "status": "completed",
+  "updatedAt": "2026-09-12T13:57:02.662Z",
+  "artifacts": [
+    {
+      "stage": "trend_scout",
+      "file": "trend_scout.json",
+      "createdAt": "2026-09-12T13:57:02.620Z"
+    },
+    {
+      "stage": "research",
+      "file": "research.json",
+      "createdAt": "2026-09-12T13:57:02.624Z"
+    },
+    {
+      "stage": "rank",
+      "file": "rank.json",
+      "createdAt": "2026-09-12T13:57:02.628Z"
+    },
+    {
+      "stage": "script",
+      "file": "script.json",
+      "createdAt": "2026-09-12T13:57:02.632Z"
+    },
+    {
+      "stage": "voice",
+      "file": "voice.json",
+      "createdAt": "2026-09-12T13:57:02.635Z"
+    },
+    {
+      "stage": "visuals",
+      "file": "visuals.json",
+      "createdAt": "2026-09-12T13:57:02.640Z"
+    },
+    {
+      "stage": "video_build",
+      "file": "video_build.json",
+      "createdAt": "2026-09-12T13:57:02.645Z"
+    },
+    {
+      "stage": "captions",
+      "file": "captions.json",
+      "createdAt": "2026-09-12T13:57:02.650Z"
+    },
+    {
+      "stage": "quality_check",
+      "file": "quality_check.json",
+      "createdAt": "2026-09-12T13:57:02.656Z"
+    },
+    {
+      "stage": "ready_to_review",
+      "file": "ready_to_review.json",
+      "createdAt": "2026-09-12T13:57:02.660Z"
+    }
+  ],
+  "errors": []
+}

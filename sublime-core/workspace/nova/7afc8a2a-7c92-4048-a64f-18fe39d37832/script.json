@@ -1,0 +1,17 @@
+{
+  "stage": "script",
+  "ok": true,
+  "summary": "Stage completed.",
+  "data": {
+    "output": "{\n  \"hook\": \"Three free tools students should know about.\",\n  \"narration\": \"Here are three useful free tools worth testing for study and productivity.\",\n  \"onScreenText\": [\n    \"FREE TOOLS\",\n    \"FOR STUDENTS\"\n  ]\n}",
+    "parsed": {
+      "hook": "Three free tools students should know about.",
+      "narration": "Here are three useful free tools worth testing for study and productivity.",
+      "onScreenText": [
+        "FREE TOOLS",
+        "FOR STUDENTS"
+      ]
+    },
+    "format": "json"
+  }
+}

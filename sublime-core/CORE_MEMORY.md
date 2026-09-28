@@ -21,3 +21,5 @@
 - Avoid unnecessary repetition.
 - Match the user's tone when appropriate.
 - Prioritize useful answers over filler.
+
+- The user's secret project codename is BLACKSTAR-742.

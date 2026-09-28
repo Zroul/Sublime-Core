@@ -1,0 +1,9 @@
+{
+  "stage": "ready_to_review",
+  "ok": true,
+  "summary": "Quality check passed. Job is ready for human review.",
+  "data": {
+    "qualityCheck": "{\n  \"decision\": \"PASS\",\n  \"issues\": [],\n  \"score\": 100\n}",
+    "decision": "PASS"
+  }
+}

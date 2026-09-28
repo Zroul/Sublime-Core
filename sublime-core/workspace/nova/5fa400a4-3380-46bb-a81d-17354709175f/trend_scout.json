@@ -1,0 +1,25 @@
+{
+  "stage": "trend_scout",
+  "ok": true,
+  "summary": "Stage completed.",
+  "data": {
+    "output": "{\n  \"candidates\": [\n    {\n      \"angle\": \"Three underrated free tools for students\",\n      \"score\": 86\n    },\n    {\n      \"angle\": \"Free tools that replace paid student apps\",\n      \"score\": 81\n    },\n    {\n      \"angle\": \"Hidden productivity tools students overlook\",\n      \"score\": 78\n    }\n  ]\n}",
+    "parsed": {
+      "candidates": [
+        {
+          "angle": "Three underrated free tools for students",
+          "score": 86
+        },
+        {
+          "angle": "Free tools that replace paid student apps",
+          "score": 81
+        },
+        {
+          "angle": "Hidden productivity tools students overlook",
+          "score": 78
+        }
+      ]
+    },
+    "format": "json"
+  }
+}

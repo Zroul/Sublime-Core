@@ -1,0 +1,14 @@
+{
+  "stage": "quality_check",
+  "ok": true,
+  "summary": "Stage completed.",
+  "data": {
+    "output": "{\n  \"decision\": \"PASS\",\n  \"issues\": [],\n  \"score\": 100\n}",
+    "parsed": {
+      "decision": "PASS",
+      "issues": [],
+      "score": 100
+    },
+    "format": "json"
+  }
+}

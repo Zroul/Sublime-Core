@@ -1,0 +1,12 @@
+{
+  "jobId": "8715d49a-bc25-49b1-933f-62d0225101cc",
+  "topic": "3 underrated free tools for students",
+  "createdAt": "2026-09-12T14:38:14.348Z",
+  "currentStage": "failed",
+  "status": "failed",
+  "updatedAt": "2026-09-12T14:38:14.433Z",
+  "artifacts": [],
+  "errors": [
+    "fetch failed"
+  ]
+}

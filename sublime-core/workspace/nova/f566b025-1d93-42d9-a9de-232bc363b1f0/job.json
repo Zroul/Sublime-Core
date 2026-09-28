@@ -1,0 +1,10 @@
+{
+  "id": "f566b025-1d93-42d9-a9de-232bc363b1f0",
+  "topic": "3 underrated free tools for students",
+  "createdAt": "2026-09-12T14:41:47.487Z",
+  "stage": "failed",
+  "outputDir": "C:\\BUILD\\Sublime Core\\sublime-core\\workspace\\nova\\f566b025-1d93-42d9-a9de-232bc363b1f0",
+  "status": "failed",
+  "error": "Local brain request to http://127.0.0.1:11434 failed: fetch failed (connect ECONNREFUSED 127.0.0.1:11434)",
+  "failedFromStage": "trend_scout"
+}
