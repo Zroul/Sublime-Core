@@ -12,8 +12,6 @@ const STAGES = [
   "assets",
   "render",
   "video_check",
-  "review",
-  "publish",
 ] as const;
 
 type Stage = (typeof STAGES)[number];
@@ -60,7 +58,6 @@ async function artifactExists(jobId: string, kind: string): Promise<boolean> {
 async function requiredArtifact(stage: Stage, id: string): Promise<string | undefined> {
   const required: Partial<Record<Stage, string>> = {
     assets: "qa",
-    review: "review",
   };
   const kind = required[stage];
   if (!kind) return undefined;
@@ -70,7 +67,7 @@ async function requiredArtifact(stage: Stage, id: string): Promise<string | unde
 export const contentJobTool: Tool = {
   name: "content_job",
   description:
-    "Manage a durable faceless-content production job. Stages are research, script, script_check, assets, render, video_check, review, publish. This tool tracks workflow state only; it does not publish or render media by itself.",
+    "Manage a durable faceless-content production job. Stages are research, script, script_check, assets, render, video_check. This tool tracks workflow state only; it does not publish or render media by itself.",
   parameters: {
     type: "object",
     properties: {
@@ -137,7 +134,9 @@ export const contentJobTool: Tool = {
 
       const index = STAGES.indexOf(job.currentStage);
       if (index === STAGES.length - 1) {
-        return { toolCallId: "", content: "Job is already at the publish stage.", isError: true };
+        job.status = "completed";
+        job.notes.push("Video production completed and handed off. Publishing is handled manually outside NOVA.");
+      }
       }
       job.currentStage = STAGES[index + 1];
     } else if (action === "block") {
@@ -145,8 +144,8 @@ export const contentJobTool: Tool = {
       const note = String(input.note ?? "").trim();
       if (note) job.notes.push(note);
     } else if (action === "complete") {
-      if (job.currentStage !== "publish") {
-        return { toolCallId: "", content: "A job can only be completed after reaching the publish stage.", isError: true };
+      if (job.currentStage !== "video_check") {
+        return { toolCallId: "", content: "A job can only be completed after video_check.", isError: true };
       }
       job.status = "completed";
     } else {
