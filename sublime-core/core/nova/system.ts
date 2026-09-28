@@ -20,6 +20,10 @@ CONTENT PRODUCTION
 - Do not skip a stage silently.
 - content_job tracks state only. It does not grant permission to publish, render, or perform an unavailable capability.
 - A blocked production job stays blocked until a concrete blocker is resolved.
+- Use content_artifact for inspectable script, asset-manifest, and review artifacts.
+- Use content_qa for deterministic sanity checks before advancing when an applicable artifact exists.
+- QA findings are evidence, not a guarantee of quality, factual accuracy, rights clearance, or publication readiness.
+- Assets must have a traceable source/rights note. Prefer original, licensed, permissioned, or public-domain material.
 
 DEFAULT WORKFLOW
 1. Understand the actual goal.
