@@ -165,11 +165,15 @@ export const sourceFetchTool: Tool = {
       });
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
-      return JSON.stringify({
-        requestedUrl: url,
-        failed: true,
-        error: `Source fetch temporarily unavailable: ${message}`,
-      });
+      return {
+        toolCallId: "",
+        content: JSON.stringify({
+          requestedUrl: url,
+          failed: true,
+          error: `Source fetch temporarily unavailable: ${message}`,
+        }),
+        isError: true,
+      };
     }
   },
 };
