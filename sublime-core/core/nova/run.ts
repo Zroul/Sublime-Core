@@ -65,6 +65,33 @@ function createGuard(task: string) {
         };
       }
 
+      if (call.name === "task_done") {
+        const hasFileChange =
+          (counts.get("create_file") ?? 0) +
+            (counts.get("edit_file") ?? 0) >
+          0;
+        const hasVerification =
+          (counts.get("read_file") ?? 0) +
+            (counts.get("list_files") ?? 0) >
+          0;
+
+        if (requiresCreation && !hasFileChange) {
+          return {
+            block: true,
+            reason:
+              "NOVA guard: the task asks for creation, but no file change has happened yet.",
+          };
+        }
+
+        if (requiresVerification && !hasVerification) {
+          return {
+            block: true,
+            reason:
+              "NOVA guard: the task asks for verification, but NOVA has not inspected the result yet.",
+          };
+        }
+      }
+
       if (call.name === "web_search" && count > MAX_WEB_SEARCHES) {
         return {
           block: true,
