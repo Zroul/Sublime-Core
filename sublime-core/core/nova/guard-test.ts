@@ -39,7 +39,7 @@ function expectAllowed(
     "create_file",
     "creation should be allowed",
   );
-  guard.recordResult("create_file", true);
+  guard.recordResult("create_file", true, { path: "test.html" });
 
   expectBlocked(
     guard,
@@ -52,7 +52,7 @@ function expectAllowed(
     "create_file",
     "second creation attempt should be allowed",
   );
-  guard.recordResult("create_file", false);
+  guard.recordResult("create_file", false, { path: "test.html" });
 
   expectBlocked(
     guard,
@@ -65,7 +65,7 @@ function expectAllowed(
     "read_file",
     "verification should be allowed",
   );
-  guard.recordResult("read_file", false);
+  guard.recordResult("read_file", false, { path: "test.html" });
 
   expectAllowed(
     guard,
