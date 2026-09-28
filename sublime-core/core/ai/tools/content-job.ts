@@ -59,7 +59,7 @@ async function artifactExists(jobId: string, kind: string): Promise<boolean> {
 
 async function requiredArtifact(stage: Stage, id: string): Promise<string | undefined> {
   const required: Partial<Record<Stage, string>> = {
-    script_check: "script",
+    assets: "qa",
     review: "review",
   };
   const kind = required[stage];
