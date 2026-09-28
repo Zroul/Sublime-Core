@@ -135,10 +135,12 @@ export const contentJobTool: Tool = {
       const index = STAGES.indexOf(job.currentStage);
       if (index === STAGES.length - 1) {
         job.status = "completed";
-        job.notes.push("Video production completed and handed off. Publishing is handled manually outside NOVA.");
+        job.notes.push(
+          "Video production completed and handed off. Publishing is handled manually outside NOVA.",
+        );
+      } else {
+        job.currentStage = STAGES[index + 1];
       }
-      }
-      job.currentStage = STAGES[index + 1];
     } else if (action === "block") {
       job.status = "blocked";
       const note = String(input.note ?? "").trim();
