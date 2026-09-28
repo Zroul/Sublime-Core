@@ -5,7 +5,7 @@ export interface NovaGuard {
   recordResult(
     toolName: string,
     isError: boolean,
-    arguments?: Record<string, unknown>,
+    toolArguments?: Record<string, unknown>,
   ): void;
 }
 
@@ -129,13 +129,13 @@ export function createNovaGuard(
       return { block: false };
     },
 
-    recordResult(toolName, isError, arguments) {
+    recordResult(toolName, isError, toolArguments) {
       if (isError) return;
 
       successful.set(toolName, (successful.get(toolName) ?? 0) + 1);
 
       const filePath =
-        typeof arguments?.path === "string" ? arguments.path : undefined;
+        typeof toolArguments?.path === "string" ? arguments.path : undefined;
 
       if (
         filePath &&
