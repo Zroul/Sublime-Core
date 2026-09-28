@@ -21,6 +21,8 @@ import { novaMemoryTool } from "../ai/tools/nova-memory.js";
 import { researchDossierTool } from "../ai/tools/research-dossier.js";
 import { novaRunStateTool } from "../ai/tools/nova-run-state.js";
 import { contentJobTool } from "../ai/tools/content-job.js";
+import { contentArtifactTool } from "../ai/tools/content-artifacts.js";
+import { contentQaTool } from "../ai/tools/content-qa.js";
 import { createNovaGuard } from "./guard.js";
 import { NOVA_SYSTEM_PROMPT } from "./system.js";
 import {
@@ -71,6 +73,8 @@ async function runTask(task: string): Promise<void> {
       researchDossierTool,
       novaRunStateTool,
       contentJobTool,
+      contentArtifactTool,
+      contentQaTool,
       runCommandTool,
     ],
     maxTurns: MAX_TURNS,
