@@ -135,7 +135,7 @@ async function appendLog(text: string): Promise<void> {
 
 async function runTask(task: string): Promise<void> {
   const provider = new OllamaProvider("core");
-  const guard = createGuard();
+  const guard = createGuard(task);
 
   await appendLog(
     `\n## Run ${new Date().toISOString()}\n\n**Task:** ${task}\n\n`,
