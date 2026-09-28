@@ -186,7 +186,7 @@ export function createNovaGuard(
         changedPaths.add(filePath);
       }
 
-      if (filePath && toolName === "read_file") {
+      if (filePath && (toolName === "read_file" || toolName === "verify_artifact")) {
         verifiedPaths.add(filePath);
       }
 
