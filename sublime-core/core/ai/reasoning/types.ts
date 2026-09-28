@@ -162,7 +162,7 @@ export interface AgentHooks<Ctx = unknown> {
   /** Return true to stop the loop after the current turn. */
   shouldStop?(state: AgentState<Ctx>): boolean | Promise<boolean>;
   /** Persist a completed turn (e.g. to a DB). Failures should be handled inside. */
-  persistTurn?(turn: Turn): void | Promise<void>;
+  persistTurn?(turn: Turn, state: AgentState<Ctx>): void | Promise<void>;
 }
 
 /** Why the loop stopped. */
