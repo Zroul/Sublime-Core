@@ -45,7 +45,15 @@ export const createFileTool: Tool = {
       recursive: true,
     });
 
-    await fs.writeFile(fullPath, content, "utf8");
+    try {
+      await fs.writeFile(fullPath, content, "utf8");
+    } catch (error) {
+      return {
+        toolCallId: "",
+        content: `Failed to create ${filePath}: ${error instanceof Error ? error.message : String(error)}`,
+        isError: true,
+      };
+    }
 
     return `Created ${filePath} successfully.`;
   },
@@ -72,8 +80,12 @@ export const readFileTool: Tool = {
 
     try {
       return await fs.readFile(fullPath, "utf8");
-    } catch {
-      return `File not found: ${filePath}`;
+    } catch (error) {
+      return {
+        toolCallId: "",
+        content: `Failed to read ${filePath}: ${error instanceof Error ? error.message : String(error)}`,
+        isError: true,
+      };
     }
   },
 };
@@ -106,10 +118,22 @@ export const editFileTool: Tool = {
     try {
       await fs.access(fullPath);
     } catch {
-      return `File not found: ${filePath}`;
+      return {
+        toolCallId: "",
+        content: `File not found: ${filePath}`,
+        isError: true,
+      };
     }
 
-    await fs.writeFile(fullPath, content, "utf8");
+    try {
+      await fs.writeFile(fullPath, content, "utf8");
+    } catch (error) {
+      return {
+        toolCallId: "",
+        content: `Failed to edit ${filePath}: ${error instanceof Error ? error.message : String(error)}`,
+        isError: true,
+      };
+    }
 
     return `Edited ${filePath} successfully.`;
   },
@@ -154,8 +178,12 @@ export const listFilesTool: Tool = {
       }
 
       return files.join("\n");
-    } catch {
-      return "Workspace does not exist yet.";
+    } catch (error) {
+      return {
+        toolCallId: "",
+        content: `Failed to list workspace files: ${error instanceof Error ? error.message : String(error)}`,
+        isError: true,
+      };
     }
   },
 };
