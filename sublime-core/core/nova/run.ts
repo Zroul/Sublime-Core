@@ -75,7 +75,7 @@ async function runTask(task: string): Promise<void> {
         );
 
         if (call) {
-          guard.recordResult(call.name, Boolean(result.isError));
+          guard.recordResult(call.name, Boolean(result.isError), call.arguments);
         }
 
         const preview = result.content.replace(/\s+/g, " ").slice(0, 240);
