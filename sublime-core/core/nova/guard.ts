@@ -2,7 +2,11 @@ import type { ToolCall } from "../ai/reasoning/types.js";
 
 export interface NovaGuard {
   beforeToolCall(call: ToolCall): { block: boolean; reason?: string };
-  recordResult(toolName: string, isError: boolean): void;
+  recordResult(
+    toolName: string,
+    isError: boolean,
+    arguments?: Record<string, unknown>,
+  ): void;
 }
 
 export interface NovaGuardLimits {
@@ -44,6 +48,8 @@ export function createNovaGuard(
 
   const counts = new Map<string, number>();
   const successful = new Map<string, number>();
+  const changedPaths = new Set<string>();
+  const verifiedPaths = new Set<string>();
   const identical = new Map<string, number>();
 
   return {
@@ -69,9 +75,8 @@ export function createNovaGuard(
             (successful.get("edit_file") ?? 0) >
           0;
         const hasVerification =
-          (successful.get("read_file") ?? 0) +
-            (successful.get("list_files") ?? 0) >
-          0;
+          verifiedPaths.size > 0 ||
+          (successful.get("list_files") ?? 0) > 0;
 
         if (requiresCreation && !hasFileChange) {
           return {
@@ -124,9 +129,23 @@ export function createNovaGuard(
       return { block: false };
     },
 
-    recordResult(toolName, isError) {
-      if (!isError) {
-        successful.set(toolName, (successful.get(toolName) ?? 0) + 1);
+    recordResult(toolName, isError, arguments) {
+      if (isError) return;
+
+      successful.set(toolName, (successful.get(toolName) ?? 0) + 1);
+
+      const filePath =
+        typeof arguments?.path === "string" ? arguments.path : undefined;
+
+      if (
+        filePath &&
+        (toolName === "create_file" || toolName === "edit_file")
+      ) {
+        changedPaths.add(filePath);
+      }
+
+      if (filePath && toolName === "read_file") {
+        verifiedPaths.add(filePath);
       }
     },
   };
