@@ -20,6 +20,12 @@ import { verifyArtifactTool } from "../ai/tools/verify-artifact.js";
 import { novaMemoryTool } from "../ai/tools/nova-memory.js";
 import { createNovaGuard } from "./guard.js";
 import { NOVA_SYSTEM_PROMPT } from "./system.js";
+import {
+  createRunId,
+  finalizeRunState,
+  saveNovaRunState,
+  stateFromTurn,
+} from "./run-state.js";
 
 const MAX_TURNS = 18;
 const workspace = path.resolve("workspace");
@@ -33,9 +39,11 @@ async function appendLog(text: string): Promise<void> {
 async function runTask(task: string): Promise<void> {
   const provider = new OllamaProvider("core");
   const guard = createNovaGuard(task);
+  const runId = createRunId();
+  const startedAt = new Date().toISOString();
 
   await appendLog(
-    `\n## Run ${new Date().toISOString()}\n\n**Task:** ${task}\n\n`,
+    `\n## Run ${startedAt}\n\n**Run ID:** ${runId}\n\n**Task:** ${task}\n\n`,
   );
 
   const result = await runReActLoop({
@@ -79,7 +87,11 @@ async function runTask(task: string): Promise<void> {
         );
 
         if (call) {
-          guard.recordResult(call.name, Boolean(result.isError), call.arguments);
+          guard.recordResult(
+            call.name,
+            Boolean(result.isError),
+            call.arguments,
+          );
         }
 
         const preview = result.content.replace(/\s+/g, " ").slice(0, 240);
@@ -91,9 +103,20 @@ async function runTask(task: string): Promise<void> {
         const toolCalls = turn.assistant.toolCalls ?? [];
         const toolNames = toolCalls.map((call) => call.name);
         const errors = turn.toolResults.filter((item) => item.isError).length;
-        return appendLog(
-          `- Turn ${turn.index}: tools=${toolNames.join(", ") || "none"}; errors=${errors}\n`,
+        const checkpoint = stateFromTurn(
+          runId,
+          task,
+          startedAt,
+          turn,
+          state.messages,
         );
+
+        return Promise.all([
+          appendLog(
+            `- Turn ${turn.index}: tools=${toolNames.join(", ") || "none"}; errors=${errors}\n`,
+          ),
+          saveNovaRunState(checkpoint),
+        ]).then(() => undefined);
       },
     },
   });
@@ -114,8 +137,27 @@ async function runTask(task: string): Promise<void> {
   );
 
   await appendLog(
-    `\n**Stopped:** ${result.stopped}  \n**Turns:** ${result.turns}  \n**Result:** ${finalText}\n`,
+    `\n**Stopped:** ${result.stopped}  \\
+**Turns:** ${result.turns}  \\
+**Result:** ${finalText}\n`,
   );
+
+  const finalState = finalizeRunState(
+    stateFromTurn(
+      runId,
+      task,
+      startedAt,
+      {
+        index: result.turns,
+        assistant: { role: "assistant", content: finalText },
+        toolResults: [],
+      },
+      result.messages,
+    ),
+    result,
+  );
+
+  await saveNovaRunState(finalState);
 }
 
 async function main(): Promise<void> {
