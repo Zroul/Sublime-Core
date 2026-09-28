@@ -15,6 +15,7 @@ import {
 import { runCommandTool } from "../ai/tools/command-tools.js";
 import { sourceFetchTool } from "../ai/tools/source-fetch.js";
 import { webSearchTool } from "../ai/tools/web-search.js";
+import { workspaceStatusTool } from "../ai/tools/workspace-status.js";
 import { NOVA_SYSTEM_PROMPT } from "./system.js";
 
 const MAX_TURNS = 18;
@@ -120,6 +121,7 @@ async function runTask(task: string): Promise<void> {
       readFileTool,
       editFileTool,
       listFilesTool,
+      workspaceStatusTool,
       runCommandTool,
     ],
     maxTurns: MAX_TURNS,
