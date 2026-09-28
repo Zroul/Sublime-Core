@@ -32,19 +32,31 @@ function toolSignature(call: ToolCall): string {
   });
 }
 
+function extractRequestedPaths(task: string): Set<string> {
+  const matches = task.match(
+    /(?:[A-Za-z0-9_.-]+[\\/])+[A-Za-z0-9_.-]+\.[A-Za-z0-9]+|[A-Za-z0-9_.-]+\.[A-Za-z0-9]+/g,
+  );
+
+  return new Set(
+    (matches ?? []).map((value) => value.replaceAll("\\", "/")),
+  );
+}
+
+function normalizePath(value: string): string {
+  return value.replaceAll("\\", "/").replace(/^\.\//, "").replace(/^//, "");
+}
+
 export function createNovaGuard(
   task: string,
   limits: NovaGuardLimits = DEFAULT_LIMITS,
 ): NovaGuard {
   const taskText = task.toLowerCase();
   const requiresCreation =
-    taskText.includes("create") ||
-    taskText.includes("write") ||
-    taskText.includes("generate");
+    /\b(create|write|generate|build|make)\b/.test(taskText);
   const requiresVerification =
-    taskText.includes("verify") ||
-    taskText.includes("confirm") ||
-    taskText.includes("check");
+    /\b(verify|confirm|check|test|validate)\b/.test(taskText);
+
+  const requestedPaths = extractRequestedPaths(task);
 
   const counts = new Map<string, number>();
   const successful = new Map<string, number>();
@@ -65,20 +77,16 @@ export function createNovaGuard(
         return {
           block: true,
           reason:
-            "NOVA guard blocked this action because the exact same tool call has already failed or repeated too many times.",
+            "NOVA guard blocked this action because the exact same tool call has already repeated too many times.",
         };
       }
 
       if (call.name === "task_done") {
-        const hasFileChange =
+        const successfulWrites =
           (successful.get("create_file") ?? 0) +
-            (successful.get("edit_file") ?? 0) >
-          0;
-        const hasVerification =
-          [...verifiedPaths].some((filePath) => changedPaths.has(filePath)) ||
-          (successful.get("list_files") ?? 0) > 0;
+          (successful.get("edit_file") ?? 0);
 
-        if (requiresCreation && !hasFileChange) {
+        if (requiresCreation && successfulWrites === 0) {
           return {
             block: true,
             reason:
@@ -86,7 +94,39 @@ export function createNovaGuard(
           };
         }
 
-        if (requiresVerification && !hasVerification) {
+        if (requestedPaths.size > 0) {
+          const missingChanges = [...requestedPaths].filter(
+            (filePath) => !changedPaths.has(normalizePath(filePath)),
+          );
+
+          if (missingChanges.length > 0) {
+            return {
+              block: true,
+              reason:
+                "NOVA guard: these requested file paths have not been successfully changed: " +
+                missingChanges.join(", "),
+            };
+          }
+
+          if (requiresVerification) {
+            const missingVerification = [...requestedPaths].filter(
+              (filePath) => !verifiedPaths.has(normalizePath(filePath)),
+            );
+
+            if (missingVerification.length > 0) {
+              return {
+                block: true,
+                reason:
+                  "NOVA guard: these requested file paths have not been individually verified: " +
+                  missingVerification.join(", "),
+              };
+            }
+          }
+        } else if (
+          requiresVerification &&
+          verifiedPaths.size === 0 &&
+          (successful.get("list_files") ?? 0) === 0
+        ) {
           return {
             block: true,
             reason:
@@ -135,7 +175,9 @@ export function createNovaGuard(
       successful.set(toolName, (successful.get(toolName) ?? 0) + 1);
 
       const filePath =
-        typeof toolArguments?.path === "string" ? arguments.path : undefined;
+        typeof toolArguments?.path === "string"
+          ? normalizePath(toolArguments.path)
+          : undefined;
 
       if (
         filePath &&
@@ -146,6 +188,10 @@ export function createNovaGuard(
 
       if (filePath && toolName === "read_file") {
         verifiedPaths.add(filePath);
+      }
+
+      if (toolName === "list_files") {
+        successful.set("list_files", successful.get("list_files") ?? 0);
       }
     },
   };
