@@ -1,0 +1,132 @@
+import { promises as fs } from "node:fs";
+import path from "node:path";
+import type { Tool } from "../reasoning/types.js";
+
+const WORKSPACE = path.resolve("workspace");
+const JOB_DIR = path.join(WORKSPACE, "nova", "jobs");
+
+const STAGES = [
+  "research",
+  "script",
+  "script_check",
+  "assets",
+  "render",
+  "video_check",
+  "review",
+  "publish",
+] as const;
+
+type Stage = (typeof STAGES)[number];
+
+interface ContentJob {
+  id: string;
+  title: string;
+  status: "active" | "completed" | "blocked";
+  currentStage: Stage;
+  createdAt: string;
+  updatedAt: string;
+  notes: string[];
+}
+
+function safeId(value: string): string {
+  const id = value.trim().replace(/[^a-zA-Z0-9_-]+/g, "-").replace(/^-+|-+$/g, "");
+  return id.slice(0, 80) || "job";
+}
+
+function jobPath(id: string): string {
+  return path.join(JOB_DIR, safeId(id) + ".json");
+}
+
+async function readJob(id: string): Promise<ContentJob | undefined> {
+  try {
+    return JSON.parse(await fs.readFile(jobPath(id), "utf8")) as ContentJob;
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") return undefined;
+    throw error;
+  }
+}
+
+export const contentJobTool: Tool = {
+  name: "content_job",
+  description:
+    "Manage a durable faceless-content production job. Stages are research, script, script_check, assets, render, video_check, review, publish. This tool tracks workflow state only; it does not publish or render media by itself.",
+  parameters: {
+    type: "object",
+    properties: {
+      action: {
+        type: "string",
+        enum: ["create", "read", "advance", "block", "complete"],
+      },
+      id: { type: "string", description: "Job ID." },
+      title: { type: "string", description: "Title when creating a job." },
+      note: { type: "string", description: "Optional durable note." },
+    },
+    required: ["action"],
+    additionalProperties: false,
+  },
+  async handler(input) {
+    const action = String(input.action ?? "read");
+    await fs.mkdir(JOB_DIR, { recursive: true });
+    const id = safeId(String(input.id ?? input.title ?? ""));
+    if (!id) {
+      return { toolCallId: "", content: "content_job requires an id or title.", isError: true };
+    }
+
+    if (action === "create") {
+      const title = String(input.title ?? "").trim();
+      if (!title) {
+        return { toolCallId: "", content: "Creating a content job requires a title.", isError: true };
+      }
+      if (await readJob(id)) {
+        return { toolCallId: "", content: "A content job with this id already exists.", isError: true };
+      }
+      const now = new Date().toISOString();
+      const job: ContentJob = {
+        id,
+        title,
+        status: "active",
+        currentStage: "research",
+        createdAt: now,
+        updatedAt: now,
+        notes: [],
+      };
+      await fs.writeFile(jobPath(id), JSON.stringify(job, null, 2), "utf8");
+      return JSON.stringify(job);
+    }
+
+    const job = await readJob(id);
+    if (!job) {
+      return { toolCallId: "", content: "Content job not found: " + id, isError: true };
+    }
+
+    if (action === "read") return JSON.stringify(job);
+
+    if (action === "advance") {
+      if (job.status !== "active") {
+        return { toolCallId: "", content: "Only active jobs can advance.", isError: true };
+      }
+      const index = STAGES.indexOf(job.currentStage);
+      if (index === STAGES.length - 1) {
+        return { toolCallId: "", content: "Job is already at the publish stage.", isError: true };
+      }
+      job.currentStage = STAGES[index + 1];
+    } else if (action === "block") {
+      job.status = "blocked";
+      const note = String(input.note ?? "").trim();
+      if (note) job.notes.push(note);
+    } else if (action === "complete") {
+      if (job.currentStage !== "publish") {
+        return { toolCallId: "", content: "A job can only be completed after reaching the publish stage.", isError: true };
+      }
+      job.status = "completed";
+    } else {
+      return { toolCallId: "", content: "content_job action must be create, read, advance, block, or complete.", isError: true };
+    }
+
+    const note = String(input.note ?? "").trim();
+    if (note && action === "advance") job.notes.push(note);
+    job.updatedAt = new Date().toISOString();
+    await fs.writeFile(jobPath(id), JSON.stringify(job, null, 2), "utf8");
+    return JSON.stringify(job);
+  },
+};
