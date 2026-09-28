@@ -75,7 +75,7 @@ export function createNovaGuard(
             (successful.get("edit_file") ?? 0) >
           0;
         const hasVerification =
-          verifiedPaths.size > 0 ||
+          [...verifiedPaths].some((filePath) => changedPaths.has(filePath)) ||
           (successful.get("list_files") ?? 0) > 0;
 
         if (requiresCreation && !hasFileChange) {
