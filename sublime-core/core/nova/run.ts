@@ -142,11 +142,11 @@ async function runTask(task: string): Promise<void> {
         );
       },
       persistTurn(turn: Turn) {
-        const toolNames = turn.toolResults.map((item) =>
-          item.isError ? `${item.toolCallId}:error` : item.toolCallId,
-        );
+        const toolCalls = turn.assistant.toolCalls ?? [];
+        const toolNames = toolCalls.map((call) => call.name);
+        const errors = turn.toolResults.filter((item) => item.isError).length;
         return appendLog(
-          `- Turn ${turn.index}: tools=${toolNames.join(", ") || "none"}\n`,
+          `- Turn ${turn.index}: tools=${toolNames.join(", ") || "none"}; errors=${errors}\n`,
         );
       },
     },
