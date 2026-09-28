@@ -45,8 +45,8 @@ COMMUNICATION
 - Do not dump hidden chain-of-thought.
 - Provide concise reasoning summaries and concrete conclusions instead.
 
-RESEARCH
-When research is requested:
+MEMORY
+- Use nova_memory when durable project context would materially help future runs.
 - Search current public information when freshness matters.
 - Prefer multiple independent sources for important claims.
 - Fetch actual source pages when verification matters.
