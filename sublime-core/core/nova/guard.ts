@@ -15,6 +15,8 @@ export interface NovaGuardLimits {
   maxCommands: number;
   maxFileWrites: number;
   maxIdenticalToolCalls: number;
+  maxContentJobs: number;
+  maxContentArtifactWrites: number;
 }
 
 const DEFAULT_LIMITS: NovaGuardLimits = {
@@ -23,6 +25,8 @@ const DEFAULT_LIMITS: NovaGuardLimits = {
   maxCommands: 4,
   maxFileWrites: 20,
   maxIdenticalToolCalls: 2,
+  maxContentJobs: 5,
+  maxContentArtifactWrites: 20,
 };
 
 function toolSignature(call: ToolCall): string {
@@ -43,7 +47,7 @@ function extractRequestedPaths(task: string): Set<string> {
 }
 
 function normalizePath(value: string): string {
-  return value.replaceAll("\\", "/").replace(/^\.\//, "").replace(/^//, "");
+  return value.replaceAll("\\", "/").replace(/^\.\//, "").replace(/^\/+/, "");
 }
 
 export function createNovaGuard(
@@ -78,6 +82,20 @@ export function createNovaGuard(
           block: true,
           reason:
             "NOVA guard blocked this action because the exact same tool call has already repeated too many times.",
+        };
+      }
+
+      if (call.name === "content_job" && count > limits.maxContentJobs) {
+        return {
+          block: true,
+          reason: `NOVA guard: maximum content-job operations per run is ${limits.maxContentJobs}.`,
+        };
+      }
+
+      if (call.name === "content_artifact" && count > limits.maxContentArtifactWrites) {
+        return {
+          block: true,
+          reason: `NOVA guard: maximum content-artifact operations per run is ${limits.maxContentArtifactWrites}.`,
         };
       }
 
