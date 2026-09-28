@@ -140,13 +140,17 @@ export const sourceFetchTool: Tool = {
       const contentType = response.headers.get("content-type") ?? "";
 
       if (!contentType.includes("text/html") && !contentType.includes("text/plain")) {
-        return JSON.stringify({
-          requestedUrl: url,
-          finalUrl: response.url,
-          status: response.status,
-          failed: true,
-          error: `Unsupported source content type: ${contentType || "unknown"}.`,
-        });
+        return {
+          toolCallId: "",
+          content: JSON.stringify({
+            requestedUrl: url,
+            finalUrl: response.url,
+            status: response.status,
+            failed: true,
+            error: `Unsupported source content type: ${contentType || "unknown"}.`,
+          }),
+          isError: true,
+        };
       }
 
       const raw = await response.text();
