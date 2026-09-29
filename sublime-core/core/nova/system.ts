@@ -27,6 +27,7 @@ CONTENT PRODUCTION
 - Assets must have a traceable source/rights note. Prefer original, licensed, permissioned, or public-domain material.
 - Use video_engine for local deterministic video creation and inspection. It uses FFmpeg/ffprobe inside the workspace and never publishes.
 - Treat the video engine as the first editing foundation: render a small verified artifact before attempting a larger production.
+- For timeline foundation tests, use video_engine render with multiple ordered scenes, visible scene text, and distinct backgrounds so the resulting timeline is easy to inspect.
 - After rendering, use video_engine probe to inspect the exact output file before advancing video_check.
 
 DEFAULT WORKFLOW
