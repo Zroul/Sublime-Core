@@ -52,6 +52,9 @@ async function runTask(task: string): Promise<void> {
     `\n## Run ${startedAt}\n\n**Run ID:** ${runId}\n\n**Task:** ${task}\n\n`,
   );
 
+  let lastVideoRender: string | null = null;
+  let lastVideoProbe: string | null = null;
+
   const result = await runReActLoop({
     llm: provider,
     system: NOVA_SYSTEM_PROMPT,
@@ -107,9 +110,33 @@ async function runTask(task: string): Promise<void> {
         }
 
         const preview = result.content.replace(/\s+/g, " ").slice(0, 240);
+        if (!result.isError && call?.name === "video_engine") {
+          const action = call.arguments?.action;
+          if (action === "render") {
+            try {
+              const data = JSON.parse(result.content);
+              if (data.ok && data.output) lastVideoRender = String(data.output);
+            } catch {}
+          }
+          if (action === "probe") {
+            try {
+              const data = JSON.parse(result.content);
+              if (data.format?.format_name && data.format?.duration) {
+                lastVideoProbe = `valid ${data.format.format_name} container, ${data.format.duration}s`;
+              }
+            } catch {}
+          }
+        }
         console.log(
           `[OBSERVE] ${result.isError ? "ERROR " : ""}${preview}`,
         );
+      },
+      shouldStop(state) {
+        if (lastVideoRender && lastVideoProbe) {
+          state.finalSummary = `Created and validated the requested video: ${lastVideoRender} (${lastVideoProbe}).`;
+          return true;
+        }
+        return false;
       },
       persistTurn(turn: Turn, state) {
         const toolCalls = turn.assistant.toolCalls ?? [];
