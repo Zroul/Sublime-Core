@@ -38,7 +38,20 @@ function escapeDrawtext(value: string): string {
 }
 
 function color(value: string | undefined): string {
-  const candidate = String(value ?? "202020");
+  const raw = String(value ?? "202020").trim().toLowerCase();
+  const named: Record<string, string> = {
+    black: "000000",
+    white: "ffffff",
+    red: "ff0000",
+    green: "00ff00",
+    blue: "0000ff",
+    yellow: "ffff00",
+    cyan: "00ffff",
+    magenta: "ff00ff",
+    gray: "808080",
+    grey: "808080",
+  };
+  const candidate = named[raw] ?? raw.replace(/^#/, "");
   return /^[0-9a-fA-F]{6}$/.test(candidate) ? candidate : "202020";
 }
 
@@ -61,7 +74,7 @@ export const videoEngineTool: Tool = {
       scenes: {
         type: "array",
         description:
-          "Required for render. Ordered scene timeline. Preserve the user's exact scene order. Each scene has duration, optional visible text, and optional six-digit hex background.",
+          "Required for render. Ordered scene timeline. Preserve the user's exact scene order and values exactly. Do not invent or replace scene durations/backgrounds. Each scene has duration, optional visible text, and background, which may be a common color name such as blue/green/red or a six-digit hex value. For example, three requested scenes of 3 seconds each MUST be passed as [{duration:3,background:\"blue\",text:\"SCENE 1\"},{duration:3,background:\"green\",text:\"SCENE 2\"},{duration:3,background:\"red\",text:\"SCENE 3\"}], producing 9 seconds total.",
         items: {
           type: "object",
           properties: {
