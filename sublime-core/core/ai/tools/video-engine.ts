@@ -45,17 +45,23 @@ function color(value: string | undefined): string {
 export const videoEngineTool: Tool = {
   name: "video_engine",
   description:
-    "Local video production engine. Uses installed FFmpeg/ffprobe to create deterministic test videos, render simple scene timelines, and inspect finished video files. It never publishes videos.",
+    "Local video production engine. Uses installed FFmpeg/ffprobe to create deterministic test videos, render simple scene timelines, and inspect finished video files. It never publishes videos. IMPORTANT: use action='render' for any user request involving multiple scenes, a timeline, scene order, text overlays, or specified backgrounds. Use action='create_test' ONLY for a generic single-color test video with no scene-specific requirements. Use action='probe' to inspect an existing output file.",
   parameters: {
     type: "object",
     properties: {
-      action: { type: "string", enum: ["create_test", "render", "probe"] },
+      action: {
+        type: "string",
+        enum: ["create_test", "render", "probe"],
+        description:
+          "Choose render for multi-scene/timeline requests. Choose create_test only for a generic single-color test. Choose probe to inspect an existing MP4.",
+      },
       id: { type: "string", description: "Safe video job id." },
       output: { type: "string", description: "Optional workspace-relative output path." },
-      duration: { type: "number", description: "Duration in seconds for create_test." },
+      duration: { type: "number", description: "Duration in seconds for create_test only." },
       scenes: {
         type: "array",
-        description: "Scene timeline. Each scene has duration, optional text, and optional six-digit hex background.",
+        description:
+          "Required for render. Ordered scene timeline. Preserve the user's exact scene order. Each scene has duration, optional visible text, and optional six-digit hex background.",
         items: {
           type: "object",
           properties: {
