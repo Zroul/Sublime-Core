@@ -69,6 +69,8 @@ export function createNovaGuard(
   const changedPaths = new Set<string>();
   const verifiedPaths = new Set<string>();
   const identical = new Map<string, number>();
+  let successfulCreations = 0;
+  let successfulVerifications = 0;
 
   return {
     beforeToolCall(call) {
@@ -113,7 +115,7 @@ export function createNovaGuard(
           (successful.get("create_file") ?? 0) +
           (successful.get("edit_file") ?? 0);
 
-        if (requiresCreation && successfulWrites === 0) {
+        if (requiresCreation && successfulWrites === 0 && successfulCreations === 0) {
           return {
             block: true,
             reason:
@@ -152,6 +154,7 @@ export function createNovaGuard(
         } else if (
           requiresVerification &&
           verifiedPaths.size === 0 &&
+          successfulVerifications === 0 &&
           (successful.get("list_files") ?? 0) === 0
         ) {
           return {
@@ -215,6 +218,17 @@ export function createNovaGuard(
 
       if (filePath && (toolName === "read_file" || toolName === "verify_artifact")) {
         verifiedPaths.add(filePath);
+        successfulVerifications += 1;
+      }
+
+      if (toolName === "video_engine") {
+        const action = toolArguments?.action;
+        if (action === "create_test" || action === "render") {
+          successfulCreations += 1;
+        }
+        if (action === "probe") {
+          successfulVerifications += 1;
+        }
       }
 
       if (toolName === "list_files") {
