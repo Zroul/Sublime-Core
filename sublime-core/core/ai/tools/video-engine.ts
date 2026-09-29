@@ -138,9 +138,9 @@ export const videoEngineTool: Tool = {
         const inputs: string[] = [];
         const filters: string[] = [];
         validScenes.forEach((scene, index) => {
-          inputs.push("-f", "lavfi", "-t", String(scene.duration), "-i", "color=c=#" + scene.background + ":s=1280x720:r=30");
+          inputs.push("-f", "lavfi", "-t", String(scene.duration), "-i", "color=c=0x" + scene.background + ":s=1280x720:r=30");
           let filter = "[" + index + ":v]format=yuv420p";
-          if (scene.text) filter += ",drawtext=text=\x27" + escapeDrawtext(scene.text) + "\x27:fontcolor=white:fontsize=54:x=(w-text_w)/2:y=(h-text_h)/2:box=1:boxcolor=black@0.45:boxborderw=18";
+          if (scene.text) filter += ",drawtext=text=\x27" + escapeDrawtext(scene.text) + "\x27:fontcolor=white:fontsize=54:x=(w-text_w)/2:y=(h-text_h)/2";
           filter += "[v" + index + "]";
           filters.push(filter);
         });
