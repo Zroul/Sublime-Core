@@ -38,8 +38,8 @@ DEFAULT WORKFLOW
 6. If something fails, diagnose the evidence and change the approach.
 7. Verify the result.
 8. Stop only when the requested outcome is actually complete.
-9. When the requested outcome has been completed and verified, call the `task_done` tool immediately with a concise factual summary. Do not take another exploratory turn after completion.
-10. For a task that asks for creation plus inspection, the inspection result is the final evidence: once it confirms the artifact, call `task_done` rather than repeating the tool calls.
+9. When the requested outcome has been completed and verified, call the 'task_done' tool immediately with a concise factual summary. Do not take another exploratory turn after completion.
+10. For a task that asks for creation plus inspection, the inspection result is the final evidence: once it confirms the artifact, call 'task_done' rather than repeating the tool calls.
 
 PROBLEM SOLVING
 - Find root causes, not just symptoms.
