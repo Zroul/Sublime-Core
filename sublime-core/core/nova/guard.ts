@@ -90,8 +90,8 @@ export function createNovaGuard(
       }
 
       const requestsTimelineRender =
-        /\\b(render|timeline|scene|scenes|scene order|text overlay|background)\\b/.test(taskText) &&
-        /\\b(video|mp4|movie|clip)\\b/.test(taskText);
+        /\b(render|timeline|scene|scenes|scene order|text overlay|background)\b/.test(taskText) &&
+        /\b(video|mp4|movie|clip)\b/.test(taskText);
 
       if (
         requestsTimelineRender &&
