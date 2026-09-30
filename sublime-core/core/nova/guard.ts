@@ -89,6 +89,22 @@ export function createNovaGuard(
         };
       }
 
+      const requestsTimelineRender =
+        /\\b(render|timeline|scene|scenes|scene order|text overlay|background)\\b/.test(taskText) &&
+        /\\b(video|mp4|movie|clip)\\b/.test(taskText);
+
+      if (
+        requestsTimelineRender &&
+        call.name === "video_engine" &&
+        call.arguments?.action === "create_test"
+      ) {
+        return {
+          block: true,
+          reason:
+            "NOVA guard blocked create_test because this task explicitly requests a rendered timeline/video with scenes, text, or backgrounds. Use video_engine action='render' and pass the requested scenes exactly.",
+        };
+      }
+
       if (call.name === "content_job" && count > limits.maxContentJobs) {
         return {
           block: true,
