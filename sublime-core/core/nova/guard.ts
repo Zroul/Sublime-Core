@@ -71,6 +71,7 @@ export function createNovaGuard(
   const identical = new Map<string, number>();
   let successfulCreations = 0;
   let successfulVerifications = 0;
+  let successfulEditingTimelines = 0;
 
   return {
     beforeToolCall(call) {
@@ -102,6 +103,19 @@ export function createNovaGuard(
           block: true,
           reason:
             "NOVA guard blocked create_test because this task explicitly requests a rendered timeline/video with scenes, text, or backgrounds. Use video_engine action='render' and pass the requested scenes exactly.",
+        };
+      }
+
+      if (
+        requestsTimelineRender &&
+        call.name === "video_engine" &&
+        call.arguments?.action === "render" &&
+        successfulEditingTimelines === 0
+      ) {
+        return {
+          block: true,
+          reason:
+            "NOVA guard blocked video_engine render because this timeline task has not produced a successful editing_module timeline yet. Build and validate the timeline first.",
         };
       }
 
@@ -235,6 +249,10 @@ export function createNovaGuard(
       if (filePath && (toolName === "read_file" || toolName === "verify_artifact")) {
         verifiedPaths.add(filePath);
         successfulVerifications += 1;
+      }
+
+      if (toolName === "editing_module" && toolArguments?.action === "build_timeline") {
+        successfulEditingTimelines += 1;
       }
 
       if (toolName === "video_engine") {
