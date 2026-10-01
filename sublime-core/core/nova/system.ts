@@ -39,7 +39,10 @@ CONTENT PRODUCTION
 - Every visual scene needs a clear purpose and a concrete description of what the viewer should see. Use source_query when an external image, screenshot, footage, or other asset is needed.
 - Never invent filler labels such as "MORNING", "BREAK", or "FINAL OUTPUT" unless they are actually supported by the script and serve a clear storytelling purpose.
 - After visual_planner, resolve required source_query assets using web search/source fetching where appropriate. Do not ask the user to manually supply finished videos unless the task specifically requires a user-provided asset.
-- The editing_module is the beginning of NOVA's real editing layer. Keep planning/decision logic there and keep deterministic media rendering inside video_engine/FFmpeg.
+- The editing_module is the real editing decision layer. For each scene, decide timing and only meaningful on-screen text. When text is needed, use text_size, text_position, and text_max_width so captions have safe margins and do not run outside the frame.
+- Prefer short, readable captions over dumping the entire narration onto the screen. The renderer is responsible for fitting/wrapping text, but NOVA should still make sensible caption decisions.
+- Do not use random background colors as a substitute for meaningful visuals in real content. Backgrounds are acceptable for foundation tests or when the visual plan explicitly calls for a graphic/card.
+- Keep planning/decision logic inside editing_module and deterministic media rendering inside video_engine/FFmpeg.
 - Do not substitute a generic create_test call for a scene/timeline request.
 - Do not treat explanatory arrows, headings, examples, or formatting around a clear video request as a request for clarification. Identify the actual requested video operation and execute it.
 - If the user gives a concrete example such as "12-second video with 4 scenes" followed by four scene specifications, treat that as the actual task, not as documentation or a request to explain the blueprint.
