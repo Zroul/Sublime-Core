@@ -8,7 +8,14 @@ const execFileAsync = promisify(execFile);
 const WORKSPACE = path.resolve("workspace");
 const VIDEO_DIR = path.join(WORKSPACE, "nova", "videos");
 
-interface Scene { duration: number; text?: string; background?: string; }
+interface Scene {
+  duration: number;
+  text?: string;
+  background?: string;
+  text_size?: number;
+  text_position?: "top" | "center" | "bottom";
+  text_max_width?: number;
+}
 
 function safeId(value: string): string {
   const id = value.trim().replace(/[^a-zA-Z0-9_-]+/g, "-").replace(/^-+|-+$/g, "");
@@ -18,75 +25,102 @@ function safeId(value: string): string {
 function workspacePath(relative: string): string {
   const resolved = path.resolve(WORKSPACE, relative);
   const relativeToWorkspace = path.relative(WORKSPACE, resolved);
-  if (relativeToWorkspace.startsWith("..") || path.isAbsolute(relativeToWorkspace)) {
-    throw new Error("Path must stay inside the workspace.");
-  }
+  if (relativeToWorkspace.startsWith("..") || path.isAbsolute(relativeToWorkspace)) throw new Error("Path must stay inside the workspace.");
   return resolved;
 }
 
 async function run(command: string, args: string[]) {
   return execFileAsync(command, args, {
-    cwd: WORKSPACE,
-    timeout: 120000,
-    maxBuffer: 2 * 1024 * 1024,
-    windowsHide: true,
+    cwd: WORKSPACE, timeout: 120000, maxBuffer: 2 * 1024 * 1024, windowsHide: true,
   });
 }
 
 function escapeDrawtext(value: string): string {
-  return value.replace(/\\/g, "\\\\").replace(/:/g, "\\:").replace(/\x27/g, "\\x27");
+  return value
+    .replace(/\\/g, "\\\\")
+    .replace(/:/g, "\:")
+    .replace(/\x27/g, "\\x27")
+    .replace(/\n/g, "\\n");
 }
 
 function color(value: string | undefined): string {
   const raw = String(value ?? "202020").trim().toLowerCase();
   const named: Record<string, string> = {
-    black: "000000",
-    white: "ffffff",
-    red: "ff0000",
-    green: "00ff00",
-    blue: "0000ff",
-    yellow: "ffff00",
-    cyan: "00ffff",
-    magenta: "ff00ff",
-    gray: "808080",
-    grey: "808080",
+    black: "000000", white: "ffffff", red: "ff0000", green: "00ff00",
+    blue: "0000ff", yellow: "ffff00", cyan: "00ffff", magenta: "ff00ff",
+    gray: "808080", grey: "808080",
   };
   const candidate = named[raw] ?? raw.replace(/^#/, "");
   return /^[0-9a-fA-F]{6}$/.test(candidate) ? candidate : "202020";
 }
 
+function wrapText(text: string, maxChars: number): string {
+  const words = text.trim().split(/\s+/);
+  const lines: string[] = [];
+  let line = "";
+  for (const word of words) {
+    const candidate = line ? line + " " + word : word;
+    if (line && candidate.length > maxChars) {
+      lines.push(line);
+      line = word;
+    } else {
+      line = candidate;
+    }
+  }
+  if (line) lines.push(line);
+  return lines.join("\n");
+}
+
+function safeTextLayout(scene: Scene) {
+  const raw = String(scene.text ?? "").trim().slice(0, 500);
+  if (!raw) return null;
+
+  const requestedSize = Number(scene.text_size ?? 54);
+  const maxWidth = Math.max(300, Math.min(1200, Number(scene.text_max_width ?? 1050)));
+  const size = Math.max(24, Math.min(72, Number.isFinite(requestedSize) ? requestedSize : 54));
+
+  // Approximate character capacity from font size so long captions wrap before they leave the frame.
+  const charsPerLine = Math.max(18, Math.floor(maxWidth / Math.max(12, size * 0.55)));
+  const wrapped = wrapText(raw, charsPerLine);
+  const position = scene.text_position ?? "center";
+  const y =
+    position === "top"
+      ? "120"
+      : position === "bottom"
+        ? "(h-text_h-100)"
+        : "(h-text_h)/2";
+
+  return { text: wrapped, size, maxWidth, y };
+}
+
 export const videoEngineTool: Tool = {
   name: "video_engine",
   description:
-    "Local video production engine. Uses installed FFmpeg/ffprobe to create deterministic test videos, render simple scene timelines, and inspect finished video files. It never publishes videos. IMPORTANT: use action='render' for any user request involving multiple scenes, a timeline, scene order, text overlays, or specified backgrounds. Use action='create_test' ONLY for a generic single-color test video with no scene-specific requirements. Use action='probe' to inspect an existing output file.",
+    "Local video production engine using installed FFmpeg/ffprobe. Renders the normalized editing timeline from editing_module. Supports safe wrapped text, text sizing, and top/center/bottom caption positioning. Use render for real scene timelines and create_test only for generic tests.",
   parameters: {
     type: "object",
     properties: {
-      action: {
-        type: "string",
-        enum: ["create_test", "render", "probe"],
-        description:
-          "Choose render for multi-scene/timeline requests. Choose create_test only for a generic single-color test. Choose probe to inspect an existing MP4.",
-      },
-      id: { type: "string", description: "Safe video job id." },
-      output: { type: "string", description: "Optional workspace-relative output path." },
-      duration: { type: "number", description: "Duration in seconds for create_test only." },
+      action: { type: "string", enum: ["create_test", "render", "probe"] },
+      id: { type: "string" },
+      output: { type: "string" },
+      duration: { type: "number" },
       scenes: {
         type: "array",
-        description:
-          "Required for render. Ordered scene timeline. Preserve the user's exact scene order and values exactly. Do not invent or replace scene durations/backgrounds. Each scene has duration, optional visible text, and background, which may be a common color name such as blue/green/red or a six-digit hex value. For example, three requested scenes of 3 seconds each MUST be passed as [{duration:3,background:\"blue\",text:\"SCENE 1\"},{duration:3,background:\"green\",text:\"SCENE 2\"},{duration:3,background:\"red\",text:\"SCENE 3\"}], producing 9 seconds total.",
+        description: "Ordered render-ready timeline scenes. Preserve editing_module decisions.",
         items: {
-          type: "object",
+          type: "object", additionalProperties: false,
           properties: {
             duration: { type: "number" },
             text: { type: "string" },
             background: { type: "string" },
+            text_size: { type: "number" },
+            text_position: { type: "string", enum: ["top", "center", "bottom"] },
+            text_max_width: { type: "number" },
           },
           required: ["duration"],
-          additionalProperties: false,
         },
       },
-      path: { type: "string", description: "Workspace-relative video path for probe." },
+      path: { type: "string" },
     },
     required: ["action"],
     additionalProperties: false,
@@ -127,27 +161,57 @@ export const videoEngineTool: Tool = {
       if (action === "render") {
         const scenes = Array.isArray(input.scenes) ? (input.scenes as Scene[]) : [];
         if (scenes.length === 0 || scenes.length > 30) return { toolCallId: "", content: "render requires 1-30 scenes.", isError: true };
+
         const validScenes = scenes.map((scene, index) => {
           const duration = Number(scene.duration);
           if (!Number.isFinite(duration) || duration <= 0 || duration > 120) throw new Error("Scene " + (index + 1) + " has an invalid duration.");
-          return { duration, text: String(scene.text ?? "").slice(0, 500), background: color(scene.background) };
+          return {
+            duration,
+            text: String(scene.text ?? "").slice(0, 500),
+            background: color(scene.background),
+            text_size: Number(scene.text_size ?? 54),
+            text_position: scene.text_position ?? "center",
+            text_max_width: Number(scene.text_max_width ?? 1050),
+          };
         });
+
         const id = safeId(String(input.id ?? "render"));
         const output = workspacePath(String(input.output ?? ("nova/videos/" + id + ".mp4")));
         await fs.mkdir(path.dirname(output), { recursive: true });
+
         const inputs: string[] = [];
         const filters: string[] = [];
+
         validScenes.forEach((scene, index) => {
           inputs.push("-f", "lavfi", "-t", String(scene.duration), "-i", "color=c=0x" + scene.background + ":s=1280x720:r=30");
           let filter = "[" + index + ":v]format=yuv420p";
-          if (scene.text) filter += ",drawtext=text=\x27" + escapeDrawtext(scene.text) + "\x27:fontcolor=white:fontsize=54:x=(w-text_w)/2:y=(h-text_h)/2";
+
+          const layout = safeTextLayout(scene);
+          if (layout) {
+            filter += ",drawtext=text='" + escapeDrawtext(layout.text) +
+              "':fontcolor=white:fontsize=" + layout.size +
+              ":x=(w-text_w)/2:y=" + layout.y +
+              ":box=1:boxcolor=black@0.45:boxborderw=24";
+          }
+
           filter += "[v" + index + "]";
           filters.push(filter);
         });
+
         const concatInputs = validScenes.map((_, index) => "[v" + index + "]").join("");
         const filterComplex = filters.join(";") + ";" + concatInputs + "concat=n=" + validScenes.length + ":v=1:a=0[v]";
-        await run("ffmpeg", ["-y", ...inputs, "-filter_complex", filterComplex, "-map", "[v]", "-c:v", "libx264", "-pix_fmt", "yuv420p", "-movflags", "+faststart", output]);
-        return JSON.stringify({ ok: true, action, output: path.relative(WORKSPACE, output).replaceAll("\\", "/"), scenes: validScenes.length, duration: validScenes.reduce((sum, scene) => sum + scene.duration, 0) });
+
+        await run("ffmpeg", [
+          "-y", ...inputs, "-filter_complex", filterComplex, "-map", "[v]",
+          "-c:v", "libx264", "-pix_fmt", "yuv420p", "-movflags", "+faststart", output,
+        ]);
+
+        return JSON.stringify({
+          ok: true, action,
+          output: path.relative(WORKSPACE, output).replaceAll("\\", "/"),
+          scenes: validScenes.length,
+          duration: validScenes.reduce((sum, scene) => sum + scene.duration, 0),
+        });
       }
 
       return { toolCallId: "", content: "video_engine action must be create_test, render, or probe.", isError: true };
