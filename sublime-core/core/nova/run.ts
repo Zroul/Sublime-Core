@@ -25,6 +25,7 @@ import { contentArtifactTool } from "../ai/tools/content-artifacts.js";
 import { contentQaTool } from "../ai/tools/content-qa.js";
 import { videoEngineTool } from "../ai/tools/video-engine.js";
 import { editingModuleTool } from "../ai/tools/editing-module.js";
+import { visualPlannerTool } from "../ai/tools/visual-planner.js";
 import { createNovaGuard } from "./guard.js";
 import { NOVA_SYSTEM_PROMPT } from "./system.js";
 import {
@@ -80,6 +81,7 @@ async function runTask(task: string): Promise<void> {
       contentJobTool,
       contentArtifactTool,
       contentQaTool,
+      visualPlannerTool,
       editingModuleTool,
       videoEngineTool,
       runCommandTool,
