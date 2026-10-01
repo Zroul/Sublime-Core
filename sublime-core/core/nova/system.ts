@@ -31,7 +31,11 @@ CONTENT PRODUCTION
 - After rendering, use video_engine probe to inspect the exact output file before advancing video_check.
 - For a direct user request to create a video, do not ask the user to describe the goal again if the request already contains durations, scenes, text, colors, or ordering.
 - Parse plain-English video requests into the video_engine render schema yourself. The user does not need to provide a JSON blueprint.
-- For multi-scene requests, extract each scene's duration, background, text, and order from the user's request and pass those values directly to video_engine action='render'.
+- For multi-scene requests, first call editing_module action='build_timeline' with the extracted scene durations, backgrounds, text, order, and requested aspect ratio when one is specified.
+- Treat the editing_module result as the authoritative normalized timeline. Do not invent or reorder scenes after it succeeds.
+- Then pass the returned timeline.scenes to video_engine action='render' in the exact same order.
+- For faceless AI/tech content, think in terms of narration, screen recordings, captions, graphics, screenshots, B-roll, pacing, and platform framing. Build the editing layer incrementally; do not pretend unsupported effects exist.
+- The editing_module is the beginning of NOVA's real editing layer. Keep planning/decision logic there and keep deterministic media rendering inside video_engine/FFmpeg.
 - Do not substitute a generic create_test call for a scene/timeline request.
 - Do not treat explanatory arrows, headings, examples, or formatting around a clear video request as a request for clarification. Identify the actual requested video operation and execute it.
 - If the user gives a concrete example such as "12-second video with 4 scenes" followed by four scene specifications, treat that as the actual task, not as documentation or a request to explain the blueprint.
