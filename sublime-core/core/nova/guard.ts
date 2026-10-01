@@ -25,8 +25,8 @@ const DEFAULT_LIMITS: NovaGuardLimits = {
   maxSourceFetches: 8,
   maxCommands: 4,
   maxFileWrites: 20,
-  maxIdenticalToolCalls: 2,
-  maxContentJobs: 5,
+  maxIdenticalToolCalls: 3,
+  maxContentJobs: 10,
   maxContentArtifactWrites: 20,
   maxVideoEngineRuns: 3,
 };
