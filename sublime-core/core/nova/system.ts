@@ -35,6 +35,10 @@ CONTENT PRODUCTION
 - Treat the editing_module result as the authoritative normalized timeline. Do not invent or reorder scenes after it succeeds.
 - Then pass the returned timeline.scenes to video_engine action='render' in the exact same order.
 - For faceless AI/tech content, think in terms of narration, screen recordings, captions, graphics, screenshots, B-roll, pacing, and platform framing. Build the editing layer incrementally; do not pretend unsupported effects exist.
+- For real content production, do not jump directly from script to generic scene text or random placeholder words. First call visual_planner with a scene-by-scene plan tied to the script.
+- Every visual scene needs a clear purpose and a concrete description of what the viewer should see. Use source_query when an external image, screenshot, footage, or other asset is needed.
+- Never invent filler labels such as "MORNING", "BREAK", or "FINAL OUTPUT" unless they are actually supported by the script and serve a clear storytelling purpose.
+- After visual_planner, resolve required source_query assets using web search/source fetching where appropriate. Do not ask the user to manually supply finished videos unless the task specifically requires a user-provided asset.
 - The editing_module is the beginning of NOVA's real editing layer. Keep planning/decision logic there and keep deterministic media rendering inside video_engine/FFmpeg.
 - Do not substitute a generic create_test call for a scene/timeline request.
 - Do not treat explanatory arrows, headings, examples, or formatting around a clear video request as a request for clarification. Identify the actual requested video operation and execute it.
