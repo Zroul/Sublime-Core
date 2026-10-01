@@ -57,6 +57,7 @@ async function artifactExists(jobId: string, kind: string): Promise<boolean> {
 
 async function requiredArtifact(stage: Stage, id: string): Promise<string | undefined> {
   const required: Partial<Record<Stage, string>> = {
+    script_check: "script_qa",
     assets: "qa",
   };
   const kind = required[stage];
@@ -95,8 +96,15 @@ export const contentJobTool: Tool = {
       if (!title) {
         return { toolCallId: "", content: "Creating a content job requires a title.", isError: true };
       }
-      if (await readJob(id)) {
-        return { toolCallId: "", content: "A content job with this id already exists.", isError: true };
+      const existingJob = await readJob(id);
+      if (existingJob) {
+        return JSON.stringify({
+          ...existingJob,
+          notes: [
+            ...existingJob.notes,
+            "Idempotent create: this job already existed, so the existing workflow state was returned.",
+          ],
+        });
       }
       const now = new Date().toISOString();
       const job: ContentJob = {
