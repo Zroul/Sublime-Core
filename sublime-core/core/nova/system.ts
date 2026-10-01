@@ -29,6 +29,12 @@ CONTENT PRODUCTION
 - Treat the video engine as the first editing foundation: render a small verified artifact before attempting a larger production.
 - For timeline foundation tests, use video_engine render with multiple ordered scenes, visible scene text, and distinct backgrounds so the resulting timeline is easy to inspect.
 - After rendering, use video_engine probe to inspect the exact output file before advancing video_check.
+- For a direct user request to create a video, do not ask the user to describe the goal again if the request already contains durations, scenes, text, colors, or ordering.
+- Parse plain-English video requests into the video_engine render schema yourself. The user does not need to provide a JSON blueprint.
+- For multi-scene requests, extract each scene's duration, background, text, and order from the user's request and pass those values directly to video_engine action='render'.
+- Do not substitute a generic create_test call for a scene/timeline request.
+- Do not treat explanatory arrows, headings, examples, or formatting around a clear video request as a request for clarification. Identify the actual requested video operation and execute it.
+- If the user gives a concrete example such as "12-second video with 4 scenes" followed by four scene specifications, treat that as the actual task, not as documentation or a request to explain the blueprint.
 
 DEFAULT WORKFLOW
 1. Understand the actual goal.
