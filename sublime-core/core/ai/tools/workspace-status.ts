@@ -16,6 +16,8 @@ async function walk(
   for (const entry of entries) {
     const fullPath = path.join(directory, entry.name);
 
+    if (entry.isSymbolicLink()) continue;
+
     if (entry.isDirectory()) {
       const relativeDirectory = path.relative(root, fullPath);
       directories.add(relativeDirectory || ".");

@@ -1,9 +1,9 @@
 import { promises as fs } from "node:fs";
 import path from "node:path";
 import type { Tool } from "../reasoning/types.js";
+import { resolveWorkspacePath } from "./workspace-path.js";
 
-const WORKSPACE = path.resolve("workspace");
-const DOSSIER_DIR = path.join(WORKSPACE, "nova", "research");
+const DOSSIER_DIR = path.join("nova", "research");
 
 function safeName(value: string): string {
   const name = value.trim().replace(/[^a-zA-Z0-9_-]+/g, "-").replace(/^-+|-+$/g, "");
@@ -27,8 +27,9 @@ export const researchDossierTool: Tool = {
   async handler(input) {
     const action = String(input.action ?? "read");
     const name = safeName(String(input.name ?? ""));
-    await fs.mkdir(DOSSIER_DIR, { recursive: true });
-    const file = path.join(DOSSIER_DIR, name + ".md");
+    const directory = await resolveWorkspacePath(DOSSIER_DIR);
+    await fs.mkdir(directory, { recursive: true });
+    const file = await resolveWorkspacePath(path.join(DOSSIER_DIR, name + ".md"));
 
     if (action === "read") {
       try {

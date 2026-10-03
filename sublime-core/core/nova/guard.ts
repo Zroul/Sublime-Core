@@ -6,6 +6,7 @@ export interface NovaGuard {
     toolName: string,
     isError: boolean,
     toolArguments?: Record<string, unknown>,
+    observation?: string,
   ): void;
 }
 
@@ -25,7 +26,7 @@ const DEFAULT_LIMITS: NovaGuardLimits = {
   maxSourceFetches: 8,
   maxCommands: 4,
   maxFileWrites: 20,
-  maxIdenticalToolCalls: 3,
+  maxIdenticalToolCalls: 2,
   maxContentJobs: 10,
   maxContentArtifactWrites: 20,
   maxVideoEngineRuns: 3,
@@ -61,6 +62,9 @@ export function createNovaGuard(
     /\b(create|write|generate|build|make)\b/.test(taskText);
   const requiresVerification =
     /\b(verify|confirm|check|test|validate)\b/.test(taskText);
+  const requestsTimelineRender =
+    /\b(render|timeline|scene|scenes|scene order|text overlay|background)\b/.test(taskText) &&
+    /\b(video|mp4|movie|clip)\b/.test(taskText);
 
   const requestedPaths = extractRequestedPaths(task);
 
@@ -72,6 +76,13 @@ export function createNovaGuard(
   let successfulCreations = 0;
   let successfulVerifications = 0;
   let successfulEditingTimelines = 0;
+  let renderedVideoPath: string | undefined;
+  let probedVideoPath: string | undefined;
+
+  function normalizeVideoPath(value: string): string {
+    const normalized = value.replaceAll("\\", "/").replace(/^\.\//, "");
+    return process.platform === "win32" ? normalized.toLowerCase() : normalized;
+  }
 
   return {
     beforeToolCall(call) {
@@ -89,10 +100,6 @@ export function createNovaGuard(
             "NOVA guard blocked this action because the exact same tool call has already repeated too many times.",
         };
       }
-
-      const requestsTimelineRender =
-        /\b(render|timeline|scene|scenes|scene order|text overlay|background)\b/.test(taskText) &&
-        /\b(video|mp4|movie|clip)\b/.test(taskText);
 
       if (
         requestsTimelineRender &&
@@ -141,6 +148,17 @@ export function createNovaGuard(
       }
 
       if (call.name === "task_done") {
+        if (
+          requestsTimelineRender &&
+          (!renderedVideoPath || probedVideoPath !== renderedVideoPath)
+        ) {
+          return {
+            block: true,
+            reason:
+              "NOVA guard: render tasks must probe the exact successfully rendered output before task_done.",
+          };
+        }
+
         const successfulWrites =
           (successful.get("create_file") ?? 0) +
           (successful.get("edit_file") ?? 0);
@@ -229,10 +247,17 @@ export function createNovaGuard(
       return { block: false };
     },
 
-    recordResult(toolName, isError, toolArguments) {
+    recordResult(toolName, isError, toolArguments, observation) {
       if (isError) return;
 
       successful.set(toolName, (successful.get(toolName) ?? 0) + 1);
+
+      if (toolName !== "task_done") {
+        for (const signature of identical.keys()) {
+          const previous = JSON.parse(signature) as { name?: unknown };
+          if (previous.name === "task_done") identical.delete(signature);
+        }
+      }
 
       const filePath =
         typeof toolArguments?.path === "string"
@@ -253,6 +278,35 @@ export function createNovaGuard(
 
       if (toolName === "editing_module" && toolArguments?.action === "build_timeline") {
         successfulEditingTimelines += 1;
+      }
+
+      if (toolName === "video_engine" && typeof observation === "string") {
+        try {
+          const result = JSON.parse(observation) as {
+            ok?: unknown;
+            valid?: unknown;
+            outputPath?: unknown;
+            metadata?: { formatName?: unknown; durationSeconds?: unknown };
+          };
+          if (toolArguments?.action === "render" && result.ok === true && typeof result.outputPath === "string") {
+            renderedVideoPath = normalizeVideoPath(result.outputPath);
+            probedVideoPath = undefined;
+          }
+          if (
+            toolArguments?.action === "probe" &&
+            result.ok === true &&
+            result.valid === true &&
+            typeof result.outputPath === "string" &&
+            normalizeVideoPath(result.outputPath) === renderedVideoPath &&
+            typeof result.metadata?.formatName === "string" &&
+            Number.isFinite(result.metadata.durationSeconds) &&
+            Number(result.metadata.durationSeconds) > 0
+          ) {
+            probedVideoPath = normalizeVideoPath(result.outputPath);
+          }
+        } catch {
+          // An unparseable observation cannot satisfy the render/probe completion gate.
+        }
       }
 
       if (toolName === "video_engine") {

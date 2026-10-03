@@ -1,13 +1,5 @@
 import type { AgentState, Tool, ToolResult } from "../reasoning/types.js";
-
-type EditScene = {
-  duration: number;
-  background?: string;
-  text?: string;
-  text_size?: number;
-  text_position?: "top" | "center" | "bottom";
-  text_max_width?: number;
-};
+import type { VideoEditingResult, VideoSceneDefinition } from "../../nova/video-contracts.js";
 
 const COLORS = new Set([
   "black", "white", "red", "green", "blue", "yellow",
@@ -70,7 +62,7 @@ export const editingModuleTool: Tool = {
       if (!["16:9", "9:16", "1:1"].includes(aspectRatio)) throw new Error("aspect_ratio must be 16:9, 9:16, or 1:1.");
 
       let totalDuration = 0;
-      const scenes = args.scenes.map((rawScene, index) => {
+      const scenes: VideoSceneDefinition[] = args.scenes.map((rawScene, index) => {
         if (!rawScene || typeof rawScene !== "object" || Array.isArray(rawScene)) {
           throw new Error(`Scene ${index + 1} must be an object.`);
         }
@@ -83,10 +75,11 @@ export const editingModuleTool: Tool = {
         const textSize = scene.text_size === undefined ? undefined : asFiniteNumber(scene.text_size, `Scene ${index + 1} text_size`);
         if (textSize !== undefined && (textSize < 18 || textSize > 120)) throw new Error(`Scene ${index + 1} text_size must be between 18 and 120.`);
 
-        const textPosition = scene.text_position === undefined ? undefined : String(scene.text_position);
-        if (textPosition !== undefined && !["top", "center", "bottom"].includes(textPosition)) {
+        const textPositionValue = scene.text_position === undefined ? undefined : String(scene.text_position);
+        if (textPositionValue !== undefined && !["top", "center", "bottom"].includes(textPositionValue)) {
           throw new Error(`Scene ${index + 1} text_position must be top, center, or bottom.`);
         }
+        const textPosition = textPositionValue as "top" | "center" | "bottom" | undefined;
 
         const textMaxWidth = scene.text_max_width === undefined ? undefined : asFiniteNumber(scene.text_max_width, `Scene ${index + 1} text_max_width`);
         if (textMaxWidth !== undefined && (textMaxWidth < 300 || textMaxWidth > 1200)) {
@@ -107,15 +100,23 @@ export const editingModuleTool: Tool = {
 
       if (totalDuration > 1800) throw new Error("Timeline duration cannot exceed 30 minutes.");
 
-      return JSON.stringify({
+      const timeline = {
+        type: "nova_timeline_v2" as const,
+        aspect_ratio: aspectRatio as "16:9" | "9:16" | "1:1",
+        scenes,
+        total_duration: Number(totalDuration.toFixed(3)),
+      };
+      const result: VideoEditingResult = {
         ok: true,
         action: "build_timeline",
-        aspect_ratio: aspectRatio,
+        aspect_ratio: timeline.aspect_ratio,
         scene_count: scenes.length,
-        total_duration: Number(totalDuration.toFixed(3)),
-        timeline: { type: "nova_timeline_v2", aspect_ratio: aspectRatio, scenes },
+        total_duration: timeline.total_duration,
+        timeline,
         next_step: "Pass timeline.scenes in the same order to video_engine render, then probe the exact output.",
-      });
+      };
+
+      return JSON.stringify(result);
     } catch (error) {
       return { toolCallId: "", isError: true, content: error instanceof Error ? error.message : String(error) };
     }

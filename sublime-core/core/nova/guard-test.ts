@@ -9,8 +9,9 @@ function expectBlocked(
   guard: ReturnType<typeof createNovaGuard>,
   toolName: string,
   message: string,
+  args: Record<string, unknown> = {},
 ) {
-  const result = guard.beforeToolCall(call(toolName, message));
+  const result = guard.beforeToolCall(call(toolName, message, args));
   assert.equal(result.block, true, message);
 }
 
@@ -18,8 +19,9 @@ function expectAllowed(
   guard: ReturnType<typeof createNovaGuard>,
   toolName: string,
   message: string,
+  args: Record<string, unknown> = {},
 ) {
-  const result = guard.beforeToolCall(call(toolName, message));
+  const result = guard.beforeToolCall(call(toolName, message, args));
   assert.equal(result.block, false, message);
 }
 
@@ -76,16 +78,16 @@ function expectAllowed(
 
 {
   const guard = createNovaGuard("Run a command.");
-  expectAllowed(guard, "run_command", "first command");
-  expectAllowed(guard, "run_command", "second command");
-  expectAllowed(guard, "run_command", "third command");
-  expectAllowed(guard, "run_command", "fourth command");
-  expectBlocked(guard, "run_command", "fifth command must hit the command budget");
+  expectAllowed(guard, "run_command", "first command", { command: "node", args: ["1"] });
+  expectAllowed(guard, "run_command", "second command", { command: "node", args: ["2"] });
+  expectAllowed(guard, "run_command", "third command", { command: "node", args: ["3"] });
+  expectAllowed(guard, "run_command", "fourth command", { command: "node", args: ["4"] });
+  expectBlocked(guard, "run_command", "fifth command must hit the command budget", { command: "node", args: ["5"] });
 }
 
 {
   const guard = createNovaGuard("Inspect the workspace.");
-  const same = call("workspace_status", "same");
+  const same = call("workspace_status", "same", { path: "same" });
   assert.equal(guard.beforeToolCall(same).block, false);
   assert.equal(guard.beforeToolCall(same).block, false);
   assert.equal(

@@ -3,12 +3,18 @@ import { promisify } from "node:util";
 import { promises as fs } from "node:fs";
 import path from "node:path";
 import type { Tool } from "../reasoning/types.js";
+import type {
+  VideoProbeResult,
+  VideoRenderResult,
+  VideoSpecification,
+} from "../../nova/video-contracts.js";
+import { resolveWorkspacePath } from "./workspace-path.js";
 
 const execFileAsync = promisify(execFile);
 const WORKSPACE = path.resolve("workspace");
-const VIDEO_DIR = path.join(WORKSPACE, "nova", "videos");
 
 interface Scene {
+  index?: number;
   duration: number;
   text?: string;
   background?: string;
@@ -17,22 +23,24 @@ interface Scene {
   text_max_width?: number;
 }
 
+type VideoCommandRunner = (
+  command: string,
+  args: string[],
+) => Promise<{ stdout: string; stderr: string }>;
+
 function safeId(value: string): string {
   const id = value.trim().replace(/[^a-zA-Z0-9_-]+/g, "-").replace(/^-+|-+$/g, "");
   return id.slice(0, 80) || "video";
-}
-
-function workspacePath(relative: string): string {
-  const resolved = path.resolve(WORKSPACE, relative);
-  const relativeToWorkspace = path.relative(WORKSPACE, resolved);
-  if (relativeToWorkspace.startsWith("..") || path.isAbsolute(relativeToWorkspace)) throw new Error("Path must stay inside the workspace.");
-  return resolved;
 }
 
 async function run(command: string, args: string[]) {
   return execFileAsync(command, args, {
     cwd: WORKSPACE, timeout: 120000, maxBuffer: 2 * 1024 * 1024, windowsHide: true,
   });
+}
+
+function relativeWorkspacePath(fullPath: string): string {
+  return path.relative(WORKSPACE, fullPath).replaceAll("\\", "/");
 }
 
 function escapeDrawtext(value: string): string {
@@ -93,7 +101,10 @@ function safeTextLayout(scene: Scene) {
   return { text: wrapped, size, maxWidth, y };
 }
 
-export const videoEngineTool: Tool = {
+export function createVideoEngineTool(
+  runCommand: VideoCommandRunner = run,
+): Tool {
+  return {
   name: "video_engine",
   description:
     "Local video production engine using installed FFmpeg/ffprobe. Renders the normalized editing timeline from editing_module. Supports safe wrapped text, text sizing, and top/center/bottom caption positioning. Use render for real scene timelines and create_test only for generic tests.",
@@ -110,6 +121,7 @@ export const videoEngineTool: Tool = {
         items: {
           type: "object", additionalProperties: false,
           properties: {
+            index: { type: "integer", minimum: 1 },
             duration: { type: "number" },
             text: { type: "string" },
             background: { type: "string" },
@@ -129,33 +141,93 @@ export const videoEngineTool: Tool = {
   async handler(input) {
     const action = String(input.action ?? "");
     try {
-      await fs.mkdir(VIDEO_DIR, { recursive: true });
-
       if (action === "create_test") {
         const id = safeId(String(input.id ?? "test"));
         const duration = Math.max(1, Math.min(30, Number(input.duration ?? 5)));
-        const output = workspacePath(String(input.output ?? ("nova/videos/" + id + ".mp4")));
+        const output = await resolveWorkspacePath(String(input.output ?? ("nova/videos/" + id + ".mp4")));
         await fs.mkdir(path.dirname(output), { recursive: true });
-        await run("ffmpeg", [
+        await runCommand("ffmpeg", [
           "-y", "-f", "lavfi", "-i", "color=c=202020:s=1280x720:r=30",
           "-f", "lavfi", "-i", "sine=frequency=440:sample_rate=48000",
           "-t", String(duration), "-c:v", "libx264", "-pix_fmt", "yuv420p",
           "-c:a", "aac", "-shortest", output,
         ]);
-        return JSON.stringify({ ok: true, action, output: path.relative(WORKSPACE, output).replaceAll("\\", "/"), duration });
+        const result: VideoRenderResult = {
+          ok: true,
+          outputPath: relativeWorkspacePath(output),
+          sceneCount: 1,
+          specification: {
+            width: 1280,
+            height: 720,
+            frameRate: 30,
+            durationSeconds: duration,
+            outputPath: relativeWorkspacePath(output),
+          },
+        };
+        return JSON.stringify({ ...result, action });
       }
 
       if (action === "probe") {
         const relative = String(input.path ?? "");
         if (!relative) return { toolCallId: "", content: "video_engine probe requires path.", isError: true };
-        const target = workspacePath(relative);
-        const result = await run("ffprobe", [
+        const target = await resolveWorkspacePath(relative);
+        const result = await runCommand("ffprobe", [
           "-v", "error",
           "-show_entries", "format=duration,size,format_name",
           "-show_entries", "stream=index,codec_type,codec_name,width,height,r_frame_rate",
           "-of", "json", target,
         ]);
-        return result.stdout.trim() || "ffprobe returned no metadata.";
+        const parsed = JSON.parse(result.stdout) as {
+          format?: { format_name?: unknown; duration?: unknown; size?: unknown };
+          streams?: Array<{
+            codec_type?: unknown;
+            codec_name?: unknown;
+            width?: unknown;
+            height?: unknown;
+            r_frame_rate?: unknown;
+          }>;
+        };
+        const formatName = typeof parsed.format?.format_name === "string"
+          ? parsed.format.format_name
+          : "";
+        const durationSeconds = Number(parsed.format?.duration);
+        const hasVideoStream = (parsed.streams ?? []).some(
+          (stream) => stream.codec_type === "video",
+        );
+        if (
+          !formatName ||
+          !Number.isFinite(durationSeconds) ||
+          durationSeconds <= 0 ||
+          !hasVideoStream
+        ) {
+          const result: VideoProbeResult = {
+            ok: false,
+            valid: false,
+            outputPath: relativeWorkspacePath(target),
+            error: "ffprobe metadata must include a format name, positive duration, and video stream.",
+          };
+          return { toolCallId: "", content: JSON.stringify(result), isError: true };
+        }
+
+        const sizeBytes = Number(parsed.format?.size);
+        const probe: VideoProbeResult = {
+          ok: true,
+          valid: true,
+          outputPath: relativeWorkspacePath(target),
+          metadata: {
+            formatName,
+            durationSeconds,
+            ...(Number.isFinite(sizeBytes) && sizeBytes >= 0 ? { sizeBytes } : {}),
+            streams: (parsed.streams ?? []).map((stream) => ({
+              ...(typeof stream.codec_type === "string" ? { type: stream.codec_type } : {}),
+              ...(typeof stream.codec_name === "string" ? { codec: stream.codec_name } : {}),
+              ...(typeof stream.width === "number" ? { width: stream.width } : {}),
+              ...(typeof stream.height === "number" ? { height: stream.height } : {}),
+              ...(typeof stream.r_frame_rate === "string" ? { frameRate: stream.r_frame_rate } : {}),
+            })),
+          },
+        };
+        return JSON.stringify(probe);
       }
 
       if (action === "render") {
@@ -166,6 +238,7 @@ export const videoEngineTool: Tool = {
           const duration = Number(scene.duration);
           if (!Number.isFinite(duration) || duration <= 0 || duration > 120) throw new Error("Scene " + (index + 1) + " has an invalid duration.");
           return {
+            index: scene.index ?? index + 1,
             duration,
             text: String(scene.text ?? "").slice(0, 500),
             background: color(scene.background),
@@ -176,7 +249,7 @@ export const videoEngineTool: Tool = {
         });
 
         const id = safeId(String(input.id ?? "render"));
-        const output = workspacePath(String(input.output ?? ("nova/videos/" + id + ".mp4")));
+        const output = await resolveWorkspacePath(String(input.output ?? ("nova/videos/" + id + ".mp4")));
         await fs.mkdir(path.dirname(output), { recursive: true });
 
         const inputs: string[] = [];
@@ -201,17 +274,27 @@ export const videoEngineTool: Tool = {
         const concatInputs = validScenes.map((_, index) => "[v" + index + "]").join("");
         const filterComplex = filters.join(";") + ";" + concatInputs + "concat=n=" + validScenes.length + ":v=1:a=0[v]";
 
-        await run("ffmpeg", [
+        await runCommand("ffmpeg", [
           "-y", ...inputs, "-filter_complex", filterComplex, "-map", "[v]",
           "-c:v", "libx264", "-pix_fmt", "yuv420p", "-movflags", "+faststart", output,
         ]);
 
-        return JSON.stringify({
-          ok: true, action,
-          output: path.relative(WORKSPACE, output).replaceAll("\\", "/"),
-          scenes: validScenes.length,
-          duration: validScenes.reduce((sum, scene) => sum + scene.duration, 0),
-        });
+        const durationSeconds = validScenes.reduce((sum, scene) => sum + scene.duration, 0);
+        const outputPath = relativeWorkspacePath(output);
+        const specification: VideoSpecification = {
+          width: 1280,
+          height: 720,
+          frameRate: 30,
+          durationSeconds,
+          outputPath,
+        };
+        const result: VideoRenderResult = {
+          ok: true,
+          outputPath,
+          sceneCount: validScenes.length,
+          specification,
+        };
+        return JSON.stringify({ ...result, action });
       }
 
       return { toolCallId: "", content: "video_engine action must be create_test, render, or probe.", isError: true };
@@ -219,4 +302,7 @@ export const videoEngineTool: Tool = {
       return { toolCallId: "", content: "video_engine failed: " + (error instanceof Error ? error.message : String(error)), isError: true };
     }
   },
-};
+  };
+}
+
+export const videoEngineTool = createVideoEngineTool();

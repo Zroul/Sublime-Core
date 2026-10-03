@@ -1,27 +1,12 @@
 import { promises as fs } from "node:fs";
-import path from "node:path";
 import type { LlmClient } from "../ai/reasoning/types.js";
+import { resolveWorkspacePath } from "../ai/tools/workspace-path.js";
 import { runResearchAgent } from "./research-agent.js";
 import {
   generateValidatedScript,
   type ScriptPipelineResult,
 } from "./script-pipeline.js";
 import type { ScriptRequest } from "./script-generator.js";
-
-const WORKSPACE = path.resolve("workspace");
-
-function safeWorkspacePath(filePath: string): string {
-  const fullPath = path.resolve(WORKSPACE, filePath);
-
-  if (
-    fullPath !== WORKSPACE &&
-    !fullPath.startsWith(WORKSPACE + path.sep)
-  ) {
-    throw new Error("Content pipeline path is outside the workspace.");
-  }
-
-  return fullPath;
-}
 
 export interface ContentPipelineRequest extends ScriptRequest {
   researchOutputFile?: string;
@@ -48,7 +33,7 @@ export async function runContentPipeline(
     maxTurns: request.researchMaxTurns ?? 18,
   });
 
-  const reportPath = safeWorkspacePath(researchFile);
+  const reportPath = await resolveWorkspacePath(researchFile);
   let researchContext: string;
 
   try {

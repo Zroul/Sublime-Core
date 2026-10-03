@@ -2,10 +2,11 @@ import { promises as fs } from "node:fs";
 import path from "node:path";
 import { createInterface } from "node:readline/promises";
 import { stdin as input, stdout as output } from "node:process";
+import { pathToFileURL } from "node:url";
 
 import { OllamaProvider } from "../ai/providers/ollama.js";
 import { runReActLoop } from "../ai/reasoning/loop.js";
-import type { Turn } from "../ai/reasoning/types.js";
+import type { AgentRunResult, LlmClient, Message, Tool, Turn } from "../ai/reasoning/types.js";
 import {
   createFileTool,
   editFileTool,
@@ -26,6 +27,7 @@ import { contentQaTool } from "../ai/tools/content-qa.js";
 import { videoEngineTool } from "../ai/tools/video-engine.js";
 import { editingModuleTool } from "../ai/tools/editing-module.js";
 import { visualPlannerTool } from "../ai/tools/visual-planner.js";
+import { resolveWorkspacePath } from "../ai/tools/workspace-path.js";
 import { createNovaGuard } from "./guard.js";
 import { NOVA_SYSTEM_PROMPT } from "./system.js";
 import {
@@ -36,16 +38,23 @@ import {
 } from "./run-state.js";
 
 const MAX_TURNS = 18;
-const workspace = path.resolve("workspace");
-const logPath = path.join(workspace, "nova", "NOVA_RUN_LOG.md");
+
+export interface RunTaskOptions {
+  maxTurns?: number;
+  videoEngine?: Tool;
+}
 
 async function appendLog(text: string): Promise<void> {
+  const logPath = await resolveWorkspacePath("nova/NOVA_RUN_LOG.md");
   await fs.mkdir(path.dirname(logPath), { recursive: true });
   await fs.appendFile(logPath, text, "utf8");
 }
 
-async function runTask(task: string): Promise<void> {
-  const provider = new OllamaProvider("core");
+export async function runTask(
+  task: string,
+  provider: LlmClient = new OllamaProvider("core"),
+  options: RunTaskOptions = {},
+): Promise<void> {
   const guard = createNovaGuard(task);
   const runId = createRunId();
   const startedAt = new Date().toISOString();
@@ -56,16 +65,16 @@ async function runTask(task: string): Promise<void> {
 
   let lastVideoRender: string | null = null;
   let lastVideoProbe: string | null = null;
+  const initialMessages: Message[] = [{ role: "user", content: task }];
+  let lastMessages = initialMessages;
+  let lastTurn = 0;
 
-  const result = await runReActLoop({
+  let result: AgentRunResult;
+  try {
+    result = await runReActLoop({
     llm: provider,
     system: NOVA_SYSTEM_PROMPT,
-    initialMessages: [
-      {
-        role: "user",
-        content: task,
-      },
-    ],
+    initialMessages,
     tools: [
       webSearchTool,
       sourceFetchTool,
@@ -83,12 +92,14 @@ async function runTask(task: string): Promise<void> {
       contentQaTool,
       visualPlannerTool,
       editingModuleTool,
-      videoEngineTool,
+      options.videoEngine ?? videoEngineTool,
       runCommandTool,
     ],
-    maxTurns: MAX_TURNS,
+    maxTurns: options.maxTurns ?? MAX_TURNS,
     hooks: {
-      beforeToolCall(call) {
+      beforeToolCall(call, state) {
+        lastMessages = [...state.messages];
+        lastTurn = state.turn;
         const decision = guard.beforeToolCall(call);
         if (decision.block) {
           console.log(`[BLOCKED] ${call.name}: ${decision.reason}`);
@@ -98,6 +109,8 @@ async function runTask(task: string): Promise<void> {
         return decision;
       },
       onToolResult(result, state) {
+        lastMessages = [...state.messages];
+        lastTurn = state.turn;
         const assistant = [...state.messages]
           .reverse()
           .find((message) => message.role === "assistant");
@@ -110,6 +123,7 @@ async function runTask(task: string): Promise<void> {
             call.name,
             Boolean(result.isError),
             call.arguments,
+            result.content,
           );
         }
 
@@ -119,14 +133,27 @@ async function runTask(task: string): Promise<void> {
           if (action === "render") {
             try {
               const data = JSON.parse(result.content);
-              if (data.ok && data.output) lastVideoRender = String(data.output);
+              if (data.ok && typeof data.outputPath === "string") {
+                lastVideoRender = normalizeVideoPath(data.outputPath);
+                lastVideoProbe = null;
+              }
             } catch {}
           }
           if (action === "probe") {
             try {
               const data = JSON.parse(result.content);
-              if (data.format?.format_name && data.format?.duration) {
-                lastVideoProbe = `valid ${data.format.format_name} container, ${data.format.duration}s`;
+              const probedPath = typeof data.outputPath === "string"
+                ? normalizeVideoPath(data.outputPath)
+                : "";
+              if (
+                data.ok === true &&
+                data.valid === true &&
+                probedPath &&
+                probedPath === lastVideoRender &&
+                data.metadata?.formatName &&
+                Number.isFinite(data.metadata.durationSeconds)
+              ) {
+                lastVideoProbe = `valid ${data.metadata.formatName} container, ${data.metadata.durationSeconds}s`;
               }
             } catch {}
           }
@@ -138,11 +165,14 @@ async function runTask(task: string): Promise<void> {
       shouldStop(state) {
         if (lastVideoRender && lastVideoProbe) {
           state.finalSummary = `Created and validated the requested video: ${lastVideoRender} (${lastVideoProbe}).`;
+          state.successfulStop = true;
           return true;
         }
         return false;
       },
       persistTurn(turn: Turn, state) {
+        lastMessages = [...state.messages];
+        lastTurn = turn.index;
         const toolCalls = turn.assistant.toolCalls ?? [];
         const toolNames = toolCalls.map((call) => call.name);
         const errors = turn.toolResults.filter((item) => item.isError).length;
@@ -163,6 +193,18 @@ async function runTask(task: string): Promise<void> {
       },
     },
   });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    result = {
+      stopped: "runner_error",
+      turns: lastTurn,
+      messages: [
+        ...lastMessages,
+        { role: "assistant", content: `NOVA orchestration failed: ${message}` },
+      ],
+      finalSummary: `NOVA orchestration failed: ${message}`,
+    };
+  }
 
   const lastAssistant = [...result.messages]
     .reverse()
@@ -230,9 +272,20 @@ async function main(): Promise<void> {
   }
 }
 
-main().catch((error) => {
-  console.error(
-    error instanceof Error ? error.message : String(error),
-  );
-  process.exitCode = 1;
-});
+const invokedPath = process.argv[1]
+  ? pathToFileURL(path.resolve(process.argv[1])).href
+  : undefined;
+
+if (invokedPath === import.meta.url) {
+  main().catch((error) => {
+    console.error(
+      error instanceof Error ? error.message : String(error),
+    );
+    process.exitCode = 1;
+  });
+}
+
+function normalizeVideoPath(value: string): string {
+  const normalized = path.posix.normalize(value.replaceAll("\\", "/")).replace(/^\.\//, "");
+  return process.platform === "win32" ? normalized.toLowerCase() : normalized;
+}

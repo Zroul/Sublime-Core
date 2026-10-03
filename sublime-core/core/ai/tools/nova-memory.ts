@@ -1,9 +1,7 @@
 import { promises as fs } from "node:fs";
 import path from "node:path";
 import type { Tool } from "../reasoning/types.js";
-
-const WORKSPACE = path.resolve("workspace");
-const MEMORY_PATH = path.join(WORKSPACE, "nova", "NOVA_MEMORY.md");
+import { resolveWorkspacePath } from "./workspace-path.js";
 
 function normalize(value: string): string {
   return value.replace(/\s+/g, " ").trim();
@@ -33,11 +31,12 @@ export const novaMemoryTool: Tool = {
 
   async handler(input) {
     const action = String(input.action ?? "read");
-    await fs.mkdir(path.dirname(MEMORY_PATH), { recursive: true });
+    const memoryPath = await resolveWorkspacePath("nova/NOVA_MEMORY.md");
+    await fs.mkdir(path.dirname(memoryPath), { recursive: true });
 
     if (action === "read") {
       try {
-        const content = await fs.readFile(MEMORY_PATH, "utf8");
+        const content = await fs.readFile(memoryPath, "utf8");
         return content || "# NOVA Memory\n";
       } catch (error) {
         if ((error as NodeJS.ErrnoException).code === "ENOENT") {
@@ -74,7 +73,7 @@ export const novaMemoryTool: Tool = {
 
     let existing = "";
     try {
-      existing = await fs.readFile(MEMORY_PATH, "utf8");
+      existing = await fs.readFile(memoryPath, "utf8");
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
     }
@@ -83,7 +82,7 @@ export const novaMemoryTool: Tool = {
 
     const timestamp = new Date().toISOString();
     const section = "\n- [" + timestamp + "] " + entry + "\n";
-    await fs.writeFile(MEMORY_PATH, existing.trimEnd() + section, "utf8");
+    await fs.writeFile(memoryPath, existing.trimEnd() + section, "utf8");
 
     return JSON.stringify({ saved: true, path: "nova/NOVA_MEMORY.md", entry });
   },

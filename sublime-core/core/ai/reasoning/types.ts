@@ -28,6 +28,8 @@ export interface Message {
   toolCallId?: string;
   /** Optional tool name, convenient for `tool` messages and logging. */
   name?: string;
+  /** Marks an observation that reports a blocked or failed tool call. */
+  isError?: boolean;
 }
 
 /** A request from the model to run a tool. */
@@ -112,6 +114,8 @@ export interface AgentState<Ctx = unknown> {
   system: string;
   /** Set when the stop tool records a final summary. */
   finalSummary?: string;
+  /** Set only after a run-specific shouldStop condition is verified successful. */
+  successfulStop?: boolean;
   /** Arbitrary user context, passed straight through from run options. */
   context?: Ctx;
 }
@@ -182,4 +186,6 @@ export interface AgentRunResult {
   messages: Message[];
   /** Summary recorded by the stop tool, if any. */
   finalSummary?: string;
+  /** Explicit success signal for non-task_done stop paths. */
+  successfulStop?: boolean;
 }

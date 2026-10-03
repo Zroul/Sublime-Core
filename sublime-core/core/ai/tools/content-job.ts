@@ -1,9 +1,7 @@
 import { promises as fs } from "node:fs";
 import path from "node:path";
 import type { Tool } from "../reasoning/types.js";
-
-const WORKSPACE = path.resolve("workspace");
-const JOB_DIR = path.join(WORKSPACE, "nova", "jobs");
+import { resolveWorkspacePath } from "./workspace-path.js";
 
 const STAGES = [
   "research",
@@ -31,14 +29,13 @@ function safeId(value: string): string {
   return id.slice(0, 80) || "job";
 }
 
-function jobPath(id: string): string {
-  return path.join(JOB_DIR, safeId(id) + ".json");
+async function jobPath(id: string): Promise<string> {
+  return resolveWorkspacePath(path.join("nova", "jobs", safeId(id) + ".json"));
 }
 
 async function readJob(id: string): Promise<ContentJob | undefined> {
-
   try {
-    return JSON.parse(await fs.readFile(jobPath(id), "utf8")) as ContentJob;
+    return JSON.parse(await fs.readFile(await jobPath(id), "utf8")) as ContentJob;
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code === "ENOENT") return undefined;
     throw error;
@@ -46,7 +43,9 @@ async function readJob(id: string): Promise<ContentJob | undefined> {
 }
 
 async function artifactExists(jobId: string, kind: string): Promise<boolean> {
-  const file = path.join(JOB_DIR, safeId(jobId), kind + ".md");
+  const file = await resolveWorkspacePath(
+    path.join("nova", "jobs", safeId(jobId), kind + ".md"),
+  );
   try {
     await fs.access(file);
     return true;
@@ -85,7 +84,8 @@ export const contentJobTool: Tool = {
   },
   async handler(input) {
     const action = String(input.action ?? "read");
-    await fs.mkdir(JOB_DIR, { recursive: true });
+    const jobDirectory = await resolveWorkspacePath(path.join("nova", "jobs"));
+    await fs.mkdir(jobDirectory, { recursive: true });
     const id = safeId(String(input.id ?? input.title ?? ""));
     if (!id) {
       return { toolCallId: "", content: "content_job requires an id or title.", isError: true };
@@ -116,7 +116,7 @@ export const contentJobTool: Tool = {
         updatedAt: now,
         notes: [],
       };
-      await fs.writeFile(jobPath(id), JSON.stringify(job, null, 2), "utf8");
+      await fs.writeFile(await jobPath(id), JSON.stringify(job, null, 2), "utf8");
       return JSON.stringify(job);
     }
 
@@ -165,7 +165,7 @@ export const contentJobTool: Tool = {
     const note = String(input.note ?? "").trim();
     if (note && action === "advance") job.notes.push(note);
     job.updatedAt = new Date().toISOString();
-    await fs.writeFile(jobPath(id), JSON.stringify(job, null, 2), "utf8");
+    await fs.writeFile(await jobPath(id), JSON.stringify(job, null, 2), "utf8");
     return JSON.stringify(job);
   },
 };

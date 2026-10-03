@@ -9,7 +9,7 @@
     "nova:research": "tsx core/ai/reasoning/run-test.ts",
     "core:chat": "tsx core/ai/reasoning/run-core-chat.ts",
     "nova": "tsx core/nova/run.ts",
-    "nova:test": "tsx core/nova/guard-test.ts"
+    "nova:test": "tsx core/nova/guard-test.ts && tsx core/nova/run-loop-test.ts"
   },
   "devDependencies": {
     "@types/node": "^26.4.1",

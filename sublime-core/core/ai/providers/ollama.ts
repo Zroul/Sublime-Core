@@ -53,7 +53,10 @@ export class OllamaProvider implements LlmClient {
         if (message.role === "tool") {
           return {
             role: "tool",
-            content: message.content ?? "",
+            content: message.isError
+              ? `Tool error: ${message.content ?? ""}`
+              : message.content ?? "",
+            ...(message.name ? { tool_name: message.name } : {}),
           };
         }
 

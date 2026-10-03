@@ -1,13 +1,5 @@
 import type { AgentState, Tool, ToolResult } from "../reasoning/types.js";
-
-type VisualScene = {
-  duration: number;
-  purpose: string;
-  visual: string;
-  source_query?: string;
-  narration?: string;
-  caption?: string;
-};
+import type { VideoPlanScene, VideoVisualPlan } from "../../nova/video-contracts.js";
 
 export const visualPlannerTool: Tool = {
   name: "visual_planner",
@@ -54,7 +46,7 @@ export const visualPlannerTool: Tool = {
       }
 
       let totalDuration = 0;
-      const scenes = args.scenes.map((raw, index) => {
+      const scenes: VideoPlanScene[] = args.scenes.map((raw, index) => {
         if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
           throw new Error(`Scene ${index + 1} must be an object.`);
         }
@@ -73,16 +65,21 @@ export const visualPlannerTool: Tool = {
 
         totalDuration += duration;
 
-        const result: Record<string, unknown> = {
+        const result: VideoPlanScene = {
           index: index + 1,
           duration,
           purpose,
           visual,
         };
 
-        for (const key of ["source_query", "narration", "caption"]) {
-          const value = typeof scene[key] === "string" ? scene[key].trim() : "";
-          if (value) result[key] = value;
+        if (typeof scene.source_query === "string" && scene.source_query.trim()) {
+          result.source_query = scene.source_query.trim();
+        }
+        if (typeof scene.narration === "string" && scene.narration.trim()) {
+          result.narration = scene.narration.trim();
+        }
+        if (typeof scene.caption === "string" && scene.caption.trim()) {
+          result.caption = scene.caption.trim();
         }
 
         return result;
@@ -92,15 +89,17 @@ export const visualPlannerTool: Tool = {
         throw new Error("Visual plan cannot exceed 30 minutes.");
       }
 
+      const visualPlan: VideoVisualPlan = {
+        type: "nova_visual_plan_v1",
+        scenes,
+      };
+
       return JSON.stringify({
         ok: true,
         action: "build_visual_plan",
         scene_count: scenes.length,
         total_duration: Number(totalDuration.toFixed(3)),
-        visual_plan: {
-          type: "nova_visual_plan_v1",
-          scenes,
-        },
+        visual_plan: visualPlan,
         next_step:
           "Resolve source_query assets with web research/search where needed, then pass meaningful scene decisions into editing_module.",
       });

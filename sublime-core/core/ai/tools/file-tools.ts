@@ -1,21 +1,9 @@
 import { promises as fs } from "fs";
 import path from "path";
 import type { Tool } from "../reasoning/types.js";
+import { resolveWorkspacePath } from "./workspace-path.js";
 
 const WORKSPACE = path.resolve("workspace");
-
-function safePath(filePath: string): string {
-  const fullPath = path.resolve(WORKSPACE, filePath);
-
-  if (
-    fullPath !== WORKSPACE &&
-    !fullPath.startsWith(WORKSPACE + path.sep)
-  ) {
-    throw new Error("File path is outside the Sublime Core workspace.");
-  }
-
-  return fullPath;
-}
 
 export const createFileTool: Tool = {
   name: "create_file",
@@ -39,7 +27,7 @@ export const createFileTool: Tool = {
   async handler(args) {
     const filePath = String(args.path);
     const content = String(args.content);
-    const fullPath = safePath(filePath);
+    const fullPath = await resolveWorkspacePath(filePath);
 
     await fs.mkdir(path.dirname(fullPath), {
       recursive: true,
@@ -76,7 +64,7 @@ export const readFileTool: Tool = {
 
   async handler(args) {
     const filePath = String(args.path);
-    const fullPath = safePath(filePath);
+    const fullPath = await resolveWorkspacePath(filePath);
 
     try {
       return await fs.readFile(fullPath, "utf8");
@@ -113,7 +101,7 @@ export const editFileTool: Tool = {
   async handler(args) {
     const filePath = String(args.path);
     const content = String(args.content);
-    const fullPath = safePath(filePath);
+    const fullPath = await resolveWorkspacePath(filePath);
 
     try {
       await fs.access(fullPath);

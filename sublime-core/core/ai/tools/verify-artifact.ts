@@ -1,19 +1,7 @@
 import { promises as fs } from "node:fs";
 import path from "node:path";
 import type { Tool } from "../reasoning/types.js";
-
-const WORKSPACE = path.resolve("workspace");
-
-function safePath(input: string): string {
-  const target = path.resolve(WORKSPACE, input);
-  const relative = path.relative(WORKSPACE, target);
-
-  if (relative.startsWith("..") || path.isAbsolute(relative)) {
-    throw new Error("Path escapes the workspace.");
-  }
-
-  return target;
-}
+import { resolveWorkspacePath } from "./workspace-path.js";
 
 export const verifyArtifactTool: Tool = {
   name: "verify_artifact",
@@ -43,7 +31,7 @@ export const verifyArtifactTool: Tool = {
     }
 
     try {
-      const absolute = safePath(requestedPath);
+      const absolute = await resolveWorkspacePath(requestedPath);
       const stat = await fs.stat(absolute);
 
       return {

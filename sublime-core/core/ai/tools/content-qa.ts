@@ -1,16 +1,6 @@
 import { promises as fs } from "node:fs";
-import path from "node:path";
 import type { Tool } from "../reasoning/types.js";
-
-const WORKSPACE = path.resolve("workspace");
-
-function safePath(value: string): string {
-  const full = path.resolve(WORKSPACE, value);
-  if (full !== WORKSPACE && !full.startsWith(WORKSPACE + path.sep)) {
-    throw new Error("Path is outside the Sublime Core workspace.");
-  }
-  return full;
-}
+import { resolveWorkspacePath } from "./workspace-path.js";
 
 function checksFor(kind: string, content: string): string[] {
   const checks: string[] = [];
@@ -24,7 +14,7 @@ function checksFor(kind: string, content: string): string[] {
       checks.push("Asset manifest does not state an obvious source or rights field.");
     }
   }
-  if (kind === "qa") {
+  if (kind === "qa" || kind === "script_qa") {
     if (!/(pass|fail|issue|finding|check)/i.test(content)) checks.push("QA artifact does not contain an explicit check/result vocabulary.");
   }
   if (kind === "review") {
@@ -43,7 +33,7 @@ export const contentQaTool: Tool = {
     type: "object",
     properties: {
       path: { type: "string", description: "Workspace-relative artifact path." },
-      kind: { type: "string", enum: ["script", "qa", "asset_manifest", "review"] },
+      kind: { type: "string", enum: ["script", "script_qa", "qa", "asset_manifest", "review"] },
     },
     required: ["path", "kind"],
     additionalProperties: false,
@@ -51,9 +41,8 @@ export const contentQaTool: Tool = {
   async handler(input) {
     const relative = String(input.path ?? "");
     const kind = String(input.kind ?? "");
-    const file = safePath(relative);
-
     try {
+      const file = await resolveWorkspacePath(relative);
       const content = await fs.readFile(file, "utf8");
       const findings = checksFor(kind, content);
       return JSON.stringify({
