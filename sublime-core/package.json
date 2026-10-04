@@ -2,14 +2,14 @@
   "name": "sublime-core",
   "version": "0.1.0",
   "private": true,
-  "description": "Private AI-powered website builder",
+  "description": "Private AI-powered assistant for Sublime Core",
   "type": "module",
   "scripts": {
     "start": "node app/backend/index.js",
     "nova:research": "tsx core/ai/reasoning/run-test.ts",
     "core:chat": "tsx core/ai/reasoning/run-core-chat.ts",
     "nova": "tsx core/nova/run.ts",
-    "nova:test": "tsx core/nova/guard-test.ts && tsx core/nova/run-loop-test.ts"
+    "nova:test": "node core/nova/test-runner.mjs"
   },
   "devDependencies": {
     "@types/node": "^26.4.1",

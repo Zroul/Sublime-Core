@@ -25,6 +25,8 @@ import { contentJobTool } from "../ai/tools/content-job.js";
 import { contentArtifactTool } from "../ai/tools/content-artifacts.js";
 import { contentQaTool } from "../ai/tools/content-qa.js";
 import { videoEngineTool } from "../ai/tools/video-engine.js";
+import { mediaCapabilitiesTool } from "../ai/tools/media-environment.js";
+import { createVideoProductionTool, type ProductionDependencies } from "./production-pipeline.js";
 import { editingModuleTool } from "../ai/tools/editing-module.js";
 import { visualPlannerTool } from "../ai/tools/visual-planner.js";
 import { resolveWorkspacePath } from "../ai/tools/workspace-path.js";
@@ -42,6 +44,7 @@ const MAX_TURNS = 18;
 export interface RunTaskOptions {
   maxTurns?: number;
   videoEngine?: Tool;
+  productionDependencies?: Omit<ProductionDependencies, "videoEngine">;
 }
 
 async function appendLog(text: string): Promise<void> {
@@ -52,7 +55,7 @@ async function appendLog(text: string): Promise<void> {
 
 export async function runTask(
   task: string,
-  provider: LlmClient = new OllamaProvider("core"),
+  provider: LlmClient = new OllamaProvider(),
   options: RunTaskOptions = {},
 ): Promise<void> {
   const guard = createNovaGuard(task);
@@ -68,6 +71,37 @@ export async function runTask(
   const initialMessages: Message[] = [{ role: "user", content: task }];
   let lastMessages = initialMessages;
   let lastTurn = 0;
+  const directVideoProduction =
+    /^\s*(?:please\s+)?(?:make|create|produce|build|generate)\b/i.test(task) &&
+    /\b(?:video|clip|film)\b/i.test(task);
+  const registeredTools: Tool[] = [
+    webSearchTool,
+    sourceFetchTool,
+    createFileTool,
+    readFileTool,
+    editFileTool,
+    listFilesTool,
+    workspaceStatusTool,
+    verifyArtifactTool,
+    novaMemoryTool,
+    researchDossierTool,
+    novaRunStateTool,
+    contentJobTool,
+    contentArtifactTool,
+    contentQaTool,
+    visualPlannerTool,
+    editingModuleTool,
+    options.videoEngine ?? videoEngineTool,
+    mediaCapabilitiesTool,
+    createVideoProductionTool(provider, {
+      ...options.productionDependencies,
+      videoEngine: options.videoEngine ?? videoEngineTool,
+    }),
+    runCommandTool,
+  ];
+  const activeTools = directVideoProduction
+    ? registeredTools.filter((tool) => tool.name === "video_production")
+    : registeredTools;
 
   let result: AgentRunResult;
   try {
@@ -75,26 +109,7 @@ export async function runTask(
     llm: provider,
     system: NOVA_SYSTEM_PROMPT,
     initialMessages,
-    tools: [
-      webSearchTool,
-      sourceFetchTool,
-      createFileTool,
-      readFileTool,
-      editFileTool,
-      listFilesTool,
-      workspaceStatusTool,
-      verifyArtifactTool,
-      novaMemoryTool,
-      researchDossierTool,
-      novaRunStateTool,
-      contentJobTool,
-      contentArtifactTool,
-      contentQaTool,
-      visualPlannerTool,
-      editingModuleTool,
-      options.videoEngine ?? videoEngineTool,
-      runCommandTool,
-    ],
+    tools: activeTools,
     maxTurns: options.maxTurns ?? MAX_TURNS,
     hooks: {
       beforeToolCall(call, state) {
@@ -163,6 +178,7 @@ export async function runTask(
         );
       },
       shouldStop(state) {
+        if (state.successfulStop === true && state.finalSummary) return true;
         if (lastVideoRender && lastVideoProbe) {
           state.finalSummary = `Created and validated the requested video: ${lastVideoRender} (${lastVideoProbe}).`;
           state.successfulStop = true;

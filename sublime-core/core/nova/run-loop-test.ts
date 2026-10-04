@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdir, mkdtemp, readFile, rm, symlink } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, symlink, writeFile } from "node:fs/promises";
 import path from "node:path";
 import type { LlmClient, Message, ToolCall, ToolSpec } from "../ai/reasoning/types.js";
 
@@ -168,7 +168,16 @@ async function main(): Promise<void> {
         toolCalls: [toolCall("c-timeline", "editing_module", {
           action: "build_timeline",
           aspect_ratio: "16:9",
-          scenes: [{ duration: 1, background: "black", text: "NOVA" }],
+          scenes: [{
+            duration: 1,
+            background: "black",
+            text: "NOVA",
+            caption_segments: [{
+              text: "This deliberately long caption contains enough words to wrap safely.",
+              start: 0,
+              end: 1,
+            }],
+          }],
         })],
       }),
       (input) => {
@@ -209,7 +218,13 @@ async function main(): Promise<void> {
     const videoTool = createVideoEngineTool(async (command, args) => {
       processCalls.push(command);
       if (command === "ffmpeg") {
-        assert.ok(args.includes(path.join(workspace, videoPath)));
+        const filterComplex = args[args.indexOf("-filter_complex") + 1] ?? "";
+        assert.match(filterComplex, /drawbox=x=iw\*0\.08:y=ih\*0\.12/);
+        assert.doesNotMatch(filterComplex, /drawbox=x=w\*|drawbox=x=[^,:]+:y=h\*/);
+        assert.ok(filterComplex.includes("\n"), "wrapped drawtext lines must remain actual line breaks for FFmpeg");
+        const output = args.at(-1);
+        assert.equal(output, path.join(workspace, videoPath));
+        await writeFile(output, "deterministic video fixture");
         return { stdout: "", stderr: "" };
       }
       assert.equal(command, "ffprobe");
@@ -223,9 +238,9 @@ async function main(): Promise<void> {
       };
     });
     await runTask(taskC, modelC, { maxTurns: 5, videoEngine: videoTool });
-    assert.equal(modelC.calls, 4);
-    assert.deepEqual(processCalls, ["ffmpeg", "ffprobe"]);
     const stateC = (await listNovaRunStates()).find((state) => state.task === taskC);
+    assert.equal(modelC.calls, 4, JSON.stringify(stateC?.messages.slice(-8)));
+    assert.deepEqual(processCalls, ["ffmpeg", "ffprobe"]);
     assert.ok(stateC);
     assert.equal(stateC.status, "completed");
     assert.equal(stateC.stopped, "shouldStop");

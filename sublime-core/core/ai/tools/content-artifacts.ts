@@ -5,26 +5,56 @@ import { resolveWorkspacePath } from "./workspace-path.js";
 
 const WORKSPACE = path.resolve("workspace");
 
-type ArtifactKind = "script" | "script_qa" | "qa" | "asset_manifest" | "review";
+export type ArtifactKind =
+  | "request" | "research" | "script" | "script_data" | "script_qa" | "qa"
+  | "visual_plan" | "asset_manifest" | "audio" | "timeline"
+  | "render" | "validation" | "final" | "review";
+
+const JSON_ARTIFACTS = new Set<ArtifactKind>([
+  "request", "script_data", "visual_plan", "asset_manifest", "audio", "timeline", "render", "validation", "final",
+]);
 
 function safeId(value: string): string {
   return value.trim().replace(/[^a-zA-Z0-9_-]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 80);
 }
 
 function artifactPath(jobId: string, kind: ArtifactKind): string {
-  return path.join("nova", "jobs", safeId(jobId), kind + ".md");
+  const extension = JSON_ARTIFACTS.has(kind) ? ".json" : ".md";
+  return path.join("nova", "jobs", safeId(jobId), kind + extension);
+}
+
+export async function readContentArtifact(jobId: string, kind: ArtifactKind): Promise<string> {
+  const file = await resolveWorkspacePath(artifactPath(jobId, kind));
+  return fs.readFile(file, "utf8");
+}
+
+export async function writeContentArtifact(
+  jobId: string,
+  kind: ArtifactKind,
+  content: string,
+): Promise<string> {
+  const safeJobId = safeId(jobId);
+  if (!safeJobId) throw new Error("A valid job ID is required.");
+  if (!content.trim()) throw new Error("Artifact content cannot be empty.");
+  const file = await resolveWorkspacePath(artifactPath(safeJobId, kind));
+  await fs.mkdir(path.dirname(file), { recursive: true });
+  await fs.writeFile(file, content.trimEnd() + "\n", "utf8");
+  return path.relative(WORKSPACE, file).replaceAll("\\", "/");
 }
 
 export const contentArtifactTool: Tool = {
   name: "content_artifact",
   description:
-    "Read or write durable content-production artifacts for a job: script, asset_manifest, or review. This creates inspectable workspace artifacts but does not render, publish, download copyrighted media, or claim an artifact passed review.",
+    "Read or write durable content-production artifacts for a job, including request, research, script, QA, visual plan, assets, timeline, render, validation, and final records. This tool does not publish or claim validation without evidence.",
   parameters: {
     type: "object",
     properties: {
       action: { type: "string", enum: ["read", "write"] },
       jobId: { type: "string", description: "Existing content job ID." },
-      kind: { type: "string", enum: ["script", "script_qa", "qa", "asset_manifest", "review"] },
+      kind: {
+        type: "string",
+        enum: ["request", "research", "script", "script_data", "script_qa", "qa", "visual_plan", "asset_manifest", "audio", "timeline", "render", "validation", "final", "review"],
+      },
       content: { type: "string", description: "Markdown artifact content when writing." },
     },
     required: ["action", "jobId", "kind"],
@@ -35,15 +65,16 @@ export const contentArtifactTool: Tool = {
     const jobId = safeId(String(input.jobId ?? ""));
     const kind = String(input.kind ?? "") as ArtifactKind;
 
-    if (!jobId || !["script", "script_qa", "qa", "asset_manifest", "review"].includes(kind)) {
+    if (!jobId || ![
+      "request", "research", "script", "script_data", "script_qa", "qa", "visual_plan",
+      "asset_manifest", "audio", "timeline", "render", "validation", "final", "review",
+    ].includes(kind)) {
       return { toolCallId: "", content: "content_artifact requires a valid jobId and kind.", isError: true };
     }
 
-    const relativePath = artifactPath(jobId, kind);
-    const file = await resolveWorkspacePath(relativePath);
     if (action === "read") {
       try {
-        return await fs.readFile(file, "utf8");
+        return await readContentArtifact(jobId, kind);
       } catch (error) {
         if ((error as NodeJS.ErrnoException).code === "ENOENT") {
           return { toolCallId: "", content: "Artifact not found: " + jobId + "/" + kind, isError: true };
@@ -61,11 +92,10 @@ export const contentArtifactTool: Tool = {
       return { toolCallId: "", content: "Artifact content cannot be empty.", isError: true };
     }
 
-    await fs.mkdir(path.dirname(file), { recursive: true });
-    await fs.writeFile(file, content + "\n", "utf8");
+    const savedPath = await writeContentArtifact(jobId, kind, content);
     return JSON.stringify({
       saved: true,
-      path: path.relative(WORKSPACE, file).replaceAll("\\", "/"),
+      path: savedPath,
       kind,
       characters: content.length,
     });

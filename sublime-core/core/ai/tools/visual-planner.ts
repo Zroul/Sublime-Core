@@ -27,6 +27,8 @@ export const visualPlannerTool: Tool = {
             source_query: { type: "string", maxLength: 300 },
             narration: { type: "string", maxLength: 1200 },
             caption: { type: "string", maxLength: 300 },
+            visual_type: { type: "string", enum: ["card", "flow", "network", "diagram"] },
+            accent_color: { type: "string" },
           },
           required: ["duration", "purpose", "visual"],
         },
@@ -71,6 +73,21 @@ export const visualPlannerTool: Tool = {
           purpose,
           visual,
         };
+
+        if (scene.visual_type !== undefined) {
+          const visualType = String(scene.visual_type);
+          if (!["card", "flow", "network", "diagram"].includes(visualType)) {
+            throw new Error(`Scene ${index + 1} visual_type is unsupported.`);
+          }
+          result.visual_type = visualType as VideoPlanScene["visual_type"];
+        }
+        if (typeof scene.accent_color === "string" && scene.accent_color.trim()) {
+          const accent = scene.accent_color.trim();
+          if (!/^(?:#[0-9a-fA-F]{6}|[0-9a-fA-F]{6}|black|white|red|green|blue|yellow|cyan|magenta|gray|grey)$/i.test(accent)) {
+            throw new Error(`Scene ${index + 1} accent_color must be a named color or 6-digit hex color.`);
+          }
+          result.accent_color = accent;
+        }
 
         if (typeof scene.source_query === "string" && scene.source_query.trim()) {
           result.source_query = scene.source_query.trim();

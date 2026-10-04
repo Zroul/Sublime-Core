@@ -8,6 +8,7 @@ import type {
   VideoRenderResult,
   VideoSpecification,
 } from "../../nova/video-contracts.js";
+import { discoverMediaCapabilities } from "./media-environment.js";
 import { resolveWorkspacePath } from "./workspace-path.js";
 
 const execFileAsync = promisify(execFile);
@@ -21,6 +22,14 @@ interface Scene {
   text_size?: number;
   text_position?: "top" | "center" | "bottom";
   text_max_width?: number;
+  visual?: string;
+  visual_type?: "card" | "flow" | "network" | "diagram";
+  accent_color?: string;
+  asset_path?: string;
+  asset_media_type?: "image" | "video";
+  asset_fit?: "cover" | "contain";
+  procedural_kind?: "generic" | "ai_video" | "sky_scattering" | "cpu_architecture";
+  caption_segments?: Array<{ text: string; start: number; end: number }>;
 }
 
 type VideoCommandRunner = (
@@ -34,7 +43,16 @@ function safeId(value: string): string {
 }
 
 async function run(command: string, args: string[]) {
-  return execFileAsync(command, args, {
+  const capabilities = await discoverMediaCapabilities();
+  const executable = command === "ffmpeg"
+    ? capabilities.ffmpegPath
+    : command === "ffprobe"
+      ? capabilities.ffprobePath
+      : undefined;
+  if (!executable) {
+    throw new Error(`Dependency unavailable: ${command} was not found on PATH. NOVA will not suggest an installation command for another operating system.`);
+  }
+  return execFileAsync(executable, args, {
     cwd: WORKSPACE, timeout: 120000, maxBuffer: 2 * 1024 * 1024, windowsHide: true,
   });
 }
@@ -48,7 +66,6 @@ function escapeDrawtext(value: string): string {
     .replace(/\\/g, "\\\\")
     .replace(/:/g, "\:")
     .replace(/\x27/g, "\\x27")
-    .replace(/\n/g, "\\n");
 }
 
 function color(value: string | undefined): string {
@@ -79,12 +96,12 @@ function wrapText(text: string, maxChars: number): string {
   return lines.join("\n");
 }
 
-function safeTextLayout(scene: Scene) {
+function safeTextLayout(scene: Scene, width = 1280, height = 720) {
   const raw = String(scene.text ?? "").trim().slice(0, 500);
   if (!raw) return null;
 
   const requestedSize = Number(scene.text_size ?? 54);
-  const maxWidth = Math.max(300, Math.min(1200, Number(scene.text_max_width ?? 1050)));
+  const maxWidth = Math.max(180, Math.min(width - 48, Number(scene.text_max_width ?? Math.min(1050, width - 96))));
   const size = Math.max(24, Math.min(72, Number.isFinite(requestedSize) ? requestedSize : 54));
 
   // Approximate character capacity from font size so long captions wrap before they leave the frame.
@@ -93,12 +110,58 @@ function safeTextLayout(scene: Scene) {
   const position = scene.text_position ?? "center";
   const y =
     position === "top"
-      ? "120"
+      ? String(Math.round(height * 0.12))
       : position === "bottom"
-        ? "(h-text_h-100)"
+        ? `(h-text_h-${Math.round(height * 0.1)})`
         : "(h-text_h)/2";
 
   return { text: wrapped, size, maxWidth, y };
+}
+
+function topicalOverlay(kind: Scene["procedural_kind"], accent: string): string {
+  if (kind === "ai_video") {
+    return `,drawbox=x=iw*0.12:y=ih*0.25:w=iw*0.2:h=ih*0.32:color=${accent}:t=3` +
+      `,drawbox=x=iw*0.4:y=ih*0.2:w=iw*0.2:h=ih*0.42:color=${accent}:t=3` +
+      `,drawbox=x=iw*0.7:y=ih*0.18:w=iw*0.16:h=ih*0.14:color=${accent}:t=3` +
+      `,drawbox=x=iw*0.7:y=ih*0.43:w=iw*0.16:h=ih*0.14:color=${accent}:t=3` +
+      `,drawbox=x=iw*0.7:y=ih*0.68:w=iw*0.16:h=ih*0.14:color=${accent}:t=3` +
+      `,drawbox=x=iw*0.32:y=ih*0.41:w=iw*0.08:h=3:color=${accent}:t=fill` +
+      `,drawbox=x=iw*0.6:y=ih*0.41:w=iw*0.1:h=3:color=${accent}:t=fill` +
+      `,drawbox=x=iw*(0.42+0.12*sin(t*2)):y=ih*0.35:w=iw*0.04:h=ih*0.04:color=${accent}:t=fill`;
+  }
+  if (kind === "sky_scattering") {
+    return `,drawbox=x=iw*0.08:y=ih*0.18:w=iw*0.1:h=ih*0.1:color=0xffd166:t=fill` +
+      `,drawbox=x=iw*0.18:y=ih*0.23:w=iw*0.44:h=3:color=0xffd166:t=fill` +
+      `,drawbox=x=iw*0.28:y=ih*0.35:w=iw*0.5:h=3:color=0x38c7ff:t=fill` +
+      `,drawbox=x=iw*0.35:y=ih*0.48:w=iw*0.46:h=3:color=0x38c7ff:t=fill` +
+      `,drawbox=x=iw*0.18:y=ih*0.62:w=iw*0.7:h=ih*0.15:color=0x1f6f9e@0.55:t=fill` +
+      `,drawbox=x=iw*(0.34+0.08*sin(t*2)):y=ih*0.31:w=iw*0.025:h=ih*0.025:color=0x38c7ff:t=fill` +
+      `,drawbox=x=iw*0.77:y=ih*0.58:w=iw*0.035:h=ih*0.11:color=${accent}:t=fill`;
+  }
+  if (kind === "cpu_architecture") {
+    return `,drawbox=x=iw*0.38:y=ih*0.24:w=iw*0.24:h=ih*0.38:color=${accent}:t=4` +
+      `,drawbox=x=iw*0.43:y=ih*0.31:w=iw*0.14:h=ih*0.12:color=${accent}:t=2` +
+      `,drawbox=x=iw*0.43:y=ih*0.47:w=iw*0.14:h=ih*0.08:color=${accent}:t=2` +
+      `,drawbox=x=iw*0.22:y=ih*0.4:w=iw*0.16:h=3:color=${accent}:t=fill` +
+      `,drawbox=x=iw*0.62:y=ih*0.4:w=iw*0.16:h=3:color=${accent}:t=fill` +
+      `,drawbox=x=iw*(0.24+0.1*sin(t*2)):y=ih*0.37:w=iw*0.03:h=ih*0.05:color=${accent}:t=fill`;
+  }
+  return "";
+}
+
+async function resolveSceneAsset(scene: Scene): Promise<{ path: string; mediaType: "image" | "video"; fit: "cover" | "contain" } | undefined> {
+  if (!scene.asset_path) return undefined;
+  const normalized = scene.asset_path.replace(/\\/g, "/");
+  if (!normalized.startsWith("assets/") || normalized.includes("../") || normalized.startsWith("/") || /^[a-z]:/i.test(normalized)) {
+    throw new Error("Scene asset_path must remain inside workspace/assets.");
+  }
+  if (scene.asset_media_type !== "image" && scene.asset_media_type !== "video") {
+    throw new Error("Scene asset_path requires asset_media_type image or video.");
+  }
+  const assetPath = await resolveWorkspacePath(normalized);
+  const stat = await fs.stat(assetPath);
+  if (!stat.isFile() || stat.size <= 0) throw new Error(`Scene asset is missing or empty: ${normalized}`);
+  return { path: assetPath, mediaType: scene.asset_media_type, fit: scene.asset_fit === "contain" ? "contain" : "cover" };
 }
 
 export function createVideoEngineTool(
@@ -115,6 +178,7 @@ export function createVideoEngineTool(
       id: { type: "string" },
       output: { type: "string" },
       duration: { type: "number" },
+      aspect_ratio: { type: "string", enum: ["16:9", "9:16", "1:1"] },
       scenes: {
         type: "array",
         description: "Ordered render-ready timeline scenes. Preserve editing_module decisions.",
@@ -128,6 +192,27 @@ export function createVideoEngineTool(
             text_size: { type: "number" },
             text_position: { type: "string", enum: ["top", "center", "bottom"] },
             text_max_width: { type: "number" },
+            visual: { type: "string", maxLength: 500 },
+            visual_type: { type: "string", enum: ["card", "flow", "network", "diagram"] },
+            accent_color: { type: "string" },
+            asset_path: { type: "string", maxLength: 500 },
+            asset_media_type: { type: "string", enum: ["image", "video"] },
+            asset_fit: { type: "string", enum: ["cover", "contain"] },
+            procedural_kind: { type: "string", enum: ["generic", "ai_video", "sky_scattering", "cpu_architecture"] },
+            caption_segments: {
+              type: "array",
+              maxItems: 12,
+              items: {
+                type: "object",
+                additionalProperties: false,
+                properties: {
+                  text: { type: "string", minLength: 1, maxLength: 180 },
+                  start: { type: "number", minimum: 0 },
+                  end: { type: "number", minimum: 0 },
+                },
+                required: ["text", "start", "end"],
+              },
+            },
           },
           required: ["duration"],
         },
@@ -152,6 +237,8 @@ export function createVideoEngineTool(
           "-t", String(duration), "-c:v", "libx264", "-pix_fmt", "yuv420p",
           "-c:a", "aac", "-shortest", output,
         ]);
+        const stat = await fs.stat(output);
+        if (!stat.isFile() || stat.size <= 0) throw new Error("FFmpeg exited without producing a non-empty output file.");
         const result: VideoRenderResult = {
           ok: true,
           outputPath: relativeWorkspacePath(output),
@@ -171,6 +258,16 @@ export function createVideoEngineTool(
         const relative = String(input.path ?? "");
         if (!relative) return { toolCallId: "", content: "video_engine probe requires path.", isError: true };
         const target = await resolveWorkspacePath(relative);
+        const stat = await fs.stat(target);
+        if (!stat.isFile() || stat.size <= 0) {
+          const invalid: VideoProbeResult = {
+            ok: false,
+            valid: false,
+            outputPath: relativeWorkspacePath(target),
+            error: "The output file is missing, is not a regular file, or is empty.",
+          };
+          return { toolCallId: "", content: JSON.stringify(invalid), isError: true };
+        }
         const result = await runCommand("ffprobe", [
           "-v", "error",
           "-show_entries", "format=duration,size,format_name",
@@ -192,7 +289,8 @@ export function createVideoEngineTool(
           : "";
         const durationSeconds = Number(parsed.format?.duration);
         const hasVideoStream = (parsed.streams ?? []).some(
-          (stream) => stream.codec_type === "video",
+          (stream) => stream.codec_type === "video" &&
+            Number(stream.width) > 0 && Number(stream.height) > 0,
         );
         if (
           !formatName ||
@@ -234,9 +332,33 @@ export function createVideoEngineTool(
         const scenes = Array.isArray(input.scenes) ? (input.scenes as Scene[]) : [];
         if (scenes.length === 0 || scenes.length > 30) return { toolCallId: "", content: "render requires 1-30 scenes.", isError: true };
 
-        const validScenes = scenes.map((scene, index) => {
+        const aspectRatio = String(input.aspect_ratio ?? "16:9");
+        const dimensions = aspectRatio === "9:16"
+          ? { width: 720, height: 1280 }
+          : aspectRatio === "1:1"
+            ? { width: 1080, height: 1080 }
+            : aspectRatio === "16:9"
+              ? { width: 1280, height: 720 }
+              : undefined;
+        if (!dimensions) throw new Error("aspect_ratio must be 16:9, 9:16, or 1:1.");
+
+        const validScenes = await Promise.all(scenes.map(async (scene, index) => {
           const duration = Number(scene.duration);
           if (!Number.isFinite(duration) || duration <= 0 || duration > 120) throw new Error("Scene " + (index + 1) + " has an invalid duration.");
+          const captionSegments = (scene.caption_segments ?? []).map((caption, captionIndex) => {
+            const start = Number(caption.start);
+            const end = Number(caption.end);
+            const text = String(caption.text ?? "").trim().slice(0, 180);
+            if (!text || !Number.isFinite(start) || !Number.isFinite(end) || start < 0 || end <= start || end > duration) {
+              throw new Error(`Scene ${index + 1} caption ${captionIndex + 1} has invalid timing or text.`);
+            }
+            return { text, start, end };
+          });
+          const asset = await resolveSceneAsset(scene);
+          const proceduralKind = scene.procedural_kind;
+          if (proceduralKind !== undefined && !["generic", "ai_video", "sky_scattering", "cpu_architecture"].includes(proceduralKind)) {
+            throw new Error(`Scene ${index + 1} has an unsupported procedural_kind.`);
+          }
           return {
             index: scene.index ?? index + 1,
             duration,
@@ -245,8 +367,14 @@ export function createVideoEngineTool(
             text_size: Number(scene.text_size ?? 54),
             text_position: scene.text_position ?? "center",
             text_max_width: Number(scene.text_max_width ?? 1050),
+            visual: String(scene.visual ?? "").slice(0, 500),
+            visual_type: scene.visual_type ?? "card",
+            accent_color: color(scene.accent_color ?? "26d9c8"),
+            caption_segments: captionSegments,
+            ...(asset ? { asset } : {}),
+            procedural_kind: proceduralKind ?? "generic",
           };
-        });
+        }));
 
         const id = safeId(String(input.id ?? "render"));
         const output = await resolveWorkspacePath(String(input.output ?? ("nova/videos/" + id + ".mp4")));
@@ -256,15 +384,61 @@ export function createVideoEngineTool(
         const filters: string[] = [];
 
         validScenes.forEach((scene, index) => {
-          inputs.push("-f", "lavfi", "-t", String(scene.duration), "-i", "color=c=0x" + scene.background + ":s=1280x720:r=30");
-          let filter = "[" + index + ":v]format=yuv420p";
+          if (scene.asset) {
+            if (scene.asset.mediaType === "image") {
+              inputs.push("-loop", "1", "-framerate", "30", "-t", String(scene.duration), "-i", scene.asset.path);
+            } else {
+              inputs.push("-stream_loop", "-1", "-t", String(scene.duration), "-i", scene.asset.path);
+            }
+          } else {
+            inputs.push("-f", "lavfi", "-t", String(scene.duration), "-i", "color=c=0x" + scene.background + `:s=${dimensions.width}x${dimensions.height}:r=30`);
+          }
+          let filter = "[" + index + ":v]";
+          if (scene.asset) {
+            if (scene.asset.fit === "contain") {
+              filter += `scale=${dimensions.width}:${dimensions.height}:force_original_aspect_ratio=decrease,pad=${dimensions.width}:${dimensions.height}:(ow-iw)/2:(oh-ih)/2:color=0x${scene.background},setsar=1`;
+            } else {
+              filter += `scale=${dimensions.width}:${dimensions.height}:force_original_aspect_ratio=increase,crop=${dimensions.width}:${dimensions.height},setsar=1`;
+            }
+            const fadeDuration = Math.min(0.25, Math.max(0.1, scene.duration / 5));
+            const fadeOutStart = Math.max(0, scene.duration - fadeDuration).toFixed(3);
+            filter += `,trim=duration=${scene.duration},setpts=PTS-STARTPTS,fade=t=in:st=0:d=${fadeDuration.toFixed(3)},fade=t=out:st=${fadeOutStart}:d=${fadeDuration.toFixed(3)},format=yuv420p`;
+          } else {
+            filter += "format=yuv420p";
+          }
 
-          const layout = safeTextLayout(scene);
+          const accent = "0x" + scene.accent_color + "@0.85";
+          if (!scene.asset && scene.procedural_kind !== "generic") {
+            filter += topicalOverlay(scene.procedural_kind, accent);
+          } else if (scene.visual_type === "network") {
+            filter += `,drawbox=x=iw*0.12:y=ih*0.2:w=iw*0.76:h=ih*0.58:color=${accent}:t=3`;
+            filter += `,drawbox=x=iw*0.2:y=ih*0.36:w=iw*0.6:h=3:color=${accent}:t=fill`;
+            filter += `,drawbox=x=iw*0.34:y=ih*0.24:w=3:h=ih*0.4:color=${accent}:t=fill`;
+          } else if (scene.visual_type === "flow") {
+            filter += `,drawbox=x=iw*0.08:y=ih*0.25:w=iw*0.84:h=ih*0.5:color=${accent}:t=3`;
+            filter += `,drawbox=x=iw*0.34:y=ih*0.25:w=3:h=ih*0.5:color=${accent}:t=fill`;
+            filter += `,drawbox=x=iw*0.66:y=ih*0.25:w=3:h=ih*0.5:color=${accent}:t=fill`;
+          } else if (scene.visual_type === "diagram") {
+            filter += `,drawbox=x=iw*0.16:y=ih*0.2:w=iw*0.68:h=ih*0.6:color=${accent}:t=3`;
+            filter += `,drawbox=x=iw*0.24:y=ih*0.32:w=iw*0.52:h=3:color=${accent}:t=fill`;
+          } else {
+            filter += `,drawbox=x=iw*0.08:y=ih*0.12:w=iw*0.84:h=ih*0.76:color=${accent}:t=3`;
+          }
+
+          const layout = safeTextLayout(scene, dimensions.width, dimensions.height);
           if (layout) {
             filter += ",drawtext=text='" + escapeDrawtext(layout.text) +
               "':fontcolor=white:fontsize=" + layout.size +
               ":x=(w-text_w)/2:y=" + layout.y +
               ":box=1:boxcolor=black@0.45:boxborderw=24";
+          }
+
+          for (const caption of scene.caption_segments) {
+            const captionText = wrapText(caption.text, Math.max(12, Math.floor((dimensions.width - 96) / 22)));
+            filter += ",drawtext=text='" + escapeDrawtext(captionText) +
+              "':fontcolor=white:fontsize=" + Math.min(42, Math.max(24, Math.round(dimensions.width * 0.032))) +
+              ":x=(w-text_w)/2:y=h*0.78:box=1:boxcolor=black@0.72:boxborderw=18" +
+              ":enable='between(t," + caption.start + "," + caption.end + ")'";
           }
 
           filter += "[v" + index + "]";
@@ -276,14 +450,16 @@ export function createVideoEngineTool(
 
         await runCommand("ffmpeg", [
           "-y", ...inputs, "-filter_complex", filterComplex, "-map", "[v]",
-          "-c:v", "libx264", "-pix_fmt", "yuv420p", "-movflags", "+faststart", output,
+          "-c:v", "libx264", "-pix_fmt", "yuv420p", "-r", "30", "-movflags", "+faststart", output,
         ]);
+        const stat = await fs.stat(output);
+        if (!stat.isFile() || stat.size <= 0) throw new Error("FFmpeg exited without producing a non-empty output file.");
 
         const durationSeconds = validScenes.reduce((sum, scene) => sum + scene.duration, 0);
         const outputPath = relativeWorkspacePath(output);
         const specification: VideoSpecification = {
-          width: 1280,
-          height: 720,
+          width: dimensions.width,
+          height: dimensions.height,
           frameRate: 30,
           durationSeconds,
           outputPath,
@@ -294,7 +470,7 @@ export function createVideoEngineTool(
           sceneCount: validScenes.length,
           specification,
         };
-        return JSON.stringify({ ...result, action });
+        return JSON.stringify({ ...result, action, aspectRatio });
       }
 
       return { toolCallId: "", content: "video_engine action must be create_test, render, or probe.", isError: true };

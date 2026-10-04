@@ -13,7 +13,9 @@ function isHexColor(value: string): boolean {
 function validateBackground(value: string | undefined): string | undefined {
   if (value === undefined) return undefined;
   const normalized = value.trim().toLowerCase();
-  if (COLORS.has(normalized) || isHexColor(normalized)) return normalized;
+  const hex = normalized.startsWith("#") ? normalized.slice(1) : normalized;
+  if (COLORS.has(normalized)) return normalized;
+  if (isHexColor(hex)) return hex;
   throw new Error(`Unsupported background "${value}". Use a named color or a 6-digit hex color.`);
 }
 
@@ -21,6 +23,16 @@ function asFiniteNumber(value: unknown, label: string): number {
   const number = Number(value);
   if (!Number.isFinite(number)) throw new Error(`${label} must be a finite number.`);
   return number;
+}
+
+function validateAssetPath(value: unknown, label: string): string | undefined {
+  if (value === undefined) return undefined;
+  if (typeof value !== "string" || !value.trim()) throw new Error(`${label} must be a non-empty workspace asset path.`);
+  const normalized = value.trim().replace(/\\/g, "/");
+  if (!normalized.startsWith("assets/") || normalized.includes("../") || normalized.startsWith("/") || /^[a-z]:/i.test(normalized)) {
+    throw new Error(`${label} must remain inside workspace/assets.`);
+  }
+  return normalized;
 }
 
 export const editingModuleTool: Tool = {
@@ -40,11 +52,32 @@ export const editingModuleTool: Tool = {
           type: "object", additionalProperties: false,
           properties: {
             duration: { type: "number", minimum: 0.1, maximum: 120 },
+            visual: { type: "string", maxLength: 500 },
+            visual_type: { type: "string", enum: ["card", "flow", "network", "diagram"] },
+            asset_path: { type: "string", maxLength: 500 },
+            asset_media_type: { type: "string", enum: ["image", "video"] },
+            asset_fit: { type: "string", enum: ["cover", "contain"] },
+            procedural_kind: { type: "string", enum: ["generic", "ai_video", "sky_scattering", "cpu_architecture"] },
+            accent_color: { type: "string" },
             background: { type: "string" },
             text: { type: "string", maxLength: 500 },
             text_size: { type: "number", minimum: 18, maximum: 120 },
             text_position: { type: "string", enum: ["top", "center", "bottom"] },
             text_max_width: { type: "number", minimum: 300, maximum: 1200 },
+            caption_segments: {
+              type: "array",
+              maxItems: 12,
+              items: {
+                type: "object",
+                additionalProperties: false,
+                properties: {
+                  text: { type: "string", minLength: 1, maxLength: 180 },
+                  start: { type: "number", minimum: 0 },
+                  end: { type: "number", minimum: 0 },
+                },
+                required: ["text", "start", "end"],
+              },
+            },
           },
           required: ["duration"],
         },
@@ -72,6 +105,43 @@ export const editingModuleTool: Tool = {
 
         const background = typeof scene.background === "string" ? validateBackground(scene.background) : undefined;
         const text = typeof scene.text === "string" && scene.text.trim() ? scene.text.trim() : undefined;
+        const visual = typeof scene.visual === "string" ? scene.visual.trim().slice(0, 500) : undefined;
+        const visualType = scene.visual_type === undefined ? "card" : String(scene.visual_type);
+        if (!["card", "flow", "network", "diagram"].includes(visualType)) {
+          throw new Error(`Scene ${index + 1} visual_type is unsupported.`);
+        }
+        const accentColor = typeof scene.accent_color === "string"
+          ? validateBackground(scene.accent_color)
+          : undefined;
+        const assetPath = validateAssetPath(scene.asset_path, `Scene ${index + 1} asset_path`);
+        const assetMediaType = scene.asset_media_type === undefined ? undefined : String(scene.asset_media_type);
+        if (assetMediaType !== undefined && !["image", "video"].includes(assetMediaType)) {
+          throw new Error(`Scene ${index + 1} asset_media_type must be image or video.`);
+        }
+        if (assetPath && !assetMediaType) throw new Error(`Scene ${index + 1} asset_path requires asset_media_type.`);
+        const assetFit = scene.asset_fit === undefined ? "cover" : String(scene.asset_fit);
+        if (!["cover", "contain"].includes(assetFit)) {
+          throw new Error(`Scene ${index + 1} asset_fit must be cover or contain.`);
+        }
+        const proceduralKind = scene.procedural_kind === undefined ? undefined : String(scene.procedural_kind);
+        if (proceduralKind !== undefined && !["generic", "ai_video", "sky_scattering", "cpu_architecture"].includes(proceduralKind)) {
+          throw new Error(`Scene ${index + 1} procedural_kind is unsupported.`);
+        }
+        const captionSegments = Array.isArray(scene.caption_segments)
+          ? scene.caption_segments.map((rawCaption, captionIndex) => {
+              if (!rawCaption || typeof rawCaption !== "object" || Array.isArray(rawCaption)) {
+                throw new Error(`Scene ${index + 1} caption ${captionIndex + 1} must be an object.`);
+              }
+              const caption = rawCaption as Record<string, unknown>;
+              const captionText = typeof caption.text === "string" ? caption.text.trim() : "";
+              const start = asFiniteNumber(caption.start, `Scene ${index + 1} caption start`);
+              const end = asFiniteNumber(caption.end, `Scene ${index + 1} caption end`);
+              if (!captionText || captionText.length > 180 || start < 0 || end <= start || end > duration) {
+                throw new Error(`Scene ${index + 1} caption ${captionIndex + 1} has invalid text or timing.`);
+              }
+              return { text: captionText, start, end };
+            })
+          : [];
         const textSize = scene.text_size === undefined ? undefined : asFiniteNumber(scene.text_size, `Scene ${index + 1} text_size`);
         if (textSize !== undefined && (textSize < 18 || textSize > 120)) throw new Error(`Scene ${index + 1} text_size must be between 18 and 120.`);
 
@@ -90,8 +160,16 @@ export const editingModuleTool: Tool = {
         return {
           index: index + 1,
           duration,
+          ...(visual ? { visual } : {}),
+          visual_type: visualType as VideoSceneDefinition["visual_type"],
+          ...(assetPath ? { asset_path: assetPath } : {}),
+          ...(assetMediaType ? { asset_media_type: assetMediaType as "image" | "video" } : {}),
+          ...(assetPath ? { asset_fit: assetFit as "cover" | "contain" } : {}),
+          ...(proceduralKind ? { procedural_kind: proceduralKind as VideoSceneDefinition["procedural_kind"] } : {}),
+          ...(accentColor ? { accent_color: accentColor } : {}),
           ...(background ? { background } : {}),
           ...(text ? { text } : {}),
+          ...(captionSegments.length ? { caption_segments: captionSegments } : {}),
           ...(textSize !== undefined ? { text_size: textSize } : {}),
           ...(textPosition ? { text_position: textPosition } : {}),
           ...(textMaxWidth !== undefined ? { text_max_width: textMaxWidth } : {}),
@@ -100,11 +178,19 @@ export const editingModuleTool: Tool = {
 
       if (totalDuration > 1800) throw new Error("Timeline duration cannot exceed 30 minutes.");
 
+      const dimensions = aspectRatio === "9:16"
+        ? { width: 720, height: 1280 }
+        : aspectRatio === "1:1"
+          ? { width: 1080, height: 1080 }
+          : { width: 1280, height: 720 };
+
       const timeline = {
         type: "nova_timeline_v2" as const,
         aspect_ratio: aspectRatio as "16:9" | "9:16" | "1:1",
         scenes,
         total_duration: Number(totalDuration.toFixed(3)),
+        ...dimensions,
+        frame_rate: 30,
       };
       const result: VideoEditingResult = {
         ok: true,

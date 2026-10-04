@@ -16,6 +16,8 @@ export interface VideoPlanScene {
   duration: number;
   purpose: string;
   visual: string;
+  visual_type?: "card" | "flow" | "network" | "diagram";
+  accent_color?: string;
   source_query?: string;
   narration?: string;
   caption?: string;
@@ -30,8 +32,21 @@ export interface VideoSceneDefinition {
   index: number;
   duration: number;
   visual?: string;
+  visual_type?: "card" | "flow" | "network" | "diagram";
+  accent_color?: string;
   caption?: string;
+  caption_segments?: Array<{
+    text: string;
+    start: number;
+    end: number;
+  }>;
   source_query?: string;
+  /** A validated workspace-relative asset selected by the asset resolver. */
+  asset_path?: string;
+  asset_media_type?: "image" | "video";
+  asset_fit?: "cover" | "contain";
+  /** The visual primitive used when no permitted media asset is available. */
+  procedural_kind?: "generic" | "ai_video" | "sky_scattering" | "cpu_architecture";
   asset_references?: VideoAssetReference[];
   background?: string;
   text?: string;
@@ -45,6 +60,9 @@ export interface VideoTimeline {
   aspect_ratio: "16:9" | "9:16" | "1:1";
   scenes: VideoSceneDefinition[];
   total_duration: number;
+  width: number;
+  height: number;
+  frame_rate: number;
 }
 
 export interface VideoEditingResult {
