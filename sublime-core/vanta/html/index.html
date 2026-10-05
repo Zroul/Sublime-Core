@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>VANTA</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <main class="vanta" aria-label="VANTA After Effects assistant">
+    <button id="orb" class="orb" aria-label="Open VANTA" aria-expanded="false">
+      <span class="orb-core"></span>
+      <span class="orb-ring"></span>
+      <span class="orb-pulse"></span>
+    </button>
+
+    <section id="command-panel" class="command-panel" aria-hidden="true">
+      <header class="topbar">
+        <div class="brand">
+          <span class="status-dot"></span>
+          <span>VANTA</span>
+        </div>
+        <button id="close" class="icon-button" aria-label="Close">×</button>
+      </header>
+
+      <form id="command-form" class="command-form">
+        <label for="command">What should I change?</label>
+        <div class="input-row">
+          <textarea
+            id="command"
+            rows="1"
+            maxlength="1000"
+            autocomplete="off"
+            spellcheck="false"
+            placeholder="Add a glow to the selected layer..."
+          ></textarea>
+          <button id="voice" class="round-button" type="button" aria-label="Voice command">●</button>
+          <button class="send-button" type="submit" aria-label="Send command">→</button>
+        </div>
+      </form>
+
+      <div id="progress" class="progress hidden" aria-live="polite">
+        <div class="progress-head">
+          <span id="progress-label">Working...</span>
+          <span id="progress-value">0%</span>
+        </div>
+        <div class="progress-track">
+          <div id="progress-bar" class="progress-bar"></div>
+        </div>
+      </div>
+
+      <div id="result" class="result hidden" aria-live="polite">
+        <span class="result-mark">✓</span>
+        <span id="result-text">Done</span>
+      </div>
+    </section>
+  </main>
+
+  <script src="app.js"></script>
+</body>
+</html>
