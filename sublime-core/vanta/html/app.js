@@ -1,7 +1,4 @@
 const root = document.querySelector(".vanta");
-const orb = document.querySelector("#orb");
-const panel = document.querySelector("#command-panel");
-const closeButton = document.querySelector("#close");
 const form = document.querySelector("#command-form");
 const commandInput = document.querySelector("#command");
 const voiceButton = document.querySelector("#voice");
@@ -13,21 +10,6 @@ const result = document.querySelector("#result");
 const resultText = document.querySelector("#result-text");
 
 let progressTimer = null;
-
-function openPanel() {
-  root.classList.add("panel-open");
-  panel.classList.add("open");
-  panel.setAttribute("aria-hidden", "false");
-  orb.setAttribute("aria-expanded", "true");
-  setTimeout(() => commandInput.focus(), 120);
-}
-
-function closePanel() {
-  root.classList.remove("panel-open");
-  panel.classList.remove("open");
-  panel.setAttribute("aria-hidden", "true");
-  orb.setAttribute("aria-expanded", "false");
-}
 
 function resetStatus() {
   if (progressTimer) {
@@ -68,9 +50,6 @@ function demoCommand(command) {
   }, 75);
 }
 
-orb.addEventListener("click", openPanel);
-closeButton.addEventListener("click", closePanel);
-
 form.addEventListener("submit", (event) => {
   event.preventDefault();
 
@@ -93,7 +72,7 @@ commandInput.addEventListener("keydown", (event) => {
 
 commandInput.addEventListener("input", () => {
   commandInput.style.height = "auto";
-  commandInput.style.height = Math.min(commandInput.scrollHeight, 92) + "px";
+  commandInput.style.height = Math.min(commandInput.scrollHeight, 100) + "px";
 });
 
 voiceButton.addEventListener("click", () => {
@@ -133,5 +112,7 @@ voiceButton.addEventListener("click", () => {
 });
 
 window.addEventListener("keydown", (event) => {
-  if (event.key === "Escape") closePanel();
+  if (event.key === "Escape") {
+    commandInput.blur();
+  }
 });
