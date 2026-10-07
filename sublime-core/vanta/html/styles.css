@@ -1,11 +1,13 @@
 :root {
-  --bg: #0b0d12;
-  --panel: #10131a;
-  --line: rgba(255,255,255,0.09);
-  --text: #f4f6fb;
-  --muted: #8b93a3;
-  --blue: #2368ff;
-  --blue-bright: #5b8fff;
+  --bg: #08070a;
+  --panel: #0f0c12;
+  --line: rgba(184, 147, 196, 0.16);
+  --text: #eee8ef;
+  --muted: #9a8f9e;
+  --accent: #8f315e;
+  --accent-bright: #c45a87;
+  --accent-soft: rgba(143,49,94,0.16);
+  --violet: #6d4a7f;
 }
 
 * { box-sizing: border-box; }
@@ -33,11 +35,25 @@ button, textarea { font: inherit; }
   min-height: 140px;
   padding: 18px;
   background:
-    radial-gradient(circle at 50% 42%, rgba(35,104,255,0.075), transparent 34%),
-    var(--bg);
+    radial-gradient(circle at 50% 38%, rgba(109,74,127,0.11), transparent 29%),
+    radial-gradient(circle at 50% 75%, rgba(143,49,94,0.065), transparent 35%),
+    linear-gradient(145deg, #08070a 0%, #0d090f 55%, #08070a 100%);
+}
+
+.vanta::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0.12;
+  background-image:
+    repeating-linear-gradient(0deg, rgba(255,255,255,0.025) 0, rgba(255,255,255,0.025) 1px, transparent 1px, transparent 4px);
+  mix-blend-mode: screen;
 }
 
 .topbar {
+  position: relative;
+  z-index: 1;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -50,22 +66,23 @@ button, textarea { font: inherit; }
   gap: 8px;
   font-size: 12px;
   font-weight: 700;
-  letter-spacing: 0.11em;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
 }
 
 .status-dot {
   width: 7px;
   height: 7px;
   border-radius: 50%;
-  background: var(--blue-bright);
-  box-shadow: 0 0 12px rgba(91,143,255,0.85);
+  background: var(--accent-bright);
+  box-shadow: 0 0 12px rgba(196,90,135,0.8);
 }
 
 .menu-button {
   width: 30px;
   height: 30px;
   padding: 0;
-  border: 0;
+  border: 1px solid transparent;
   border-radius: 9px;
   background: transparent;
   color: var(--muted);
@@ -74,11 +91,14 @@ button, textarea { font: inherit; }
 }
 
 .menu-button:hover {
-  background: rgba(255,255,255,0.06);
+  border-color: var(--line);
+  background: rgba(143,49,94,0.08);
   color: var(--text);
 }
 
 .welcome {
+  position: relative;
+  z-index: 1;
   flex: 1 1 auto;
   display: flex;
   flex-direction: column;
@@ -91,31 +111,36 @@ button, textarea { font: inherit; }
 
 .welcome-orb {
   display: grid;
-  width: 48px;
-  height: 48px;
+  width: 50px;
+  height: 50px;
   place-items: center;
   margin-bottom: 17px;
-  border: 1px solid rgba(91,143,255,0.35);
+  border: 1px solid rgba(196,90,135,0.4);
   border-radius: 50%;
-  background: rgba(10,13,20,0.8);
+  background:
+    radial-gradient(circle at 50% 50%, rgba(143,49,94,0.14), rgba(10,8,12,0.92) 66%);
   box-shadow:
-    0 0 30px rgba(35,104,255,0.12),
-    0 10px 30px rgba(0,0,0,0.25);
+    0 0 24px rgba(143,49,94,0.16),
+    0 0 0 5px rgba(109,74,127,0.035),
+    0 10px 30px rgba(0,0,0,0.35);
 }
 
 .welcome-orb span {
   width: 23px;
   height: 23px;
   border-radius: 50%;
-  background: radial-gradient(circle at 35% 30%, #86aaff 0%, #2368ff 45%, #0c2b72 100%);
-  box-shadow: 0 0 18px rgba(35,104,255,0.45);
+  background:
+    radial-gradient(circle at 34% 27%, #d98cab 0%, #a64270 38%, #5a1e40 70%, #170d16 100%);
+  box-shadow:
+    0 0 18px rgba(196,90,135,0.45),
+    0 0 34px rgba(109,74,127,0.18);
 }
 
 .welcome h1 {
   margin: 0;
   font-size: clamp(21px, 4.4vw, 28px);
   font-weight: 600;
-  letter-spacing: -0.02em;
+  letter-spacing: 0.015em;
   line-height: 1.15;
 }
 
@@ -129,6 +154,8 @@ button, textarea { font: inherit; }
 }
 
 .composer-wrap {
+  position: relative;
+  z-index: 1;
   flex: 0 0 auto;
   width: min(100%, 620px);
   margin: 0 auto;
@@ -140,12 +167,21 @@ button, textarea { font: inherit; }
   gap: 8px;
   min-height: 54px;
   padding: 7px 7px 7px 16px;
-  border: 1px solid rgba(255,255,255,0.12);
+  border: 1px solid rgba(184,147,196,0.2);
   border-radius: 17px;
-  background: rgba(18,22,30,0.97);
+  background:
+    linear-gradient(145deg, rgba(23,16,25,0.98), rgba(13,10,16,0.98));
   box-shadow:
-    0 12px 35px rgba(0,0,0,0.28),
+    0 12px 35px rgba(0,0,0,0.4),
+    0 0 25px rgba(143,49,94,0.05),
     0 0 0 1px rgba(255,255,255,0.015) inset;
+}
+
+.composer:focus-within {
+  border-color: rgba(196,90,135,0.42);
+  box-shadow:
+    0 12px 35px rgba(0,0,0,0.4),
+    0 0 22px rgba(143,49,94,0.1);
 }
 
 textarea {
@@ -168,7 +204,7 @@ textarea {
 }
 
 textarea::placeholder {
-  color: #747d8d;
+  color: #756b7a;
   opacity: 1;
 }
 
@@ -182,9 +218,14 @@ textarea::placeholder {
 }
 
 .voice-button {
-  background: rgba(255,255,255,0.035);
+  background: rgba(255,255,255,0.025);
   color: var(--muted);
   font-size: 8px;
+}
+
+.voice-button:hover {
+  border-color: rgba(196,90,135,0.28);
+  color: var(--text);
 }
 
 .voice-button.listening {
@@ -194,25 +235,30 @@ textarea::placeholder {
 }
 
 .send-button {
-  background: var(--blue);
-  color: white;
+  border-color: rgba(196,90,135,0.35);
+  background: linear-gradient(145deg, #9b3865, #702545);
+  color: #fff5f9;
   font-size: 18px;
   font-weight: 700;
+  box-shadow: 0 0 15px rgba(143,49,94,0.16);
 }
 
 .send-button:hover {
-  background: var(--blue-bright);
+  background: linear-gradient(145deg, #bd4f7e, #883052);
+  box-shadow: 0 0 20px rgba(196,90,135,0.24);
 }
 
 .hint {
   margin-top: 8px;
-  color: #606878;
+  color: #665d69;
   text-align: center;
   font-size: 10px;
   line-height: 1.35;
 }
 
 .progress {
+  position: relative;
+  z-index: 1;
   flex: 0 0 auto;
   width: min(100%, 620px);
   margin: 11px auto 0;
@@ -226,11 +272,11 @@ textarea::placeholder {
   font-size: 10px;
   font-weight: 600;
   text-transform: uppercase;
-  letter-spacing: 0.06em;
+  letter-spacing: 0.07em;
 }
 
 #progress-value {
-  color: var(--text);
+  color: var(--accent-bright);
   font-variant-numeric: tabular-nums;
 }
 
@@ -246,18 +292,20 @@ textarea::placeholder {
   width: 0;
   height: 100%;
   border-radius: inherit;
-  background: linear-gradient(90deg, #2368ff, #6a99ff);
+  background: linear-gradient(90deg, #6b2445, #c45a87, #76508a);
   transition: width 80ms linear;
 }
 
 .result {
+  position: relative;
+  z-index: 1;
   display: flex;
   align-items: center;
   justify-content: center;
   gap: 8px;
   flex: 0 0 auto;
   margin: 10px auto 0;
-  color: #c4cbd7;
+  color: #c5bac8;
   font-size: 11px;
 }
 
@@ -267,8 +315,8 @@ textarea::placeholder {
   height: 19px;
   place-items: center;
   border-radius: 50%;
-  background: rgba(78,134,255,0.14);
-  color: var(--blue-bright);
+  background: rgba(143,49,94,0.14);
+  color: var(--accent-bright);
 }
 
 .hidden { display: none; }
