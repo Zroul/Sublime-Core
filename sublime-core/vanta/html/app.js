@@ -1,4 +1,3 @@
-const root = document.querySelector(".vanta");
 const form = document.querySelector("#command-form");
 const commandInput = document.querySelector("#command");
 const voiceButton = document.querySelector("#voice");
@@ -9,45 +8,56 @@ const progressLabel = document.querySelector("#progress-label");
 const result = document.querySelector("#result");
 const resultText = document.querySelector("#result-text");
 
-let progressTimer = null;
-
 function resetStatus() {
-  if (progressTimer) {
-    clearInterval(progressTimer);
-    progressTimer = null;
-  }
-
   progress.classList.add("hidden");
   result.classList.add("hidden");
   progressBar.style.width = "0%";
   progressValue.textContent = "0%";
 }
 
-function demoCommand(command) {
-  resetStatus();
-
+function setProgress(value, label) {
   progress.classList.remove("hidden");
-  progressLabel.textContent = "Working...";
-  result.classList.add("hidden");
+  progressLabel.textContent = label;
+  progressBar.style.width = value + "%";
+  progressValue.textContent = value + "%";
+}
 
-  let value = 0;
+function showResult(message, isError) {
+  resultText.textContent = message;
+  result.classList.remove("hidden");
 
-  progressTimer = setInterval(() => {
-    value += Math.floor(Math.random() * 9) + 4;
+  const mark = result.querySelector(".result-mark");
+  mark.textContent = isError ? "!" : "✓";
+}
 
-    if (value >= 100) {
-      value = 100;
-      clearInterval(progressTimer);
-      progressTimer = null;
+function runAE(command) {
+  if (!window.__adobe_cep__ || typeof window.__adobe_cep__.evalScript !== "function") {
+    showResult("AE bridge is unavailable.", true);
+    return;
+  }
 
-      progressLabel.textContent = "Applied";
-      resultText.textContent = command || "Command completed";
-      result.classList.remove("hidden");
+  setProgress(20, "Thinking...");
+  setProgress(55, "Editing After Effects...");
+
+  const escaped = String(command)
+    .replace(/\\/g, "\\\\")
+    .replace(/"/g, "\\"")
+    .replace(/\r/g, "\\r")
+    .replace(/\n/g, "\\n");
+
+  window.__adobe_cep__.evalScript(
+    'VANTA_executeCommand("' + escaped + '")',
+    (response) => {
+      setProgress(100, response && response.indexOf("ERROR|") === 0 ? "Couldn't apply" : "Applied");
+
+      const isError = !response || response.indexOf("ERROR|") === 0;
+      const message = response
+        ? response.replace(/^(ERROR|OK)\|/, "")
+        : "After Effects returned no result.";
+
+      showResult(message, isError);
     }
-
-    progressBar.style.width = value + "%";
-    progressValue.textContent = value + "%";
-  }, 75);
+  );
 }
 
 form.addEventListener("submit", (event) => {
@@ -59,7 +69,8 @@ form.addEventListener("submit", (event) => {
     return;
   }
 
-  demoCommand(command);
+  resetStatus();
+  runAE(command);
   commandInput.value = "";
 });
 
@@ -80,8 +91,7 @@ voiceButton.addEventListener("click", () => {
     window.SpeechRecognition || window.webkitSpeechRecognition;
 
   if (!SpeechRecognition) {
-    resultText.textContent = "Voice input will be wired to the bot next.";
-    result.classList.remove("hidden");
+    showResult("Voice input is not available in this CEP runtime yet.", true);
     return;
   }
 
@@ -91,7 +101,6 @@ voiceButton.addEventListener("click", () => {
   recognition.maxAlternatives = 1;
 
   voiceButton.classList.add("listening");
-  result.classList.add("hidden");
 
   recognition.onresult = (event) => {
     commandInput.value = event.results[0][0].transcript;
@@ -100,8 +109,7 @@ voiceButton.addEventListener("click", () => {
   };
 
   recognition.onerror = () => {
-    resultText.textContent = "Voice input unavailable.";
-    result.classList.remove("hidden");
+    showResult("Voice input unavailable.", true);
   };
 
   recognition.onend = () => {
