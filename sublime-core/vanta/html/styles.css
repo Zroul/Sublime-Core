@@ -2,32 +2,26 @@
   --bg: #0b0d12;
   --panel: #10131a;
   --line: rgba(255,255,255,0.09);
-  --text: #f2f4f8;
-  --muted: #858d9d;
+  --text: #f4f6fb;
+  --muted: #8b93a3;
   --blue: #2368ff;
   --blue-bright: #5b8fff;
 }
 
-* {
-  box-sizing: border-box;
-}
+* { box-sizing: border-box; }
 
-html,
-body {
+html, body {
   width: 100%;
   height: 100%;
   margin: 0;
   overflow: hidden;
   background: var(--bg);
   color: var(--text);
-  font-family: Inter, "Segoe UI", Arial, sans-serif;
+  font-family: "Trebuchet MS", "Segoe UI", Arial, sans-serif;
   -webkit-font-smoothing: antialiased;
 }
 
-button,
-textarea {
-  font: inherit;
-}
+button, textarea { font: inherit; }
 
 .vanta {
   position: relative;
@@ -54,9 +48,9 @@ textarea {
   display: flex;
   align-items: center;
   gap: 8px;
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 700;
-  letter-spacing: 0.16em;
+  letter-spacing: 0.11em;
 }
 
 .status-dot {
@@ -68,15 +62,15 @@ textarea {
 }
 
 .menu-button {
-  width: 28px;
-  height: 28px;
+  width: 30px;
+  height: 30px;
   padding: 0;
   border: 0;
-  border-radius: 8px;
+  border-radius: 9px;
   background: transparent;
   color: var(--muted);
   cursor: pointer;
-  font-size: 14px;
+  font-size: 15px;
 }
 
 .menu-button:hover {
@@ -97,10 +91,10 @@ textarea {
 
 .welcome-orb {
   display: grid;
-  width: 46px;
-  height: 46px;
+  width: 48px;
+  height: 48px;
   place-items: center;
-  margin-bottom: 16px;
+  margin-bottom: 17px;
   border: 1px solid rgba(91,143,255,0.35);
   border-radius: 50%;
   background: rgba(10,13,20,0.8);
@@ -110,8 +104,8 @@ textarea {
 }
 
 .welcome-orb span {
-  width: 22px;
-  height: 22px;
+  width: 23px;
+  height: 23px;
   border-radius: 50%;
   background: radial-gradient(circle at 35% 30%, #86aaff 0%, #2368ff 45%, #0c2b72 100%);
   box-shadow: 0 0 18px rgba(35,104,255,0.45);
@@ -119,16 +113,18 @@ textarea {
 
 .welcome h1 {
   margin: 0;
-  font-size: clamp(18px, 4vw, 25px);
+  font-size: clamp(21px, 4.4vw, 28px);
   font-weight: 600;
-  letter-spacing: -0.025em;
+  letter-spacing: -0.02em;
+  line-height: 1.15;
 }
 
 .welcome p {
-  max-width: 340px;
-  margin: 8px 0 0;
+  max-width: 390px;
+  margin: 9px 0 0;
   color: var(--muted);
-  font-size: 11px;
+  font-size: 13px;
+  font-weight: 400;
   line-height: 1.5;
 }
 
@@ -141,12 +137,12 @@ textarea {
 .composer {
   display: flex;
   align-items: center;
-  gap: 7px;
-  min-height: 48px;
-  padding: 6px 6px 6px 14px;
-  border: 1px solid rgba(255,255,255,0.11);
-  border-radius: 14px;
-  background: rgba(18,22,30,0.96);
+  gap: 8px;
+  min-height: 54px;
+  padding: 7px 7px 7px 16px;
+  border: 1px solid rgba(255,255,255,0.12);
+  border-radius: 17px;
+  background: rgba(18,22,30,0.97);
   box-shadow:
     0 12px 35px rgba(0,0,0,0.28),
     0 0 0 1px rgba(255,255,255,0.015) inset;
@@ -156,7 +152,7 @@ textarea {
   flex: 1;
   width: 100%;
   min-width: 0;
-  min-height: 32px;
+  min-height: 34px;
   max-height: 100px;
   padding: 8px 2px;
   border: 0;
@@ -165,20 +161,23 @@ textarea {
   overflow-y: auto;
   background: transparent;
   color: var(--text);
-  font-size: 12px;
-  line-height: 1.4;
+  font-family: "Trebuchet MS", "Segoe UI", Arial, sans-serif;
+  font-size: 14px;
+  line-height: 1.45;
+  letter-spacing: 0.005em;
 }
 
 textarea::placeholder {
-  color: #687181;
+  color: #747d8d;
+  opacity: 1;
 }
 
 .action-button {
   flex: 0 0 auto;
-  width: 34px;
-  height: 34px;
+  width: 37px;
+  height: 37px;
   border: 1px solid var(--line);
-  border-radius: 10px;
+  border-radius: 11px;
   cursor: pointer;
 }
 
@@ -197,7 +196,8 @@ textarea::placeholder {
 .send-button {
   background: var(--blue);
   color: white;
-  font-size: 17px;
+  font-size: 18px;
+  font-weight: 700;
 }
 
 .send-button:hover {
@@ -205,16 +205,17 @@ textarea::placeholder {
 }
 
 .hint {
-  margin-top: 7px;
-  color: #565e6c;
+  margin-top: 8px;
+  color: #606878;
   text-align: center;
-  font-size: 9px;
+  font-size: 10px;
+  line-height: 1.35;
 }
 
 .progress {
   flex: 0 0 auto;
   width: min(100%, 620px);
-  margin: 10px auto 0;
+  margin: 11px auto 0;
 }
 
 .progress-head {
@@ -222,9 +223,10 @@ textarea::placeholder {
   align-items: center;
   justify-content: space-between;
   color: var(--muted);
-  font-size: 9px;
+  font-size: 10px;
+  font-weight: 600;
   text-transform: uppercase;
-  letter-spacing: 0.08em;
+  letter-spacing: 0.06em;
 }
 
 #progress-value {
@@ -254,36 +256,27 @@ textarea::placeholder {
   justify-content: center;
   gap: 8px;
   flex: 0 0 auto;
-  margin: 9px auto 0;
-  color: #bfc7d5;
-  font-size: 10px;
+  margin: 10px auto 0;
+  color: #c4cbd7;
+  font-size: 11px;
 }
 
 .result-mark {
   display: grid;
-  width: 18px;
-  height: 18px;
+  width: 19px;
+  height: 19px;
   place-items: center;
   border-radius: 50%;
   background: rgba(78,134,255,0.14);
   color: var(--blue-bright);
 }
 
-.hidden {
-  display: none;
-}
+.hidden { display: none; }
 
 @media (max-width: 360px) {
-  .vanta {
-    padding: 12px;
-  }
-
-  .welcome h1 {
-    font-size: 18px;
-  }
-
-  .welcome p,
-  .hint {
-    font-size: 9px;
-  }
+  .vanta { padding: 12px; }
+  .welcome h1 { font-size: 20px; }
+  .welcome p { font-size: 12px; }
+  .hint { font-size: 9px; }
+  textarea { font-size: 13px; }
 }
