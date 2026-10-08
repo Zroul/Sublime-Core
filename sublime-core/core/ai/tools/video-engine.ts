@@ -425,6 +425,15 @@ export function createVideoEngineTool(
             filter += `,drawbox=x=iw*0.08:y=ih*0.12:w=iw*0.84:h=ih*0.76:color=${accent}:t=3`;
           }
 
+          // Give procedural scenes actual visual motion and depth instead of a static card.
+          if (!scene.asset) {
+            filter += `,drawbox=x=0:y=0:w=iw:h=ih:color=0x000000@0.10:t=fill`;
+            filter += `,drawbox=x=iw*(0.04+0.02*sin(t)):y=ih*0.08:w=iw*0.18:h=4:color=${accent}:t=fill`;
+            filter += `,drawbox=x=iw*0.78:y=ih*(0.14+0.06*sin(t*1.4)):w=iw*0.12:h=3:color=${accent}:t=fill`;
+            filter += `,drawbox=x=iw*(0.12+0.08*sin(t*0.7)):y=ih*0.68:w=iw*0.05:h=ih*0.05:color=${accent}:t=fill`;
+            filter += `,drawbox=x=iw*(0.72+0.06*cos(t*0.9)):y=ih*0.3:w=iw*0.025:h=ih*0.025:color=${accent}:t=fill`;
+          }
+
           const layout = safeTextLayout(scene, dimensions.width, dimensions.height);
           if (layout) {
             filter += ",drawtext=text='" + escapeDrawtext(layout.text) +
