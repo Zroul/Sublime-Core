@@ -302,8 +302,8 @@ function buildTimelineDraft(
       accent_color: typeof plan.accent_color === "string" ? plan.accent_color : accentColors[index % accentColors.length],
       background: index % 2 === 0 ? "08111f" : "10182b",
       text: cue.heading.slice(0, 80),
-      text_size: request.aspectRatio === "9:16" ? 48 : 56,
-      text_position: "center",
+      text_size: request.aspectRatio === "9:16" ? 44 : 52,
+      text_position: "top",
       text_max_width: request.aspectRatio === "9:16" ? 610 : 1120,
       caption_segments: captionSegments,
       ...(resolution?.asset ? {
