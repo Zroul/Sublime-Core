@@ -492,7 +492,7 @@ export async function runVideoProduction(
       preferredMediaType: "image",
       durationSeconds: Number(scene.duration) || request.targetSeconds / Math.max(planScenes.length, 1),
       visualRole: typeof scene.purpose === "string" ? scene.purpose : undefined,
-    }, { providers: assetProviders, now }));
+    }, { providers: assetProviders, now })));
     const assetManifest = {
       status: assetResolutions.every((resolution) => resolution.status === "procedural")
         ? "resolved_procedurally"
