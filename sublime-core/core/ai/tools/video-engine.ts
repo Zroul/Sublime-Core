@@ -119,32 +119,34 @@ function safeTextLayout(scene: Scene, width = 1280, height = 720) {
 }
 
 function topicalOverlay(kind: Scene["procedural_kind"], accent: string): string {
+  const glow = accent.replace("@0.85", "@0.22");
   if (kind === "ai_video") {
-    return `,drawbox=x=iw*0.12:y=ih*0.25:w=iw*0.2:h=ih*0.32:color=${accent}:t=3` +
-      `,drawbox=x=iw*0.4:y=ih*0.2:w=iw*0.2:h=ih*0.42:color=${accent}:t=3` +
-      `,drawbox=x=iw*0.7:y=ih*0.18:w=iw*0.16:h=ih*0.14:color=${accent}:t=3` +
-      `,drawbox=x=iw*0.7:y=ih*0.43:w=iw*0.16:h=ih*0.14:color=${accent}:t=3` +
-      `,drawbox=x=iw*0.7:y=ih*0.68:w=iw*0.16:h=ih*0.14:color=${accent}:t=3` +
-      `,drawbox=x=iw*0.32:y=ih*0.41:w=iw*0.08:h=3:color=${accent}:t=fill` +
-      `,drawbox=x=iw*0.6:y=ih*0.41:w=iw*0.1:h=3:color=${accent}:t=fill` +
-      `,drawbox=x=iw*(0.42+0.12*sin(t*2)):y=ih*0.35:w=iw*0.04:h=ih*0.04:color=${accent}:t=fill`;
+    return `,drawbox=x=iw*0.08:y=ih*0.28:w=iw*0.2:h=ih*0.28:color=${accent}:t=3` +
+      `,drawbox=x=iw*0.4:y=ih*0.2:w=iw*0.2:h=ih*0.44:color=${accent}:t=4` +
+      `,drawbox=x=iw*0.72:y=ih*0.28:w=iw*0.2:h=ih*0.28:color=${accent}:t=3` +
+      `,drawbox=x=iw*0.28:y=ih*0.415:w=iw*0.12:h=4:color=${accent}:t=fill` +
+      `,drawbox=x=iw*0.6:y=ih*0.415:w=iw*0.12:h=4:color=${accent}:t=fill` +
+      `,drawbox=x=iw*(0.43+0.09*sin(t*2.2)):y=ih*(0.34+0.05*cos(t*1.7)):w=18:h=18:color=${accent}:t=fill` +
+      `,drawbox=x=iw*(0.76+0.08*sin(t*1.5)):y=ih*(0.34+0.05*sin(t*2.1)):w=10:h=10:color=${accent}:t=fill` +
+      `,drawbox=x=iw*0.39:y=ih*0.18:w=iw*0.22:h=ih*0.48:color=${glow}:t=fill`;
   }
   if (kind === "sky_scattering") {
-    return `,drawbox=x=iw*0.08:y=ih*0.18:w=iw*0.1:h=ih*0.1:color=0xffd166:t=fill` +
-      `,drawbox=x=iw*0.18:y=ih*0.23:w=iw*0.44:h=3:color=0xffd166:t=fill` +
-      `,drawbox=x=iw*0.28:y=ih*0.35:w=iw*0.5:h=3:color=0x38c7ff:t=fill` +
-      `,drawbox=x=iw*0.35:y=ih*0.48:w=iw*0.46:h=3:color=0x38c7ff:t=fill` +
-      `,drawbox=x=iw*0.18:y=ih*0.62:w=iw*0.7:h=ih*0.15:color=0x1f6f9e@0.55:t=fill` +
-      `,drawbox=x=iw*(0.34+0.08*sin(t*2)):y=ih*0.31:w=iw*0.025:h=ih*0.025:color=0x38c7ff:t=fill` +
-      `,drawbox=x=iw*0.77:y=ih*0.58:w=iw*0.035:h=ih*0.11:color=${accent}:t=fill`;
+    return `,drawbox=x=iw*0.08:y=ih*0.18:w=iw*0.11:h=ih*0.11:color=0xffd166:t=fill` +
+      `,drawbox=x=iw*0.19:y=ih*0.25:w=iw*0.5:h=4:color=0xffd166@0.8:t=fill` +
+      `,drawbox=x=iw*0.3:y=ih*0.36:w=iw*0.48:h=4:color=0x38c7ff@0.8:t=fill` +
+      `,drawbox=x=iw*0.38:y=ih*0.49:w=iw*0.42:h=4:color=0x38c7ff@0.65:t=fill` +
+      `,drawbox=x=iw*0.18:y=ih*0.62:w=iw*0.68:h=ih*0.14:color=0x1f6f9e@0.55:t=fill` +
+      `,drawbox=x=iw*(0.28+0.12*sin(t*1.8)):y=ih*(0.28+0.07*cos(t*1.2)):w=16:h=16:color=0x38c7ff:t=fill` +
+      `,drawbox=x=iw*(0.55+0.1*cos(t*1.4)):y=ih*(0.42+0.05*sin(t*1.8)):w=12:h=12:color=0x38c7ff:t=fill`;
   }
   if (kind === "cpu_architecture") {
-    return `,drawbox=x=iw*0.38:y=ih*0.24:w=iw*0.24:h=ih*0.38:color=${accent}:t=4` +
-      `,drawbox=x=iw*0.43:y=ih*0.31:w=iw*0.14:h=ih*0.12:color=${accent}:t=2` +
-      `,drawbox=x=iw*0.43:y=ih*0.47:w=iw*0.14:h=ih*0.08:color=${accent}:t=2` +
-      `,drawbox=x=iw*0.22:y=ih*0.4:w=iw*0.16:h=3:color=${accent}:t=fill` +
-      `,drawbox=x=iw*0.62:y=ih*0.4:w=iw*0.16:h=3:color=${accent}:t=fill` +
-      `,drawbox=x=iw*(0.24+0.1*sin(t*2)):y=ih*0.37:w=iw*0.03:h=ih*0.05:color=${accent}:t=fill`;
+    return `,drawbox=x=iw*0.36:y=ih*0.22:w=iw*0.28:h=ih*0.42:color=${accent}:t=4` +
+      `,drawbox=x=iw*0.42:y=ih*0.3:w=iw*0.16:h=ih*0.11:color=${accent}:t=2` +
+      `,drawbox=x=iw*0.42:y=ih*0.46:w=iw*0.16:h=ih*0.08:color=${accent}:t=2` +
+      `,drawbox=x=iw*0.2:y=ih*0.4:w=iw*0.16:h=4:color=${accent}:t=fill` +
+      `,drawbox=x=iw*0.64:y=ih*0.4:w=iw*0.16:h=4:color=${accent}:t=fill` +
+      `,drawbox=x=iw*(0.23+0.11*sin(t*2)):y=ih*(0.36+0.03*cos(t)):w=18:h=10:color=${accent}:t=fill` +
+      `,drawbox=x=iw*(0.65+0.1*cos(t*1.7)):y=ih*(0.48+0.04*sin(t*1.4)):w=14:h=8:color=${accent}:t=fill`;
   }
   return "";
 }
