@@ -207,6 +207,10 @@ function modelResponseError(value: unknown): string | undefined {
   return undefined;
 }
 
+function isEmptyResponse(value: { text?: string; toolCalls?: ToolCall[] }): boolean {
+  return !(value.text?.trim()) && !(value.toolCalls && value.toolCalls.length > 0);
+}
+
 export async function runReActLoop<Ctx = unknown>(
   options: RunReActLoopOptions<Ctx>,
 ): Promise<AgentRunResult> {
@@ -251,6 +255,8 @@ export async function runReActLoop<Ctx = unknown>(
     successfulStop: state.successfulStop,
   });
 
+  let emptyResponseRecoveryUsed = false;
+
   for (let turn = 1; turn <= maxTurns; turn++) {
     state.turn = turn;
 
@@ -276,7 +282,7 @@ export async function runReActLoop<Ctx = unknown>(
       return finish("model_error", turn);
     }
 
-    const responseError = modelResponseError(rawResponse);
+    let responseError = modelResponseError(rawResponse);
     if (responseError) {
       const assistant: Message = {
         role: "assistant",
@@ -289,7 +295,75 @@ export async function runReActLoop<Ctx = unknown>(
       return finish("invalid_response", turn);
     }
 
-    const response = rawResponse as { text?: string; toolCalls?: ToolCall[] };
+    let response = rawResponse as { text?: string; toolCalls?: ToolCall[] };
+
+    if (isEmptyResponse(response)) {
+      if (emptyResponseRecoveryUsed) {
+        const assistant: Message = {
+          role: "assistant",
+          content: "Model returned an empty response after the single recovery attempt.",
+        };
+        state.messages.push(assistant);
+        const failedTurn: Turn = { index: turn, assistant, toolResults: [] };
+        await hooks.persistTurn?.(failedTurn, state);
+        await hooks.onTurnEnd?.(state);
+        return finish("empty_response", turn);
+      }
+
+      emptyResponseRecoveryUsed = true;
+      state.messages.push({ role: "assistant", content: "" });
+      state.messages.push({
+        role: "user",
+        content:
+          "Your previous response was empty. Recover now: either call the appropriate tool to make progress, or provide a concise final response. If the task is complete, call task_done with a summary. Do not return an empty response.",
+      });
+
+      try {
+        rawResponse = await llm.complete({
+          system:
+            system +
+            "\n\nRECOVERY INSTRUCTION: Your previous response was empty. Return a useful non-empty text response or valid tool call(s). Do not repeat an empty response.",
+          messages: state.messages,
+          tools: registry.toSpecs(),
+        });
+      } catch (error) {
+        const assistant: Message = {
+          role: "assistant",
+          content: `Model recovery request failed: ${error instanceof Error ? error.message : String(error)}`,
+        };
+        state.messages.push(assistant);
+        const failedTurn: Turn = { index: turn, assistant, toolResults: [] };
+        await hooks.persistTurn?.(failedTurn, state);
+        await hooks.onTurnEnd?.(state);
+        return finish("model_error", turn);
+      }
+
+      responseError = modelResponseError(rawResponse);
+      if (responseError) {
+        const assistant: Message = {
+          role: "assistant",
+          content: `Malformed model recovery response: ${responseError}`,
+        };
+        state.messages.push(assistant);
+        const failedTurn: Turn = { index: turn, assistant, toolResults: [] };
+        await hooks.persistTurn?.(failedTurn, state);
+        await hooks.onTurnEnd?.(state);
+        return finish("invalid_response", turn);
+      }
+
+      response = rawResponse as { text?: string; toolCalls?: ToolCall[] };
+      if (isEmptyResponse(response)) {
+        const assistant: Message = {
+          role: "assistant",
+          content: "Model returned an empty response after the single recovery attempt.",
+        };
+        state.messages.push(assistant);
+        const failedTurn: Turn = { index: turn, assistant, toolResults: [] };
+        await hooks.persistTurn?.(failedTurn, state);
+        await hooks.onTurnEnd?.(state);
+        return finish("empty_response", turn);
+      }
+    }
 
     const assistant: Message = {
       role: "assistant",
@@ -389,6 +463,14 @@ export async function runReActLoop<Ctx = unknown>(
 
     if (await hooks.shouldStop?.(state)) {
       return finish("shouldStop", turn);
+    }
+
+    if (calls.length === 0 && assistant.content.trim()) {
+      return finish("no_tool_calls", turn);
+    }
+
+    if (calls.length === 0 && !assistant.content.trim()) {
+      return finish("empty_response", turn);
     }
   }
 
