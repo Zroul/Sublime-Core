@@ -318,7 +318,42 @@ async function main(): Promise<void> {
     const stateD = (await listNovaRunStates()).find((state) => state.task === taskD);
     assert.ok(stateD);
     assert.equal(stateD.status, "failed");
-    assert.equal(stateD.stopped, "maxTurns");
+    assert.equal(stateD.stopped, "no_tool_calls");
+
+    // TEST E: one empty model response gets one controlled recovery attempt, then completes.
+    const taskE = "Complete a task after recovering from an empty model response.";
+    const modelE = new ScriptedModel([
+      () => ({}),
+      (input) => {
+        assert.match(input.system, /RECOVERY INSTRUCTION/i);
+        assert.ok(input.messages.some(
+          (message) => message.role === "user" && /previous response was empty/i.test(message.content),
+        ));
+        return {
+          text: "Task completed.",
+          toolCalls: [toolCall("e-done", "task_done", {
+            summary: "Recovered from the empty response and completed the task.",
+          })],
+        };
+      },
+    ]);
+    await runTask(taskE, modelE);
+    assert.equal(modelE.calls, 2);
+    const stateE = (await listNovaRunStates()).find((state) => state.task === taskE);
+    assert.ok(stateE);
+    assert.equal(stateE.status, "completed");
+    assert.equal(stateE.stopped, "task_done");
+
+    // TEST F: a second empty response stops immediately instead of consuming the remaining turns.
+    const taskF = "Stop cleanly when the model returns empty responses.";
+    const modelF = new ScriptedModel([() => ({}), () => ({})]);
+    await runTask(taskF, modelF, { maxTurns: 18 });
+    assert.equal(modelF.calls, 2);
+    const stateF = (await listNovaRunStates()).find((state) => state.task === taskF);
+    assert.ok(stateF);
+    assert.equal(stateF.status, "failed");
+    assert.equal(stateF.stopped, "empty_response");
+    assert.ok(stateF.messages.at(-1)?.content.includes("after the single recovery attempt"));
 
     // Malformed model output and provider failures produce persisted failure results.
     const malformedModel = new ScriptedModel([
@@ -346,7 +381,7 @@ async function main(): Promise<void> {
     assert.ok(modelErrorState.messages.at(-1)?.content.includes("deterministic model boundary failure"));
 
     console.log = originalLog;
-    console.log("NOVA deterministic tests A–D and model-error checks passed.");
+    console.log("NOVA deterministic tests A–F and model-error checks passed.");
   } finally {
     console.log = originalLog;
     process.chdir(originalCwd);
