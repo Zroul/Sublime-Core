@@ -21,7 +21,13 @@ try {
   runNode([compiler, "--outDir", outputDirectory, "--sourceMap", "false"], "TypeScript compilation");
   await writeFile(path.join(outputDirectory, "package.json"), '{"type":"module"}\n', "utf8");
 
-  for (const test of ["guard-test.js", "run-loop-test.js", "production-test.js", "video-engine-audio-test.js"]) {
+  for (const test of [
+    "guard-test.js",
+    "run-loop-test.js",
+    "production-test.js",
+    "video-engine-audio-test.js",
+    "video-engine-audio-integration-test.js",
+  ]) {
     runNode([path.join(outputDirectory, "core", "nova", test)], test);
   }
 } catch (error) {
