@@ -797,6 +797,8 @@ export async function resumeVideoProduction(
   if (!Array.isArray(timeline.scenes) || timeline.scenes.length === 0) {
     throw new Error(`Cannot resume ${jobId}: the saved timeline is missing or invalid.`);
   }
+  const savedAudio = parseObject(await readContentArtifact(jobId, "audio").catch(() => "{}"));
+  const resumeAudioCues = Array.isArray(savedAudio.cues) ? savedAudio.cues as PlannedAudioCue[] : [];
 
   const capabilities = await discoverMediaCapabilities(dependencies.executableFinder);
   if (!capabilities.ffmpegAvailable || !capabilities.ffprobeAvailable) {
@@ -819,6 +821,7 @@ export async function resumeVideoProduction(
       output: outputPath,
       aspect_ratio: timeline.aspect_ratio,
       scenes: timeline.scenes,
+      audio_cues: resumeAudioCues,
     });
     const outputStat = await fs.stat(absoluteOutput);
     if (!outputStat.isFile() || outputStat.size <= 0) throw new Error("Resumed render produced no non-empty file.");
@@ -826,7 +829,7 @@ export async function resumeVideoProduction(
 
     await updateContentJobRecord(jobId, { currentStage: "validation" });
     const probe = await invokeVideoTool(engine, { action: "probe", path: outputPath });
-    const checked = validateProbe(probe, request, timeline.width, timeline.height, catSoundEffects.length > 0);
+    const checked = validateProbe(probe, request, timeline.width, timeline.height, resumeAudioCues.length > 0);
     const validation = {
       valid: checked.valid,
       reasons: checked.reasons,
