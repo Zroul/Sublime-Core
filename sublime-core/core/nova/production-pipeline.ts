@@ -560,6 +560,8 @@ export async function runVideoProduction(
       ? (visualPlan.visual_plan as { scenes: Array<Record<string, unknown>> }).scenes
       : [];
     const assetProviders = dependencies.assetProviders ?? configuredAssetProviders();
+    const catRankingMode = /\b(cat|cats|kitten|kittens)\b/i.test(task) &&
+      /\b(rank|ranking|top\s*\d+|funniest|funny|compilation|shorts)\b/i.test(task);
     const assetResolutions = await Promise.all(planScenes.map((scene, index) => resolveVisualAsset({
       sceneDescription: typeof scene.visual === "string" ? scene.visual : cues[index]?.visualDirection ?? request.topic,
       topic: request.topic,
@@ -567,7 +569,7 @@ export async function runVideoProduction(
         typeof scene.purpose === "string" ? scene.purpose : "",
         typeof scene.source_query === "string" ? scene.source_query : "",
       ].filter(Boolean),
-      preferredMediaType: "image",
+      preferredMediaType: catRankingMode ? "video" : "image",
       durationSeconds: Number(scene.duration) || request.targetSeconds / Math.max(planScenes.length, 1),
       visualRole: typeof scene.purpose === "string" ? scene.purpose : undefined,
     }, { providers: assetProviders, now })));
