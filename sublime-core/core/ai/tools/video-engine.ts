@@ -14,6 +14,13 @@ import { resolveWorkspacePath } from "./workspace-path.js";
 const execFileAsync = promisify(execFile);
 const WORKSPACE = path.resolve("workspace");
 
+interface AudioCue {
+  asset_path: string;
+  start: number;
+  duration?: number;
+  volume?: number;
+}
+
 interface Scene {
   index?: number;
   duration: number;
@@ -219,6 +226,21 @@ export function createVideoEngineTool(
           required: ["duration"],
         },
       },
+      audio_cues: {
+        type: "array",
+        description: "Optional timed sound effects or music clips. Each file must be inside workspace/assets/audio.",
+        maxItems: 40,
+        items: {
+          type: "object", additionalProperties: false,
+          properties: {
+            asset_path: { type: "string", maxLength: 500 },
+            start: { type: "number", minimum: 0 },
+            duration: { type: "number", minimum: 0.05, maximum: 120 },
+            volume: { type: "number", minimum: 0, maximum: 2 },
+          },
+          required: ["asset_path", "start"],
+        },
+      },
       path: { type: "string" },
     },
     required: ["action"],
@@ -384,6 +406,24 @@ export function createVideoEngineTool(
 
         const inputs: string[] = [];
         const filters: string[] = [];
+        const audioCues = Array.isArray(input.audio_cues) ? input.audio_cues as AudioCue[] : [];
+        if (audioCues.length > 40) throw new Error("audio_cues cannot contain more than 40 items.");
+        const resolvedAudioCues = await Promise.all(audioCues.map(async (cue, index) => {
+          const normalized = String(cue.asset_path ?? "").replace(/\\/g, "/");
+          if (!normalized.startsWith("assets/audio/") || normalized.includes("../") || normalized.startsWith("/") || /^[a-z]:/i.test(normalized)) {
+            throw new Error(`Audio cue ${index + 1} must use a workspace-relative path inside assets/audio.`);
+          }
+          const start = Number(cue.start);
+          const duration = cue.duration === undefined ? undefined : Number(cue.duration);
+          const volume = cue.volume === undefined ? 0.8 : Number(cue.volume);
+          if (!Number.isFinite(start) || start < 0) throw new Error(`Audio cue ${index + 1} start must be a non-negative number.`);
+          if (duration !== undefined && (!Number.isFinite(duration) || duration <= 0 || duration > 120)) throw new Error(`Audio cue ${index + 1} duration must be greater than 0 and at most 120 seconds.`);
+          if (!Number.isFinite(volume) || volume < 0 || volume > 2) throw new Error(`Audio cue ${index + 1} volume must be between 0 and 2.`);
+          const fullPath = await resolveWorkspacePath(normalized);
+          const stat = await fs.stat(fullPath);
+          if (!stat.isFile() || stat.size <= 0) throw new Error(`Audio cue ${index + 1} is missing or empty: ${normalized}`);
+          return { path: fullPath, start, duration, volume };
+        }));
 
         validScenes.forEach((scene, index) => {
           if (scene.asset) {
@@ -457,10 +497,24 @@ export function createVideoEngineTool(
         });
 
         const concatInputs = validScenes.map((_, index) => "[v" + index + "]").join("");
-        const filterComplex = filters.join(";") + ";" + concatInputs + "concat=n=" + validScenes.length + ":v=1:a=0[v]";
+        const graph = [filters.join(";"), concatInputs + "concat=n=" + validScenes.length + ":v=1:a=0[v]"];
+        const audioInputStart = validScenes.length;
+        resolvedAudioCues.forEach((cue, index) => {
+          const inputIndex = audioInputStart + index;
+          inputs.push("-i", cue.path);
+          const trim = cue.duration === undefined ? "" : `,atrim=duration=${cue.duration}`;
+          const delayMs = Math.round(cue.start * 1000);
+          graph.push(`[${inputIndex}:a]asetpts=PTS-STARTPTS${trim},volume=${cue.volume},adelay=${delayMs}:all=1[audioCue${index}]`);
+        });
+        if (resolvedAudioCues.length > 0) {
+          const audioLabels = resolvedAudioCues.map((_, index) => `[audioCue${index}]`).join("");
+          graph.push(`${audioLabels}amix=inputs=${resolvedAudioCues.length}:duration=longest:normalize=0,alimiter=limit=0.95[aout]`);
+        }
+        const filterComplex = graph.join(";");
 
         await runCommand("ffmpeg", [
           "-y", ...inputs, "-filter_complex", filterComplex, "-map", "[v]",
+          ...(resolvedAudioCues.length > 0 ? ["-map", "[aout]", "-c:a", "aac", "-b:a", "192k", "-shortest"] : []),
           "-c:v", "libx264", "-pix_fmt", "yuv420p", "-r", "30", "-movflags", "+faststart", output,
         ]);
         const stat = await fs.stat(output);
