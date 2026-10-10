@@ -7,13 +7,15 @@ import type { ToolResult } from "../ai/reasoning/types.js";
 const workspace = path.resolve("workspace");
 const audioDirectory = path.join(workspace, "assets", "audio");
 const outputDirectory = path.join(workspace, "nova", "videos");
-const temporary = await mkdtemp(path.join(workspace, ".audio-cue-test-"));
 const calls: Array<{ command: string; args: string[] }> = [];
+const audioFilename = `nova-test-audio-${process.pid}.wav`;
+const audioFixture = path.join(audioDirectory, audioFilename);
 
 try {
+  await mkdir(workspace, { recursive: true });
   await mkdir(audioDirectory, { recursive: true });
   await mkdir(outputDirectory, { recursive: true });
-  await writeFile(path.join(audioDirectory, "minecraft-pop.wav"), Buffer.from("test-audio-fixture"));
+  await writeFile(audioFixture, Buffer.from("test-audio-fixture"));
 
   const engine = createVideoEngineTool(async (command, args) => {
     calls.push({ command, args });
@@ -31,7 +33,7 @@ try {
     aspect_ratio: "16:9",
     scenes: [{ duration: 3, text: "Cat ranking", background: "101010" }],
     audio_cues: [{
-      asset_path: "assets/audio/minecraft-pop.wav",
+      asset_path: "assets/audio/" + audioFilename,
       start: 1.25,
       duration: 0.5,
       volume: 0.7,
@@ -56,11 +58,11 @@ try {
     scenes: [{ duration: 2 }],
     audio_cues: [{ asset_path: "assets/audio/../../outside.wav", start: 0 }],
   }, { messages: [], turn: 1, system: "test" });
-  assert.notEqual(typeof rejected === "string" ? JSON.parse(rejected).ok : (rejected as ToolResult).isError, false);
+  if (typeof rejected === "string") assert.notEqual(JSON.parse(rejected).ok, true);
+  else assert.equal((rejected as ToolResult).isError, true);
   assert.equal(calls.length, beforeTraversal, "invalid audio paths are rejected before FFmpeg runs");
 
   console.log("NOVA video-engine audio cue tests passed.");
 } finally {
-  await rm(temporary, { recursive: true, force: true });
-  await rm(path.join(audioDirectory, "minecraft-pop.wav"), { force: true });
+  await rm(audioFixture, { force: true });
 }
