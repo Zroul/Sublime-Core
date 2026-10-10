@@ -351,8 +351,8 @@ async function planLocalCatSoundEffects(
   scenes: VideoSceneDefinition[],
   task: string,
 ): Promise<PlannedAudioCue[]> {
-  if (!/\\b(cat|cats|kitten|kittens)\\b/i.test(task) ||
-      !/\\b(rank|ranking|top\\s*\\d+|funniest|funny|compilation|shorts)\\b/i.test(task)) return [];
+  if (!/\b(cat|cats|kitten|kittens)\b/i.test(task) ||
+      !/\b(rank|ranking|top\s*\d+|funniest|funny|compilation|shorts)\b/i.test(task)) return [];
 
   const audioRoot = await resolveWorkspacePath("assets/audio");
   const files = (await collectLocalAudioFiles(audioRoot)).sort((a, b) => a.localeCompare(b));
