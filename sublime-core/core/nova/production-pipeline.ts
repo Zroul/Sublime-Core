@@ -400,6 +400,7 @@ function validateProbe(
   request: VideoProductionRequest,
   width: number,
   height: number,
+  requireAudio = false,
 ): { valid: boolean; reasons: string[]; actualDuration?: number; metadata?: Record<string, unknown> } {
   const reasons: string[] = [];
   const metadata = probe.metadata && typeof probe.metadata === "object"
@@ -408,8 +409,10 @@ function validateProbe(
   const duration = Number(metadata?.durationSeconds);
   const streams = Array.isArray(metadata?.streams) ? metadata.streams as Array<Record<string, unknown>> : [];
   const video = streams.find((stream) => stream.type === "video");
+  const audio = streams.find((stream) => stream.type === "audio");
   if (probe.ok !== true || probe.valid !== true || !metadata) reasons.push("ffprobe did not validate the output container.");
   if (!video) reasons.push("The output has no readable video stream.");
+  if (requireAudio && !audio) reasons.push("Sound effects were scheduled, but the output has no readable audio stream.");
   if (Number(video?.width) !== width || Number(video?.height) !== height) reasons.push(`Expected ${width}x${height} video dimensions.`);
   if (!Number.isFinite(duration) || duration <= 0) reasons.push("The output duration is missing or invalid.");
   else if (Math.abs(duration - request.targetSeconds) > Math.max(0.45, request.targetSeconds * 0.025)) {
@@ -608,7 +611,7 @@ export async function runVideoProduction(
       narrationGenerated: false,
       musicGenerated: false,
       soundEffectsPlanned: catSoundEffects.length,
-      audioTrackPresent: catSoundEffects.length > 0,
+      audioTrackExpected: catSoundEffects.length > 0,
       audioAssetsDirectory: "assets/audio",
       fallback: catSoundEffects.length
         ? "Matched local sound effects are scheduled on the timeline; review the audio artifact and listen to the final render."
@@ -647,7 +650,7 @@ export async function runVideoProduction(
     currentStage = "validation";
     await updateContentJobRecord(jobId, { currentStage: "validation" });
     let probe = await invokeVideoTool(engine, { action: "probe", path: outputPath });
-    let checked = validateProbe(probe, request, timeline.width, timeline.height);
+    let checked = validateProbe(probe, request, timeline.width, timeline.height, catSoundEffects.length > 0);
     let renderAttempts = 1;
     if (!checked.valid && checked.actualDuration && checked.actualDuration > 0 &&
         checked.reasons.every((reason) => reason.startsWith("Rendered duration"))) {
@@ -671,7 +674,7 @@ export async function runVideoProduction(
       });
       const retryStat = await fs.stat(absoluteOutput);
       probe = await invokeVideoTool(engine, { action: "probe", path: outputPath });
-      checked = validateProbe(probe, request, timeline.width, timeline.height);
+      checked = validateProbe(probe, request, timeline.width, timeline.height, catSoundEffects.length > 0);
       await saveJson(jobId, "render", { ...retryResult, fileBytes: retryStat.size, attempt: renderAttempts, repairedDuration: true });
       await saveJson(jobId, "timeline", repairedTimeline);
     }
@@ -823,7 +826,7 @@ export async function resumeVideoProduction(
 
     await updateContentJobRecord(jobId, { currentStage: "validation" });
     const probe = await invokeVideoTool(engine, { action: "probe", path: outputPath });
-    const checked = validateProbe(probe, request, timeline.width, timeline.height);
+    const checked = validateProbe(probe, request, timeline.width, timeline.height, catSoundEffects.length > 0);
     const validation = {
       valid: checked.valid,
       reasons: checked.reasons,
