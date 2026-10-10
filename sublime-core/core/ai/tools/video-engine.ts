@@ -508,7 +508,7 @@ export function createVideoEngineTool(
         });
         if (resolvedAudioCues.length > 0) {
           const audioLabels = resolvedAudioCues.map((_, index) => `[audioCue${index}]`).join("");
-          graph.push(`${audioLabels}amix=inputs=${resolvedAudioCues.length}:duration=longest:normalize=0,alimiter=limit=0.95[aout]`);
+          graph.push(`${audioLabels}amix=inputs=${resolvedAudioCues.length}:duration=longest:normalize=0,alimiter=limit=0.95,apad[aout]`);
         }
         const filterComplex = graph.join(";");
 
