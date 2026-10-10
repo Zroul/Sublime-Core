@@ -320,6 +320,81 @@ function buildTimelineDraft(
   return { action: "build_timeline", aspect_ratio: request.aspectRatio, scenes };
 }
 
+interface PlannedAudioCue {
+  asset_path: string;
+  start: number;
+  duration: number;
+  volume: number;
+}
+
+const LOCAL_AUDIO_EXTENSIONS = new Set([".wav", ".mp3", ".ogg", ".m4a", ".aac", ".flac"]);
+
+async function collectLocalAudioFiles(root: string, directory = root): Promise<string[]> {
+  let entries;
+  try {
+    entries = await fs.readdir(directory, { withFileTypes: true });
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") return [];
+    throw error;
+  }
+  const found: string[] = [];
+  for (const entry of entries) {
+    const fullPath = path.join(directory, entry.name);
+    if (entry.isSymbolicLink()) continue;
+    if (entry.isDirectory()) found.push(...await collectLocalAudioFiles(root, fullPath));
+    else if (entry.isFile() && LOCAL_AUDIO_EXTENSIONS.has(path.extname(entry.name).toLowerCase())) found.push(fullPath);
+  }
+  return found;
+}
+
+async function planLocalCatSoundEffects(
+  scenes: VideoSceneDefinition[],
+  task: string,
+): Promise<PlannedAudioCue[]> {
+  if (!/\\b(cat|cats|kitten|kittens)\\b/i.test(task) ||
+      !/\\b(rank|ranking|top\\s*\\d+|funniest|funny|compilation|shorts)\\b/i.test(task)) return [];
+
+  const audioRoot = await resolveWorkspacePath("assets/audio");
+  const files = (await collectLocalAudioFiles(audioRoot)).sort((a, b) => a.localeCompare(b));
+  if (files.length === 0) return [];
+
+  const groups: Array<{ pattern: RegExp; keywords: RegExp; volume: number }> = [
+    { pattern: /(?:meow|cat|purr|kitten)/i, keywords: /cat|kitten|meow|purr/i, volume: 0.9 },
+    { pattern: /(?:bonk|bruh|oof|fail|vine|funny|impact)/i, keywords: /funny|fail|unexpected|bonk|bruh|oof|impact/i, volume: 0.85 },
+    { pattern: /(?:pop|pling|click|ding|xp|minecraft)/i, keywords: /rank|top|number|score|point|count|entry/i, volume: 0.7 },
+    { pattern: /(?:whoosh|swipe|transition)/i, keywords: /intro|opening|transition|next|cut/i, volume: 0.65 },
+    { pattern: /(?:win|victory|success|level.?up|fanfare)/i, keywords: /ending|final|winner|rank|top/i, volume: 0.75 },
+  ];
+  const cues: PlannedAudioCue[] = [];
+  let elapsed = 0;
+  for (let index = 0; index < scenes.length; index += 1) {
+    const scene = scenes[index];
+    const sceneText = [scene.text, scene.caption, scene.visual, scene.source_query].filter(Boolean).join(" ");
+    const isOpening = index === 0;
+    const isEnding = index === scenes.length - 1;
+    let selected: string | undefined;
+    let volume = 0.75;
+    for (const group of groups) {
+      const relevant = group.keywords.test(sceneText) ||
+        (isOpening && /intro|opening/i.test(group.pattern.source)) ||
+        (isEnding && /win|victory|success|level/i.test(group.pattern.source));
+      if (!relevant) continue;
+      selected = files.find((filename) => group.pattern.test(path.basename(filename)));
+      if (selected) { volume = group.volume; break; }
+    }
+    if (selected) {
+      cues.push({
+        asset_path: "assets/audio/" + path.relative(audioRoot, selected).split(path.sep).join("/"),
+        start: Number((elapsed + Math.min(0.2, scene.duration * 0.08)).toFixed(3)),
+        duration: Math.min(2.5, Math.max(0.25, scene.duration * 0.35)),
+        volume,
+      });
+    }
+    elapsed += scene.duration;
+  }
+  return cues.slice(0, 40);
+}
+
 function validateProbe(
   probe: Record<string, unknown>,
   request: VideoProductionRequest,
@@ -515,18 +590,6 @@ export async function runVideoProduction(
     };
     await saveJson(jobId, "asset_manifest", assetManifest);
 
-    currentStage = "audio";
-    await updateContentJobRecord(jobId, { currentStage: "audio" });
-    const audioRecord = {
-      status: request.narration ? "provider_unavailable" : "not_requested",
-      narrationRequested: request.narration,
-      narrationGenerated: false,
-      musicGenerated: false,
-      audioTrackPresent: false,
-      fallback: request.captions ? "On-screen captions are included." : "The result is a silent visual video.",
-    };
-    await saveJson(jobId, "audio", audioRecord);
-
     currentStage = "timeline";
     await updateContentJobRecord(jobId, { currentStage: "timeline" });
     const timelineDraft = buildTimelineDraft(request, scriptResult.script, planScenes, assetResolutions);
@@ -535,6 +598,23 @@ export async function runVideoProduction(
     const timelineResult = parseObject(timelineRaw.content);
     const timeline = timelineResult.timeline as VideoTimeline;
     await saveJson(jobId, "timeline", timeline);
+
+    currentStage = "audio";
+    await updateContentJobRecord(jobId, { currentStage: "audio" });
+    const catSoundEffects = await planLocalCatSoundEffects(timeline.scenes, task);
+    const audioRecord = {
+      status: catSoundEffects.length ? "local_sound_effects_planned" : request.narration ? "provider_unavailable" : "no_local_audio_assets",
+      narrationRequested: request.narration,
+      narrationGenerated: false,
+      musicGenerated: false,
+      soundEffectsPlanned: catSoundEffects.length,
+      audioTrackPresent: catSoundEffects.length > 0,
+      audioAssetsDirectory: "assets/audio",
+      fallback: catSoundEffects.length
+        ? "Matched local sound effects are scheduled on the timeline; review the audio artifact and listen to the final render."
+        : "No matching local sound effects were found. Add named effect files under workspace/assets/audio; the render will remain silent.",
+    };
+    await saveJson(jobId, "audio", { ...audioRecord, cues: catSoundEffects });
 
     const capabilities = await discoverMediaCapabilities(dependencies.executableFinder);
     await writeContentArtifact(jobId, "request", JSON.stringify({ request, mediaCapabilities: capabilities }, null, 2));
@@ -555,6 +635,7 @@ export async function runVideoProduction(
       output: finalPath,
       aspect_ratio: timeline.aspect_ratio,
       scenes: timeline.scenes,
+      audio_cues: catSoundEffects,
     };
     const renderResult = await invokeVideoTool(engine, renderInput);
     const outputPath = typeof renderResult.outputPath === "string" ? renderResult.outputPath : finalPath;
