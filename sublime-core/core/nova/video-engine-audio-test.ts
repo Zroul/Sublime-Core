@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdir, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { createVideoEngineTool } from "../ai/tools/video-engine.js";
 import type { ToolResult } from "../ai/reasoning/types.js";
@@ -65,4 +65,6 @@ try {
   console.log("NOVA video-engine audio cue tests passed.");
 } finally {
   await rm(audioFixture, { force: true });
+  await rm(path.join(outputDirectory, "audio-cue-test.mp4"), { force: true });
+  await rm(path.join(outputDirectory, "audio-cue-traversal-test.mp4"), { force: true });
 }
