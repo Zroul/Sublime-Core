@@ -176,6 +176,9 @@ export function createRankingVideoTool(videoEngine: Tool = videoEngineTool): Too
           const entertainmentScore = item.entertainment_score === undefined
             ? undefined
             : Number(item.entertainment_score);
+          if (entertainmentScore !== undefined && (!Number.isFinite(entertainmentScore) || entertainmentScore < 1 || entertainmentScore > 100)) {
+            throw new Error("Clip " + id + " entertainment_score must be between 1 and 100.");
+          }
           clips.push({
             id,
             path: assetPath,
