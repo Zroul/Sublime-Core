@@ -1,19 +1,12 @@
 import type { VideoProductionRequest } from "./request-understanding.js";
 
 /**
- * NOVA's first deterministic ranking-edit planner.
+ * NOVA's deterministic ranking-edit planner.
  *
- * This module deliberately plans edits from clips the user already owns or has
- * permission to use. It does not download media, generate narration, or assume
- * a sound-effects provider is installed.
+ * Plans edits from clips the user owns or has permission to use. It does not
+ * download media, generate narration, or assume a sound-effects provider exists.
  */
-export type RankingCategory =
-  | "angry"
-  | "bath"
-  | "vet"
-  | "fighting"
-  | "funny"
-  | "other";
+export type RankingCategory = "angry" | "bath" | "vet" | "fighting" | "funny" | "other";
 
 export interface RankingClip {
   id: string;
@@ -30,8 +23,12 @@ export interface RankingEditSegment {
   path: string;
   category: RankingCategory;
   sourceDurationSeconds: number;
+  /** In/out points in the rendered output timeline. */
   startSeconds: number;
   endSeconds: number;
+  /** In/out points within the source media. */
+  sourceStartSeconds: number;
+  sourceEndSeconds: number;
   durationSeconds: number;
   onScreenLabel: string;
   soundCue: "hook_pop" | "rank_sting" | "none";
@@ -57,23 +54,51 @@ const CATEGORY_LABELS: Record<RankingCategory, string> = {
 };
 
 function validateClip(clip: RankingClip): void {
-  if (!clip.id.trim()) throw new Error("Every ranking clip needs a non-empty id.");
-  if (!clip.path.trim()) throw new Error(`Ranking clip "${clip.id}" needs a media path.`);
+  if (!clip || typeof clip.id !== "string" || !clip.id.trim()) {
+    throw new Error("Every ranking clip needs a non-empty id.");
+  }
+  if (typeof clip.path !== "string" || !clip.path.trim()) {
+    throw new Error(`Ranking clip "${clip.id}" needs a media path.`);
+  }
+  if (!(clip.category in CATEGORY_LABELS)) {
+    throw new Error(`Ranking clip "${clip.id}" has an unsupported category.`);
+  }
   if (!Number.isFinite(clip.durationSeconds) || clip.durationSeconds <= 0) {
     throw new Error(`Ranking clip "${clip.id}" must have a positive duration.`);
   }
 }
 
-function distributeDuration(total: number, count: number): number[] {
-  const base = Math.floor((total / count) * 1000) / 1000;
-  const durations = Array.from({ length: count }, () => base);
-  durations[count - 1] = Number((total - base * (count - 1)).toFixed(3));
-  return durations;
+/** Allocate the target fairly without ever asking for more source footage than exists. */
+function allocateDurations(capacitySeconds: number[], targetSeconds: number): number[] {
+  const targetMs = Math.round(targetSeconds * 1000);
+  const capacitiesMs = capacitySeconds.map((duration) => Math.floor(duration * 1000 + 1e-6));
+  if (capacitiesMs.reduce((sum, value) => sum + value, 0) < targetMs) {
+    throw new Error("The supplied clips do not contain enough source footage for the requested duration.");
+  }
+
+  const allocated = capacitiesMs.map(() => 0);
+  let remaining = targetMs;
+  let active = capacitiesMs.map((_, index) => index);
+  while (remaining > 0 && active.length > 0) {
+    const share = Math.max(1, Math.floor(remaining / active.length));
+    const nextActive: number[] = [];
+    for (const index of active) {
+      if (remaining === 0) break;
+      const available = capacitiesMs[index] - allocated[index];
+      const amount = Math.min(available, share, remaining);
+      allocated[index] += amount;
+      remaining -= amount;
+      if (allocated[index] < capacitiesMs[index]) nextActive.push(index);
+    }
+    active = nextActive;
+  }
+  if (remaining !== 0) throw new Error("Could not allocate the requested ranking duration.");
+  return allocated.map((milliseconds) => milliseconds / 1000);
 }
 
 /**
- * Builds a stable, narration-free ranking plan. Input order is preserved so
- * callers can provide their own ranking after reviewing the source footage.
+ * Builds a narration-free plan. Input order is preserved; callers should pass
+ * clips in the reviewed order they want displayed, least-to-most entertaining.
  */
 export function createRankingEditPlan(input: {
   clips: RankingClip[];
@@ -88,6 +113,10 @@ export function createRankingEditPlan(input: {
   if (!Number.isFinite(targetSeconds) || targetSeconds < 3 || targetSeconds > 600) {
     throw new Error("Ranking target duration must be between 3 and 600 seconds.");
   }
+  const aspectRatio = input.aspectRatio ?? "9:16";
+  if (aspectRatio !== "16:9" && aspectRatio !== "9:16" && aspectRatio !== "1:1") {
+    throw new Error("Ranking aspect ratio must be 16:9, 9:16, or 1:1.");
+  }
 
   const seen = new Set<string>();
   for (const clip of clips) {
@@ -96,23 +125,26 @@ export function createRankingEditPlan(input: {
     seen.add(clip.id);
   }
 
-  const durations = distributeDuration(targetSeconds, clips.length);
-  let cursor = 0;
+  const durations = allocateDurations(clips.map((clip) => clip.durationSeconds), targetSeconds);
+  let cursorMs = 0;
   const segments = clips.map((clip, index) => {
-    const duration = durations[index];
-    const startSeconds = Number(cursor.toFixed(3));
-    const endSeconds = Number((cursor + duration).toFixed(3));
-    cursor = endSeconds;
+    const durationMs = Math.round(durations[index] * 1000);
+    const startMs = cursorMs;
+    const endMs = startMs + durationMs;
+    cursorMs = endMs;
+    const rank = clips.length - index;
     return {
-      rank: clips.length - index,
+      rank,
       clipId: clip.id,
       path: clip.path,
       category: clip.category,
       sourceDurationSeconds: clip.durationSeconds,
-      startSeconds,
-      endSeconds,
-      durationSeconds: duration,
-      onScreenLabel: `#${clips.length - index} ${CATEGORY_LABELS[clip.category]}`,
+      startSeconds: startMs / 1000,
+      endSeconds: endMs / 1000,
+      sourceStartSeconds: 0,
+      sourceEndSeconds: durationMs / 1000,
+      durationSeconds: durationMs / 1000,
+      onScreenLabel: `#${rank} ${CATEGORY_LABELS[clip.category]}`,
       soundCue: index === 0 ? "hook_pop" as const : index === clips.length - 1 ? "rank_sting" as const : "none" as const,
     };
   });
@@ -120,13 +152,13 @@ export function createRankingEditPlan(input: {
   return {
     type: "nova_ranking_edit_v1",
     title: input.title?.trim() || "FUNNIEST CAT MOMENTS",
-    aspectRatio: input.aspectRatio ?? "9:16",
+    aspectRatio,
     targetSeconds,
     narration: false,
     segments,
     notes: [
-      "Clip order is preserved; review the source footage and arrange clips from least to most entertaining before rendering.",
-      "Sound cues are edit markers only; the renderer must confirm that a licensed/local sound asset exists before adding audio.",
+      "Clip order is preserved; arrange clips from least to most entertaining after reviewing the source footage.",
+      "Sound cues are edit markers only; the renderer must confirm a licensed/local sound asset exists before adding audio.",
       "Only use source clips you own or have permission to edit and publish.",
     ],
   };
