@@ -137,13 +137,17 @@ export function createRankingVideoTool(videoEngine: Tool = videoEngineTool): Too
         if (finalProbe.ok !== true || finalProbe.valid !== true) {
           throw new Error("The rendered ranking MP4 did not pass final media validation.");
         }
+        const actualDuration = Number((finalProbe.metadata as Record<string, unknown> | undefined)?.durationSeconds);
+        if (!Number.isFinite(actualDuration) || Math.abs(actualDuration - plan.targetSeconds) > 0.75) {
+          throw new Error(`Rendered duration ${actualDuration}s does not match the requested ${plan.targetSeconds}s target.`);
+        }
         return JSON.stringify({
           ok: true,
           jobId,
           title: plan.title,
           outputPath: finalPath,
           planPath: path.join(jobRoot, "ranking-plan.json").split(String.fromCharCode(92)).join("/"),
-          durationSeconds: Number((finalProbe.metadata as Record<string, unknown>).durationSeconds),
+          durationSeconds: actualDuration,
           clipCount: plan.segments.length,
           narration: false,
           soundCues: "markers only; no sound effects were added",
