@@ -31,6 +31,7 @@ import { editingModuleTool } from "../ai/tools/editing-module.js";
 import { visualPlannerTool } from "../ai/tools/visual-planner.js";
 import { resolveWorkspacePath } from "../ai/tools/workspace-path.js";
 import { createNovaGuard } from "./guard.js";
+import { createRankingVideoTool } from "./ranking-video-tool.js";
 import { NOVA_SYSTEM_PROMPT } from "./system.js";
 import {
   createRunId,
@@ -92,6 +93,7 @@ export async function runTask(
     visualPlannerTool,
     editingModuleTool,
     options.videoEngine ?? videoEngineTool,
+    createRankingVideoTool(options.videoEngine ?? videoEngineTool),
     mediaCapabilitiesTool,
     createVideoProductionTool(provider, {
       ...options.productionDependencies,
@@ -99,9 +101,15 @@ export async function runTask(
     }),
     runCommandTool,
   ];
-  const activeTools = directVideoProduction
-    ? registeredTools.filter((tool) => tool.name === "video_production")
-    : registeredTools;
+  const directRankingProduction =
+    /\\b(?:ranking|ranked|top\\s+\\d+|compilation)\\b/i.test(task) &&
+    /\\b(?:cat|cats|dog|dogs|pet|pets)\\b/i.test(task) &&
+    /\\b(?:video|edit|compilation|shorts)\\b/i.test(task);
+  const activeTools = directRankingProduction
+    ? registeredTools.filter((tool) => tool.name === "ranking_video")
+    : directVideoProduction
+      ? registeredTools.filter((tool) => tool.name === "video_production")
+      : registeredTools;
 
   let result: AgentRunResult;
   try {
