@@ -38,7 +38,7 @@ function safeJobId(value: string): string {
 
 function validateAssetPath(value: unknown): string {
   if (typeof value !== "string" || !value.trim()) throw new Error("Every clip needs a workspace asset path.");
-  const normalized = value.replaceAll("\\\\", "/");
+  const normalized = value.split(String.fromCharCode(92)).join("/");
   if (!normalized.startsWith("assets/") || normalized.includes("../") || normalized.startsWith("/") || /^[a-z]:/i.test(normalized)) {
     throw new Error("Ranking clips must use paths inside workspace/assets, such as assets/cats/clip-01.mp4.");
   }
@@ -142,7 +142,7 @@ export function createRankingVideoTool(videoEngine: Tool = videoEngineTool): Too
           jobId,
           title: plan.title,
           outputPath: finalPath,
-          planPath: path.join(jobRoot, "ranking-plan.json").replaceAll("\\\\", "/"),
+          planPath: path.join(jobRoot, "ranking-plan.json").split(String.fromCharCode(92)).join("/"),
           durationSeconds: Number((finalProbe.metadata as Record<string, unknown>).durationSeconds),
           clipCount: plan.segments.length,
           narration: false,
@@ -150,10 +150,14 @@ export function createRankingVideoTool(videoEngine: Tool = videoEngineTool): Too
           validated: true,
         });
       } catch (error) {
-        return JSON.stringify({
-          ok: false,
-          error: error instanceof Error ? error.message : String(error),
-        });
+        return {
+          toolCallId: "",
+          content: JSON.stringify({
+            ok: false,
+            error: error instanceof Error ? error.message : String(error),
+          }),
+          isError: true,
+        };
       }
     },
   };
