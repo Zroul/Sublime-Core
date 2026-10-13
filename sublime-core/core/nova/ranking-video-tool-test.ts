@@ -32,6 +32,9 @@ const mockEngine: Tool = {
 const tool = createRankingVideoTool(mockEngine);
 const jobId = "ranking-tool-test";
 const jobDirectory = path.join(process.cwd(), "workspace", "nova", "jobs", jobId);
+const folderJobId = "ranking-folder-test";
+const folderJobDirectory = path.join(process.cwd(), "workspace", "nova", "jobs", folderJobId);
+const assetFolder = path.join(process.cwd(), "workspace", "assets", "NOVA-RANKING-FOLDER-TEST");
 const context = { messages: [], turn: 1, system: "test" };
 
 try {
@@ -98,8 +101,42 @@ try {
   }, context);
   assert.equal((collision as { isError?: boolean }).isError, true);
   assert.match(String((collision as { content?: string }).content), /already exists/i);
+
+  const folderClips = [
+    { folder: "CAT ANGRY", file: "angry.mp4", category: "angry" },
+    { folder: "CAT DURING BATH", file: "bath.mp4", category: "bath" },
+    { folder: "CAT FIGHTING", file: "fight.mp4", category: "fighting" },
+  ];
+  for (const clip of folderClips) {
+    const directory = path.join(assetFolder, clip.folder);
+    await fs.mkdir(directory, { recursive: true });
+    await fs.writeFile(path.join(directory, clip.file), "mock media placeholder", "utf8");
+  }
+  const folderResult = await tool.handler({
+    job_id: folderJobId,
+    target_seconds: 15,
+    asset_folder: "assets/NOVA-RANKING-FOLDER-TEST",
+  }, context);
+  const folderParsed = JSON.parse(String(folderResult));
+  assert.equal(folderParsed.ok, true);
+  assert.equal(folderParsed.clipCount, 3);
+  const folderPlan = JSON.parse(await fs.readFile(path.join(folderJobDirectory, "ranking-plan.json"), "utf8"));
+  assert.deepEqual(folderPlan.segments.map((segment: { category: string }) => segment.category), ["angry", "bath", "fighting"]);
+  assert.deepEqual(folderPlan.segments.map((segment: { path: string }) => path.basename(path.dirname(segment.path))), [
+    "CAT ANGRY", "CAT DURING BATH", "CAT FIGHTING",
+  ]);
+
+  const bothInputs = await tool.handler({
+    target_seconds: 15,
+    asset_folder: "assets/NOVA-RANKING-FOLDER-TEST",
+    clips: [{ id: "manual", path: "assets/cats/manual.mp4", category: "funny" }],
+  }, context);
+  assert.equal((bothInputs as { isError?: boolean }).isError, true);
+  assert.match(String((bothInputs as { content?: string }).content), /either clips or asset_folder/i);
 } finally {
   await fs.rm(jobDirectory, { recursive: true, force: true });
+  await fs.rm(folderJobDirectory, { recursive: true, force: true });
+  await fs.rm(assetFolder, { recursive: true, force: true });
 }
 
 console.log("NOVA ranking video tool tests passed.");
