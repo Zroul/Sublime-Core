@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { createRankingEditPlan } from "./ranking-edit.js";
+import { createRankingEditPlan, toRankingRenderInput } from "./ranking-edit.js";
 
 const plan = createRankingEditPlan({
   title: "Cats Losing Their Minds",
@@ -22,7 +22,25 @@ assert.equal(plan.segments[0].soundCue, "hook_pop");
 assert.equal(plan.segments[1].soundCue, "none");
 assert.equal(plan.segments[2].soundCue, "rank_sting");
 assert.equal(plan.segments.at(-1)?.endSeconds, 30);
+
 assert.equal(plan.segments[0].onScreenLabel, "#3 BATH TIME");
+
+const renderInput = toRankingRenderInput(plan, "ranking-test", "nova/jobs/ranking-test/final.mp4");
+assert.equal(renderInput.action, "render");
+assert.equal(renderInput.id, "ranking-test");
+assert.equal(renderInput.aspect_ratio, "9:16");
+const renderScenes = renderInput.scenes as Array<Record<string, unknown>>;
+assert.equal(renderScenes.length, 3);
+assert.equal(renderScenes[0].asset_path, "assets/cats/bath-1.mp4");
+assert.equal(renderScenes[0].asset_media_type, "video");
+assert.equal(renderScenes[0].text, "#3 BATH TIME");
+assert.equal(renderScenes[0].duration, 10);
+assert.throws(() => toRankingRenderInput({
+  ...plan,
+  segments: [{ ...plan.segments[0], path: "../../outside.mp4" }],
+}, "ranking-test", "final.mp4"), /inside workspace\/assets/);
+assert.throws(() => toRankingRenderInput(plan, "", "final.mp4"), /non-empty job id/);
+
 
 const redistributed = createRankingEditPlan({
   targetSeconds: 20,
