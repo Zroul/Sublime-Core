@@ -219,6 +219,19 @@ export function createVideoEngineTool(
           required: ["duration"],
         },
       },
+      sound_cues: {
+        type: "array",
+        maxItems: 30,
+        items: {
+          type: "object",
+          additionalProperties: false,
+          properties: {
+            kind: { type: "string", enum: ["hook_pop", "rank_sting"] },
+            at_seconds: { type: "number", minimum: 0 },
+          },
+          required: ["kind", "at_seconds"],
+        },
+      },
       path: { type: "string" },
     },
     required: ["action"],
@@ -378,6 +391,21 @@ export function createVideoEngineTool(
           };
         }));
 
+        const totalDuration = validScenes.reduce((sum, scene) => sum + scene.duration, 0);
+        const rawSoundCues = Array.isArray(input.sound_cues) ? input.sound_cues : [];
+        if (rawSoundCues.length > 30) throw new Error("sound_cues may contain at most 30 cues.");
+        const soundCues = rawSoundCues.map((raw, index) => {
+          if (!raw || typeof raw !== "object") throw new Error("Sound cue " + (index + 1) + " must be an object.");
+          const cue = raw as Record<string, unknown>;
+          const kind = cue.kind;
+          const atSeconds = Number(cue.at_seconds);
+          if ((kind !== "hook_pop" && kind !== "rank_sting") ||
+              !Number.isFinite(atSeconds) || atSeconds < 0 || atSeconds >= totalDuration) {
+            throw new Error("Sound cue " + (index + 1) + " has an unsupported kind or invalid timeline position.");
+          }
+          return { kind, atSeconds };
+        });
+
         const id = safeId(String(input.id ?? "render"));
         const output = await resolveWorkspacePath(String(input.output ?? ("nova/videos/" + id + ".mp4")));
         await fs.mkdir(path.dirname(output), { recursive: true });
@@ -457,16 +485,35 @@ export function createVideoEngineTool(
         });
 
         const concatInputs = validScenes.map((_, index) => "[v" + index + "]").join("");
-        const filterComplex = filters.join(";") + ";" + concatInputs + "concat=n=" + validScenes.length + ":v=1:a=0[v]";
+        let filterComplex = filters.join(";") + ";" + concatInputs + "concat=n=" + validScenes.length + ":v=1:a=0[v]";
+        const audioFilters: string[] = [];
+        soundCues.forEach((cue, index) => {
+          const audioInputIndex = validScenes.length + index;
+          const frequency = cue.kind === "hook_pop" ? 880 : 660;
+          inputs.push("-f", "lavfi", "-t", "0.32", "-i", "sine=frequency=" + frequency + ":sample_rate=48000");
+          audioFilters.push(
+            "[" + audioInputIndex + ":a]afade=t=out:st=0.08:d=0.24,volume=0.32,adelay=" +
+            Math.round(cue.atSeconds * 1000) + ":all=1[a" + index + "]",
+          );
+        });
+        if (soundCues.length > 0) {
+          const cueInputs = soundCues.map((_, index) => "[a" + index + "]").join("");
+          filterComplex += ";" + audioFilters.join(";") + ";" + cueInputs +
+            "amix=inputs=" + soundCues.length + ":duration=longest:dropout_transition=0," +
+            "apad=whole_dur=" + totalDuration + ",atrim=duration=" + totalDuration + "[aout]";
+        }
 
-        await runCommand("ffmpeg", [
+        const ffmpegArgs = [
           "-y", ...inputs, "-filter_complex", filterComplex, "-map", "[v]",
-          "-c:v", "libx264", "-pix_fmt", "yuv420p", "-r", "30", "-movflags", "+faststart", output,
-        ]);
+          "-c:v", "libx264", "-pix_fmt", "yuv420p", "-r", "30",
+        ];
+        if (soundCues.length > 0) ffmpegArgs.push("-map", "[aout]", "-c:a", "aac", "-b:a", "128k");
+        ffmpegArgs.push("-movflags", "+faststart", output);
+        await runCommand("ffmpeg", ffmpegArgs);
         const stat = await fs.stat(output);
         if (!stat.isFile() || stat.size <= 0) throw new Error("FFmpeg exited without producing a non-empty output file.");
 
-        const durationSeconds = validScenes.reduce((sum, scene) => sum + scene.duration, 0);
+        const durationSeconds = totalDuration;
         const outputPath = relativeWorkspacePath(output);
         const specification: VideoSpecification = {
           width: dimensions.width,
@@ -481,7 +528,7 @@ export function createVideoEngineTool(
           sceneCount: validScenes.length,
           specification,
         };
-        return JSON.stringify({ ...result, action, aspectRatio });
+        return JSON.stringify({ ...result, action, aspectRatio, audioTrackPresent: soundCues.length > 0, soundCueCount: soundCues.length });
       }
 
       return { toolCallId: "", content: "video_engine action must be create_test, render, or probe.", isError: true };
