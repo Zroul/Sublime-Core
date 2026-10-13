@@ -79,7 +79,7 @@ export function createRankingVideoTool(videoEngine: Tool = videoEngineTool): Too
       required: ["target_seconds", "clips"],
       additionalProperties: false,
     },
-    async handler(args: Record<string, unknown>, ctx: AgentState): Promise<string> {
+    async handler(args: Record<string, unknown>, ctx: AgentState) {
       try {
         const rawClips = args.clips;
         if (!Array.isArray(rawClips) || rawClips.length === 0 || rawClips.length > 30) {
