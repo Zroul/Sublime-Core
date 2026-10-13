@@ -172,7 +172,7 @@ export function createVideoEngineTool(
   return {
   name: "video_engine",
   description:
-    "Local video production engine using installed FFmpeg/ffprobe. Renders the normalized editing timeline from editing_module. Supports safe wrapped text, text sizing, and top/center/bottom caption positioning. Use render for real scene timelines and create_test only for generic tests.",
+    "Local video production engine using installed FFmpeg/ffprobe. Renders normalized video timelines and optional original synthesized sound cues. Supports safe wrapped text and timed captions. Use render for real scene timelines and create_test only for generic tests.",
   parameters: {
     type: "object",
     properties: {
