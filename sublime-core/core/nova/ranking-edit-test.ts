@@ -58,6 +58,29 @@ assert.deepEqual(redistributed.segments.map((segment) => segment.durationSeconds
 assert.ok(redistributed.segments.every((segment) => segment.sourceEndSeconds <= segment.sourceDurationSeconds));
 assert.equal(redistributed.segments.at(-1)?.endSeconds, 20);
 
+const scoredPlan = createRankingEditPlan({
+  targetSeconds: 9,
+  clips: [
+    { id: "best", path: "assets/best.mp4", category: "funny", durationSeconds: 5, entertainmentScore: 90 },
+    { id: "least", path: "assets/least.mp4", category: "other", durationSeconds: 5, entertainmentScore: 10 },
+    { id: "middle", path: "assets/middle.mp4", category: "angry", durationSeconds: 5, entertainmentScore: 50 },
+  ],
+});
+assert.deepEqual(scoredPlan.segments.map((segment) => segment.clipId), ["least", "middle", "best"]);
+assert.deepEqual(scoredPlan.segments.map((segment) => segment.entertainmentScore), [10, 50, 90]);
+assert.match(scoredPlan.notes[0], /sorted from least to most entertaining/);
+assert.throws(() => createRankingEditPlan({
+  targetSeconds: 9,
+  clips: [
+    { id: "scored", path: "a.mp4", category: "funny", durationSeconds: 5, entertainmentScore: 80 },
+    { id: "unscored", path: "b.mp4", category: "other", durationSeconds: 5 },
+  ],
+}), /for every clip or for none/);
+assert.throws(() => createRankingEditPlan({
+  targetSeconds: 3,
+  clips: [{ id: "invalid-score", path: "a.mp4", category: "funny", durationSeconds: 3, entertainmentScore: 101 }],
+}), /between 1 and 100/);
+
 assert.throws(() => createRankingEditPlan({ clips: [], targetSeconds: 30 }), /at least one/);
 assert.throws(() => createRankingEditPlan({
   targetSeconds: 30,
