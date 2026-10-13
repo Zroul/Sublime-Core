@@ -183,11 +183,12 @@ export function toRankingRenderInput(
 
   const scenes = plan.segments.map((segment, index) => {
     const normalized = segment.path.split(String.fromCharCode(92)).join("/");
+    const pathSegments = normalized.split("/");
     if (
       !normalized.startsWith("assets/") ||
-      normalized.includes("../") ||
       normalized.startsWith("/") ||
-      /^[a-z]:/i.test(normalized)
+      /^[a-z]:/i.test(normalized) ||
+      pathSegments.some((part) => !part || part === "." || part === "..")
     ) {
       throw new Error(`Ranking clip "${segment.clipId}" must be inside workspace/assets.`);
     }
