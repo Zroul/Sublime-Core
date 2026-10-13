@@ -1,0 +1,52 @@
+name: NOVA tests
+
+on:
+  push:
+    branches:
+      - main
+      - "feat/nova-ranking-edits"
+      - "fix/nova-empty-response-recovery"
+    paths:
+      - "sublime-core/core/nova/**"
+      - "sublime-core/core/ai/tools/video-engine.ts"
+      - "sublime-core/core/ai/tools/workspace-path.ts"
+      - "sublime-core/package.json"
+      - "sublime-core/package-lock.json"
+      - "sublime-core/tsconfig.json"
+      - ".github/workflows/nova-tests.yml"
+  pull_request:
+    paths:
+      - "sublime-core/core/nova/**"
+      - "sublime-core/core/ai/tools/video-engine.ts"
+      - "sublime-core/core/ai/tools/workspace-path.ts"
+      - "sublime-core/package.json"
+      - "sublime-core/package-lock.json"
+      - "sublime-core/tsconfig.json"
+      - ".github/workflows/nova-tests.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  nova-tests:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: sublime-core
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: sublime-core/package-lock.json
+      - name: Install FFmpeg
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes ffmpeg
+      - name: Install dependencies
+        run: npm ci
+      - name: Run NOVA test suite
+        run: npm run nova:test
