@@ -33,6 +33,7 @@ import { resolveWorkspacePath } from "../ai/tools/workspace-path.js";
 import { createNovaGuard } from "./guard.js";
 import { createRankingVideoTool } from "./ranking-video-tool.js";
 import { createVisionCategorizerTool } from "./vision-categorizer.js";
+import { createLocalAssetImportTool } from "./asset-library.js";
 import { NOVA_SYSTEM_PROMPT } from "./system.js";
 import {
   createRunId,
@@ -96,6 +97,7 @@ export async function runTask(
     options.videoEngine ?? videoEngineTool,
     createRankingVideoTool(options.videoEngine ?? videoEngineTool),
     createVisionCategorizerTool(),
+    createLocalAssetImportTool(),
     mediaCapabilitiesTool,
     createVideoProductionTool(provider, {
       ...options.productionDependencies,
@@ -110,7 +112,9 @@ export async function runTask(
     /\b(?:ranking|ranked|top\s+\d+|compilation)\b/i.test(task) &&
     /\b(?:cat|cats|dog|dogs|pet|pets)\b/i.test(task) &&
     /\b(?:video|edit|compilation|shorts)\b/i.test(task);
-  const activeTools = directVideoCategorization
+  const activeTools = directLocalAssetImport
+    ? registeredTools.filter((tool) => tool.name === "import_local_assets")
+    : directVideoCategorization
     ? registeredTools.filter((tool) => tool.name === "categorize_videos")
     : directRankingProduction
       ? registeredTools.filter((tool) => tool.name === "ranking_video")
