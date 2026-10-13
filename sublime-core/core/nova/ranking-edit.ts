@@ -13,6 +13,8 @@ export interface RankingClip {
   path: string;
   category: RankingCategory;
   durationSeconds: number;
+  /** Optional reviewed score; 1 is least entertaining and 100 is most entertaining. */
+  entertainmentScore?: number;
   title?: string;
   sourceNote?: string;
 }
@@ -23,6 +25,7 @@ export interface RankingEditSegment {
   path: string;
   category: RankingCategory;
   sourceDurationSeconds: number;
+  entertainmentScore?: number;
   /** In/out points in the rendered output timeline. */
   startSeconds: number;
   endSeconds: number;
@@ -66,6 +69,10 @@ function validateClip(clip: RankingClip): void {
   if (!Number.isFinite(clip.durationSeconds) || clip.durationSeconds <= 0) {
     throw new Error(`Ranking clip "${clip.id}" must have a positive duration.`);
   }
+  if (clip.entertainmentScore !== undefined &&
+      (!Number.isFinite(clip.entertainmentScore) || clip.entertainmentScore < 1 || clip.entertainmentScore > 100)) {
+    throw new Error(`Ranking clip "${clip.id}" entertainmentScore must be between 1 and 100.`);
+  }
 }
 
 /** Allocate the target fairly without ever asking for more source footage than exists. */
@@ -98,8 +105,8 @@ function allocateDurations(capacitySeconds: number[], targetSeconds: number): nu
 }
 
 /**
- * Builds a narration-free plan. Input order is preserved; callers should pass
- * clips in the reviewed order they want displayed, least-to-most entertaining.
+ * Builds a narration-free plan. When every clip has a reviewed entertainmentScore,
+ * clips are sorted from least to most entertaining; otherwise input order is preserved.
  */
 export function createRankingEditPlan(input: {
   clips: RankingClip[];
@@ -126,9 +133,16 @@ export function createRankingEditPlan(input: {
     seen.add(clip.id);
   }
 
-  const durations = allocateDurations(clips.map((clip) => clip.durationSeconds), targetSeconds);
+  const scoredCount = clips.filter((clip) => clip.entertainmentScore !== undefined).length;
+  if (scoredCount > 0 && scoredCount !== clips.length) {
+    throw new Error("Provide entertainmentScore for every clip or for none of them.");
+  }
+  const orderedClips = scoredCount > 0
+    ? [...clips].sort((a, b) => (a.entertainmentScore as number) - (b.entertainmentScore as number))
+    : clips;
+  const durations = allocateDurations(orderedClips.map((clip) => clip.durationSeconds), targetSeconds);
   let cursorMs = 0;
-  const segments = clips.map((clip, index) => {
+  const segments = orderedClips.map((clip, index) => {
     const durationMs = Math.round(durations[index] * 1000);
     const startMs = cursorMs;
     const endMs = startMs + durationMs;
@@ -140,6 +154,7 @@ export function createRankingEditPlan(input: {
       path: clip.path,
       category: clip.category,
       sourceDurationSeconds: clip.durationSeconds,
+      ...(clip.entertainmentScore !== undefined ? { entertainmentScore: clip.entertainmentScore } : {}),
       startSeconds: startMs / 1000,
       endSeconds: endMs / 1000,
       sourceStartSeconds: 0,
@@ -158,7 +173,9 @@ export function createRankingEditPlan(input: {
     narration: false,
     segments,
     notes: [
-      "Clip order is preserved; arrange clips from least to most entertaining after reviewing the source footage.",
+      scoredCount > 0
+        ? "Clips were sorted from least to most entertaining by the supplied reviewed entertainmentScore values."
+        : "Clip order is preserved; arrange clips from least to most entertaining after reviewing the source footage.",
       "Hook and rank cues are short original synthesized tones; no external sound asset or narration is required.",
       "Only use source clips you own or have permission to edit and publish.",
     ],
