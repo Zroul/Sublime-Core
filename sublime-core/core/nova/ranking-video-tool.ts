@@ -54,12 +54,12 @@ function validateAssetPath(value: unknown): string {
 const VIDEO_EXTENSIONS = new Set([".mp4", ".mov", ".mkv", ".webm", ".m4v"]);
 
 function inferCategory(relativePath: string): RankingCategory {
-  const normalized = relativePath.toLowerCase().replace(/[\\s_]+/g, "-");
-  if (/\\b(fight|fighting|battle|brawl)\\b/.test(normalized)) return "fighting";
-  if (/\\b(bath|bathing|shower|wash)\\b/.test(normalized)) return "bath";
-  if (/\\b(vet|veterinary|clinic)\\b/.test(normalized)) return "vet";
-  if (/\\b(angry|anger|mad|hiss|hissing)\\b/.test(normalized)) return "angry";
-  if (/\\b(funny|funniest|chaos|silly|fail)\\b/.test(normalized)) return "funny";
+  const normalized = relativePath.toLowerCase().replace(/[\s_]+/g, "-");
+  if (/\b(fight|fighting|battle|brawl)\b/.test(normalized)) return "fighting";
+  if (/\b(bath|bathing|shower|wash)\b/.test(normalized)) return "bath";
+  if (/\b(vet|veterinary|clinic)\b/.test(normalized)) return "vet";
+  if (/\b(angry|anger|mad|hiss|hissing)\b/.test(normalized)) return "angry";
+  if (/\b(funny|funniest|chaos|silly|fail)\b/.test(normalized)) return "funny";
   return "other";
 }
 
