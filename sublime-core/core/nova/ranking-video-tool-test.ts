@@ -13,7 +13,7 @@ const mockEngine: Tool = {
     calls.push(args);
     if (args.action === "probe") {
       const source = String(args.path ?? "");
-      const durationSeconds = source.endsWith("short.mp4") ? 8 : source.endsWith("long.mp4") ? 12 : 20;
+      const durationSeconds = source.endsWith("short.mp4") ? 8 : source.endsWith("long.mp4") ? 12 : 15;
       return JSON.stringify({
         ok: true,
         valid: true,
@@ -49,7 +49,7 @@ try {
   assert.equal(parsed.validated, true);
   assert.equal(parsed.narration, false);
   assert.equal(parsed.clipCount, 2);
-  assert.equal(parsed.durationSeconds, 20);
+  assert.equal(parsed.durationSeconds, 15);
   assert.equal(calls.filter((call) => call.action === "probe").length, 3);
   const render = calls.find((call) => call.action === "render");
   assert.ok(render);
