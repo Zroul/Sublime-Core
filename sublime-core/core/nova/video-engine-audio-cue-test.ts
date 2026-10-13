@@ -20,6 +20,16 @@ function parseResult(value: unknown): Record<string, unknown> {
 }
 
 try {
+  const invalidCue = await videoEngineTool.handler({
+    action: "render",
+    id: jobId + "-invalid",
+    output: outputPath,
+    aspect_ratio: "9:16",
+    scenes: [{ duration: 2, text: "INVALID CUE TEST", background: "202020" }],
+    sound_cues: [{ kind: "hook_pop", at_seconds: 2 }],
+  }, context);
+  assert.equal((invalidCue as { isError?: boolean }).isError, true, "cue at the exact end of the timeline must be rejected");
+
   const rendered = parseResult(await videoEngineTool.handler({
     action: "render",
     id: jobId,
