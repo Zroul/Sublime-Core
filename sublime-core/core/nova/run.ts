@@ -105,6 +105,8 @@ export async function runTask(
     }),
     runCommandTool,
   ];
+  const directLocalAssetImport =
+    /\b(?:import|copy|bring)\b/i.test(task) && /\b(?:local\s+)?assets?\b/i.test(task) && /\b(?:clips?|memes?|videos?)\b/i.test(task);
   const directVideoCategorization =
     /\b(?:categorize|categorise|classify|sort|organize|organise)\b/i.test(task) &&
     /\b(?:videos?|clips?|footage)\b/i.test(task);
