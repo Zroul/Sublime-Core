@@ -18,11 +18,12 @@ const mockEngine: Tool = {
         ok: true,
         valid: true,
         outputPath: source,
-        metadata: { formatName: "mov,mp4", durationSeconds, streams: [{ type: "video", codec: "h264" }] },
+        metadata: { formatName: "mov,mp4", durationSeconds, streams: [{ type: "video", codec: "h264" }, ...(source.endsWith("final.mp4") ? [{ type: "audio", codec: "aac" }] : [])] },
       });
     }
     if (args.action === "render") {
-      return JSON.stringify({ ok: true, outputPath: String(args.output) });
+      const soundCues = Array.isArray(args.sound_cues) ? args.sound_cues : [];
+      return JSON.stringify({ ok: true, outputPath: String(args.output), audioTrackPresent: soundCues.length > 0, soundCueCount: soundCues.length });
     }
     return { toolCallId: "", content: "Unexpected action", isError: true };
   },
@@ -48,12 +49,18 @@ try {
   assert.equal(parsed.ok, true);
   assert.equal(parsed.validated, true);
   assert.equal(parsed.narration, false);
+  assert.equal(parsed.soundCueCount, 2);
+  assert.match(parsed.soundCues, /synthesized/);
   assert.equal(parsed.clipCount, 2);
   assert.equal(parsed.durationSeconds, 15);
   assert.equal(calls.filter((call) => call.action === "probe").length, 3);
   const render = calls.find((call) => call.action === "render");
   assert.ok(render);
   assert.equal(render.aspect_ratio, "9:16");
+  assert.deepEqual(render.sound_cues, [
+    { kind: "hook_pop", at_seconds: 0 },
+    { kind: "rank_sting", at_seconds: 7.5 },
+  ]);
   const scenes = render.scenes as Array<Record<string, unknown>>;
   assert.deepEqual(scenes.map((scene) => scene.duration), [7.5, 7.5]);
   assert.equal(scenes[0].asset_path, "assets/cats/short.mp4");
