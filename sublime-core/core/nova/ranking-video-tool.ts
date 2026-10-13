@@ -74,7 +74,7 @@ async function discoverAssetClips(folderValue: unknown): Promise<Array<{ id: str
   async function walk(relativeDirectory: string): Promise<void> {
     const absoluteDirectory = await resolveWorkspacePath(relativeDirectory);
     const entries = await fs.readdir(absoluteDirectory, { withFileTypes: true });
-    entries.sort((a, b) => a.name.localeCompare(b.name));
+    entries.sort((a, b) => a.name < b.name ? -1 : a.name > b.name ? 1 : 0);
     for (const entry of entries) {
       visitedEntries += 1;
       if (visitedEntries > 1000) throw new Error("asset_folder contains too many entries; keep a folder scan under 1000 entries.");
@@ -89,7 +89,7 @@ async function discoverAssetClips(folderValue: unknown): Promise<Array<{ id: str
   }
 
   await walk(folder);
-  discoveredPaths.sort((a, b) => a.localeCompare(b));
+  discoveredPaths.sort((a, b) => a < b ? -1 : a > b ? 1 : 0);
   if (discoveredPaths.length === 0) throw new Error("asset_folder contains no supported video files.");
   return discoveredPaths.map((clipPath, index) => ({
     id: "clip-" + String(index + 1).padStart(2, "0"),
