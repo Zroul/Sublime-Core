@@ -125,10 +125,11 @@ export function createRankingVideoTool(videoEngine: Tool = videoEngineTool): Too
           title: typeof args.title === "string" ? args.title : undefined,
         });
         const jobRoot = "nova/jobs/" + jobId;
+        const jobDirectory = await resolveWorkspacePath(jobRoot);
         const planPath = await resolveWorkspacePath(path.join(jobRoot, "ranking-plan.json"));
-        await fs.mkdir(path.dirname(planPath), { recursive: true });
+        await fs.mkdir(path.dirname(jobDirectory), { recursive: true });
         try {
-          await fs.mkdir(await resolveWorkspacePath(jobRoot), { recursive: false });
+          await fs.mkdir(jobDirectory, { recursive: false });
         } catch (error) {
           if ((error as NodeJS.ErrnoException).code === "EEXIST") {
             throw new Error(`Ranking job "${jobId}" already exists; choose a new job_id to avoid overwriting its artifacts.`);
