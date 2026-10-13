@@ -57,7 +57,9 @@ try {
   const scenes = render.scenes as Array<Record<string, unknown>>;
   assert.deepEqual(scenes.map((scene) => scene.duration), [7.5, 7.5]);
   assert.equal(scenes[0].asset_path, "assets/cats/short.mp4");
-  const savedPlan = JSON.parse(await fs.readFile(path.join(jobDirectory, "ranking-plan.json"), "utf8"));
+  const savedPlanText = await fs.readFile(path.join(jobDirectory, "ranking-plan.json"), "utf8");
+  assert.ok(savedPlanText.endsWith("\n"), "saved ranking plan should end with a real newline");
+  const savedPlan = JSON.parse(savedPlanText);
   assert.equal(savedPlan.narration, false);
   assert.equal(savedPlan.segments.length, 2);
 
