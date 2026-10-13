@@ -32,6 +32,7 @@ import { visualPlannerTool } from "../ai/tools/visual-planner.js";
 import { resolveWorkspacePath } from "../ai/tools/workspace-path.js";
 import { createNovaGuard } from "./guard.js";
 import { createRankingVideoTool } from "./ranking-video-tool.js";
+import { createVisionCategorizerTool } from "./vision-categorizer.js";
 import { NOVA_SYSTEM_PROMPT } from "./system.js";
 import {
   createRunId,
@@ -94,6 +95,7 @@ export async function runTask(
     editingModuleTool,
     options.videoEngine ?? videoEngineTool,
     createRankingVideoTool(options.videoEngine ?? videoEngineTool),
+    createVisionCategorizerTool(),
     mediaCapabilitiesTool,
     createVideoProductionTool(provider, {
       ...options.productionDependencies,
@@ -101,15 +103,20 @@ export async function runTask(
     }),
     runCommandTool,
   ];
+  const directVideoCategorization =
+    /\b(?:categorize|categorise|classify|sort|organize|organise)\b/i.test(task) &&
+    /\b(?:videos?|clips?|footage)\b/i.test(task);
   const directRankingProduction =
     /\b(?:ranking|ranked|top\s+\d+|compilation)\b/i.test(task) &&
     /\b(?:cat|cats|dog|dogs|pet|pets)\b/i.test(task) &&
     /\b(?:video|edit|compilation|shorts)\b/i.test(task);
-  const activeTools = directRankingProduction
-    ? registeredTools.filter((tool) => tool.name === "ranking_video")
-    : directVideoProduction
-      ? registeredTools.filter((tool) => tool.name === "video_production")
-      : registeredTools;
+  const activeTools = directVideoCategorization
+    ? registeredTools.filter((tool) => tool.name === "categorize_videos")
+    : directRankingProduction
+      ? registeredTools.filter((tool) => tool.name === "ranking_video")
+      : directVideoProduction
+        ? registeredTools.filter((tool) => tool.name === "video_production")
+        : registeredTools;
 
   let result: AgentRunResult;
   try {
