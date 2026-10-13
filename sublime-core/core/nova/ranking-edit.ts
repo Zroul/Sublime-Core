@@ -60,7 +60,7 @@ function validateClip(clip: RankingClip): void {
   if (typeof clip.path !== "string" || !clip.path.trim()) {
     throw new Error(`Ranking clip "${clip.id}" needs a media path.`);
   }
-  if (!(clip.category in CATEGORY_LABELS)) {
+  if (!Object.hasOwn(CATEGORY_LABELS, clip.category)) {
     throw new Error(`Ranking clip "${clip.id}" has an unsupported category.`);
   }
   if (!Number.isFinite(clip.durationSeconds) || clip.durationSeconds <= 0) {
@@ -181,7 +181,7 @@ export function toRankingRenderInput(
   if (!outputPath.trim()) throw new Error("A ranking render needs an output path.");
 
   const scenes = plan.segments.map((segment, index) => {
-    const normalized = segment.path.replace(/\\\\/g, "/");
+    const normalized = segment.path.split(String.fromCharCode(92)).join("/");
     if (
       !normalized.startsWith("assets/") ||
       normalized.includes("../") ||
