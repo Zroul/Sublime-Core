@@ -17,18 +17,31 @@ assert.equal(plan.title, "Cats Losing Their Minds");
 assert.equal(plan.segments.length, 3);
 assert.deepEqual(plan.segments.map((segment) => segment.rank), [3, 2, 1]);
 assert.deepEqual(plan.segments.map((segment) => segment.durationSeconds), [10, 10, 10]);
+assert.deepEqual(plan.segments.map((segment) => segment.sourceEndSeconds), [10, 10, 10]);
 assert.equal(plan.segments[0].soundCue, "hook_pop");
 assert.equal(plan.segments[1].soundCue, "none");
 assert.equal(plan.segments[2].soundCue, "rank_sting");
 assert.equal(plan.segments.at(-1)?.endSeconds, 30);
 assert.equal(plan.segments[0].onScreenLabel, "#3 BATH TIME");
 
+const redistributed = createRankingEditPlan({
+  targetSeconds: 20,
+  clips: [
+    { id: "short", path: "short.mp4", category: "funny", durationSeconds: 2 },
+    { id: "long-a", path: "long-a.mp4", category: "other", durationSeconds: 15 },
+    { id: "long-b", path: "long-b.mp4", category: "angry", durationSeconds: 15 },
+  ],
+});
+assert.deepEqual(redistributed.segments.map((segment) => segment.durationSeconds), [2, 9, 9]);
+assert.ok(redistributed.segments.every((segment) => segment.sourceEndSeconds <= segment.sourceDurationSeconds));
+assert.equal(redistributed.segments.at(-1)?.endSeconds, 20);
+
 assert.throws(() => createRankingEditPlan({ clips: [], targetSeconds: 30 }), /at least one/);
 assert.throws(() => createRankingEditPlan({
   targetSeconds: 30,
   clips: [
-    { id: "same", path: "a.mp4", category: "funny", durationSeconds: 3 },
-    { id: "same", path: "b.mp4", category: "other", durationSeconds: 3 },
+    { id: "same", path: "a.mp4", category: "funny", durationSeconds: 15 },
+    { id: "same", path: "b.mp4", category: "other", durationSeconds: 15 },
   ],
 }), /Duplicate/);
 assert.throws(() => createRankingEditPlan({
@@ -39,5 +52,13 @@ assert.throws(() => createRankingEditPlan({
   targetSeconds: 30,
   clips: [{ id: "x", path: "x.mp4", category: "other", durationSeconds: 0 }],
 }), /positive duration/);
+assert.throws(() => createRankingEditPlan({
+  targetSeconds: 30,
+  clips: [{ id: "short", path: "short.mp4", category: "funny", durationSeconds: 5 }],
+}), /not contain enough source footage/);
+assert.throws(() => createRankingEditPlan({
+  targetSeconds: 3,
+  clips: [{ id: "bad-category", path: "bad.mp4", category: "surprise", durationSeconds: 3 } as never],
+}), /unsupported category/);
 
 console.log("NOVA ranking edit planner tests passed.");
