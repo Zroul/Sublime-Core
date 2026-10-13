@@ -72,7 +72,7 @@ try {
     clips: [{ id: "bad", path: "assets/..", category: "funny" }],
   }, context);
   assert.equal((disguisedTraversal as { isError?: boolean }).isError, true);
-  assert.match(String((disguisedTraversal as { content?: string }).content), /inside workspace\\/assets|paths inside workspace\\/assets/i);
+  assert.ok(String((disguisedTraversal as { content?: string }).content).includes("workspace/assets"));
 
   const collision = await tool.handler({
     job_id: jobId,
