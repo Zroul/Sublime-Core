@@ -102,9 +102,9 @@ export async function runTask(
     runCommandTool,
   ];
   const directRankingProduction =
-    /\\b(?:ranking|ranked|top\\s+\\d+|compilation)\\b/i.test(task) &&
-    /\\b(?:cat|cats|dog|dogs|pet|pets)\\b/i.test(task) &&
-    /\\b(?:video|edit|compilation|shorts)\\b/i.test(task);
+    /\b(?:ranking|ranked|top\s+\d+|compilation)\b/i.test(task) &&
+    /\b(?:cat|cats|dog|dogs|pet|pets)\b/i.test(task) &&
+    /\b(?:video|edit|compilation|shorts)\b/i.test(task);
   const activeTools = directRankingProduction
     ? registeredTools.filter((tool) => tool.name === "ranking_video")
     : directVideoProduction
