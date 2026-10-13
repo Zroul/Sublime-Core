@@ -159,7 +159,7 @@ export function createRankingEditPlan(input: {
     segments,
     notes: [
       "Clip order is preserved; arrange clips from least to most entertaining after reviewing the source footage.",
-      "Sound cues are edit markers only; the renderer must confirm a licensed/local sound asset exists before adding audio.",
+      "Hook and rank cues are short original synthesized tones; no external sound asset or narration is required.",
       "Only use source clips you own or have permission to edit and publish.",
     ],
   };
