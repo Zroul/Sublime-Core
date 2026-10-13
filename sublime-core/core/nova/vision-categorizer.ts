@@ -2,7 +2,6 @@ import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { constants as fsConstants, promises as fs } from "node:fs";
 import path from "node:path";
-import { createHash } from "node:crypto";
 import type { Tool } from "../reasoning/types.js";
 import { discoverMediaCapabilities } from "../ai/tools/media-environment.js";
 import { resolveWorkspacePath } from "../ai/tools/workspace-path.js";
@@ -245,16 +244,19 @@ export function createVisionCategorizerTool(): Tool {
                 framePaths.push(framePath);
               }
             }
-            if (framePaths.length === 0) {
-              results.push({ source: relativeSource, category: "uncertain", confidence: 0, reason: "Could not extract readable frames.", copiedTo: null });
-              continue;
-            }
             let classification: VisionClassification;
-            try {
-              classification = await classifyFrames(baseUrl, model, animal, framePaths);
-            } catch (error) {
-              results.push({ source: relativeSource, category: "uncertain", confidence: 0, reason: "Vision analysis failed: " + (error instanceof Error ? error.message : String(error)).slice(0, 180), copiedTo: null });
-              continue;
+            if (framePaths.length === 0) {
+              classification = { category: "uncertain", confidence: 0, reason: "Could not extract readable frames." };
+            } else {
+              try {
+                classification = await classifyFrames(baseUrl, model, animal, framePaths);
+              } catch (error) {
+                classification = {
+                  category: "uncertain",
+                  confidence: 0,
+                  reason: ("Vision analysis failed: " + (error instanceof Error ? error.message : String(error))).slice(0, 180),
+                };
+              }
             }
             const category: CategoryKey = classification.confidence < threshold ? "uncertain" : classification.category;
             const destinationName = names[category];
