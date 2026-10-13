@@ -66,6 +66,21 @@ try {
     clips: [{ id: "bad", path: "../outside.mp4", category: "funny" }],
   }, context);
   assert.equal((failed as { isError?: boolean }).isError, true);
+
+  const disguisedTraversal = await tool.handler({
+    target_seconds: 3,
+    clips: [{ id: "bad", path: "assets/..", category: "funny" }],
+  }, context);
+  assert.equal((disguisedTraversal as { isError?: boolean }).isError, true);
+  assert.match(String((disguisedTraversal as { content?: string }).content), /inside workspace\\/assets|paths inside workspace\\/assets/i);
+
+  const collision = await tool.handler({
+    job_id: jobId,
+    target_seconds: 3,
+    clips: [{ id: "short", path: "assets/cats/short.mp4", category: "funny" }],
+  }, context);
+  assert.equal((collision as { isError?: boolean }).isError, true);
+  assert.match(String((collision as { content?: string }).content), /already exists/i);
 } finally {
   await fs.rm(jobDirectory, { recursive: true, force: true });
 }
