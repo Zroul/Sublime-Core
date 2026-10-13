@@ -105,7 +105,7 @@ async function discoverAssetClips(folderValue: unknown): Promise<Array<{ id: str
 export function createRankingVideoTool(videoEngine: Tool = videoEngineTool): Tool {
   return {
     name: "ranking_video",
-    description: "Create a narration-free cat/dog ranking edit from approved clips in workspace/assets. Supply clips explicitly or use asset_folder to discover up to 30 local videos and infer categories from folder names. Probes real durations, renders synthesized hook/rank tones, saves the plan, and validates the final MP4. Does not download or publish footage.",
+    description: "Create a narration-free cat/dog ranking edit from approved clips in workspace/assets. Supply clips explicitly or use asset_folder to discover up to 30 local videos and infer categories from folder names. Optional reviewed entertainment_score values (1-100) sort clips least-to-most entertaining. Probes real durations, renders synthesized hook/rank tones, saves the plan, and validates the final MP4. Does not download or publish footage.",
     parameters: {
       type: "object",
       properties: {
@@ -125,6 +125,7 @@ export function createRankingVideoTool(videoEngine: Tool = videoEngineTool): Too
               id: { type: "string", minLength: 1, maxLength: 80 },
               path: { type: "string", minLength: 1, maxLength: 500 },
               category: { type: "string", enum: ["angry", "bath", "vet", "fighting", "funny", "other"] },
+              entertainment_score: { type: "number", minimum: 1, maximum: 100 },
             },
             required: ["id", "path", "category"],
           },
@@ -172,7 +173,16 @@ export function createRankingVideoTool(videoEngine: Tool = videoEngineTool): Too
           if (probe.ok !== true || probe.valid !== true || !Number.isFinite(durationSeconds) || durationSeconds <= 0) {
             throw new Error("Source clip " + id + " did not pass media validation.");
           }
-          clips.push({ id, path: assetPath, category, durationSeconds });
+          const entertainmentScore = item.entertainment_score === undefined
+            ? undefined
+            : Number(item.entertainment_score);
+          clips.push({
+            id,
+            path: assetPath,
+            category,
+            durationSeconds,
+            ...(entertainmentScore !== undefined ? { entertainmentScore } : {}),
+          });
         }
 
         const plan = createRankingEditPlan({
