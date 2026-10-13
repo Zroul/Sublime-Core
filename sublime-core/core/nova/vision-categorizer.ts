@@ -289,7 +289,7 @@ export function createVisionCategorizerTool(): Tool {
           results,
         };
         await fs.writeFile(reportPath, JSON.stringify(report, null, 2) + "\n", "utf8");
-        return JSON.stringify({ ...report, reportPath: path.relative(await resolveWorkspacePath("workspace"), reportPath).replaceAll("\\", "/") });
+        return JSON.stringify({ ...report, reportPath: path.relative(await resolveWorkspacePath("."), reportPath).replaceAll("\\", "/") });
       } catch (error) {
         return {
           toolCallId: "",
