@@ -1,0 +1,43 @@
+import assert from "node:assert/strict";
+import { createRankingEditPlan } from "./ranking-edit.js";
+
+const plan = createRankingEditPlan({
+  title: "Cats Losing Their Minds",
+  targetSeconds: 30,
+  clips: [
+    { id: "bath-1", path: "assets/cats/bath-1.mp4", category: "bath", durationSeconds: 12 },
+    { id: "angry-2", path: "assets/cats/angry-2.mp4", category: "angry", durationSeconds: 8 },
+    { id: "vet-3", path: "assets/cats/vet-3.mp4", category: "vet", durationSeconds: 15 },
+  ],
+});
+
+assert.equal(plan.type, "nova_ranking_edit_v1");
+assert.equal(plan.narration, false);
+assert.equal(plan.title, "Cats Losing Their Minds");
+assert.equal(plan.segments.length, 3);
+assert.deepEqual(plan.segments.map((segment) => segment.rank), [3, 2, 1]);
+assert.deepEqual(plan.segments.map((segment) => segment.durationSeconds), [10, 10, 10]);
+assert.equal(plan.segments[0].soundCue, "hook_pop");
+assert.equal(plan.segments[1].soundCue, "none");
+assert.equal(plan.segments[2].soundCue, "rank_sting");
+assert.equal(plan.segments.at(-1)?.endSeconds, 30);
+assert.equal(plan.segments[0].onScreenLabel, "#3 BATH TIME");
+
+assert.throws(() => createRankingEditPlan({ clips: [], targetSeconds: 30 }), /at least one/);
+assert.throws(() => createRankingEditPlan({
+  targetSeconds: 30,
+  clips: [
+    { id: "same", path: "a.mp4", category: "funny", durationSeconds: 3 },
+    { id: "same", path: "b.mp4", category: "other", durationSeconds: 3 },
+  ],
+}), /Duplicate/);
+assert.throws(() => createRankingEditPlan({
+  targetSeconds: 0,
+  clips: [{ id: "x", path: "x.mp4", category: "other", durationSeconds: 3 }],
+}), /duration/);
+assert.throws(() => createRankingEditPlan({
+  targetSeconds: 30,
+  clips: [{ id: "x", path: "x.mp4", category: "other", durationSeconds: 0 }],
+}), /positive duration/);
+
+console.log("NOVA ranking edit planner tests passed.");
