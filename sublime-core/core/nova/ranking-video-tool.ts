@@ -39,7 +39,13 @@ function safeJobId(value: string): string {
 function validateAssetPath(value: unknown): string {
   if (typeof value !== "string" || !value.trim()) throw new Error("Every clip needs a workspace asset path.");
   const normalized = value.split(String.fromCharCode(92)).join("/");
-  if (!normalized.startsWith("assets/") || normalized.includes("../") || normalized.startsWith("/") || /^[a-z]:/i.test(normalized)) {
+  const segments = normalized.split("/");
+  if (
+    !normalized.startsWith("assets/") ||
+    normalized.startsWith("/") ||
+    /^[a-z]:/i.test(normalized) ||
+    segments.some((segment) => !segment || segment === "." || segment === "..")
+  ) {
     throw new Error("Ranking clips must use paths inside workspace/assets, such as assets/cats/clip-01.mp4.");
   }
   return normalized;
@@ -121,6 +127,14 @@ export function createRankingVideoTool(videoEngine: Tool = videoEngineTool): Too
         const jobRoot = "nova/jobs/" + jobId;
         const planPath = await resolveWorkspacePath(path.join(jobRoot, "ranking-plan.json"));
         await fs.mkdir(path.dirname(planPath), { recursive: true });
+        try {
+          await fs.mkdir(await resolveWorkspacePath(jobRoot), { recursive: false });
+        } catch (error) {
+          if ((error as NodeJS.ErrnoException).code === "EEXIST") {
+            throw new Error(`Ranking job "${jobId}" already exists; choose a new job_id to avoid overwriting its artifacts.`);
+          }
+          throw error;
+        }
         await fs.writeFile(planPath, JSON.stringify(plan, null, 2) + "\\n", "utf8");
 
         const outputPath = jobRoot + "/final.mp4";
