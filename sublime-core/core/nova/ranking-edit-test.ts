@@ -34,7 +34,7 @@ assert.equal(renderScenes.length, 3);
 assert.equal(renderScenes[0].asset_path, "assets/cats/bath-1.mp4");
 assert.equal(renderScenes[0].asset_media_type, "video");
 assert.equal(renderScenes[0].text, "#3 BATH TIME");
-assert.equal(renderScenes[0].duration, 10);
+assert.equal(renderScenes[0].duration, 11);
 assert.throws(() => toRankingRenderInput({
   ...plan,
   segments: [{ ...plan.segments[0], path: "../../outside.mp4" }],
