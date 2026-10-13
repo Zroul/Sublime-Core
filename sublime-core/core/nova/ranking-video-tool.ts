@@ -147,6 +147,11 @@ export function createRankingVideoTool(videoEngine: Tool = videoEngineTool): Too
         if (rendered.ok !== true || typeof rendered.outputPath !== "string") {
           throw new Error("The video engine did not confirm a rendered output file.");
         }
+        const expectedSoundCueCount = plan.segments.filter((segment) => segment.soundCue !== "none").length;
+        if (Number(rendered.soundCueCount) !== expectedSoundCueCount ||
+            (expectedSoundCueCount > 0 && rendered.audioTrackPresent !== true)) {
+          throw new Error("The video engine did not confirm all requested sound cues were rendered.");
+        }
         const finalPath = String(rendered.outputPath);
         const finalProbe = parseEngineResult(
           await videoEngine.handler({ action: "probe", path: finalPath }, ctx),
@@ -155,7 +160,12 @@ export function createRankingVideoTool(videoEngine: Tool = videoEngineTool): Too
         if (finalProbe.ok !== true || finalProbe.valid !== true) {
           throw new Error("The rendered ranking MP4 did not pass final media validation.");
         }
-        const actualDuration = Number((finalProbe.metadata as Record<string, unknown> | undefined)?.durationSeconds);
+        const finalMetadata = finalProbe.metadata as Record<string, unknown> | undefined;
+        const finalStreams = Array.isArray(finalMetadata?.streams) ? finalMetadata.streams as Array<Record<string, unknown>> : [];
+        if (expectedSoundCueCount > 0 && !finalStreams.some((stream) => stream.type === "audio")) {
+          throw new Error("The final ranking MP4 is missing its expected sound-effects audio track.");
+        }
+        const actualDuration = Number(finalMetadata?.durationSeconds);
         if (!Number.isFinite(actualDuration) || Math.abs(actualDuration - plan.targetSeconds) > 0.75) {
           throw new Error(`Rendered duration ${actualDuration}s does not match the requested ${plan.targetSeconds}s target.`);
         }
@@ -168,7 +178,8 @@ export function createRankingVideoTool(videoEngine: Tool = videoEngineTool): Too
           durationSeconds: actualDuration,
           clipCount: plan.segments.length,
           narration: false,
-          soundCues: "markers only; no sound effects were added",
+          soundCues: "original synthesized 8-bit-style tones rendered; no narration",
+          soundCueCount: expectedSoundCueCount,
           validated: true,
         });
       } catch (error) {
