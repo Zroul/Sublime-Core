@@ -178,7 +178,7 @@ export function createRankingVideoTool(videoEngine: Tool = videoEngineTool): Too
           durationSeconds: actualDuration,
           clipCount: plan.segments.length,
           narration: false,
-          soundCues: "original synthesized 8-bit-style tones rendered; no narration",
+          soundCues: "original synthesized tones rendered; no narration",
           soundCueCount: expectedSoundCueCount,
           validated: true,
         });
