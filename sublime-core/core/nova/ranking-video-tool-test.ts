@@ -34,6 +34,8 @@ const jobId = "ranking-tool-test";
 const jobDirectory = path.join(process.cwd(), "workspace", "nova", "jobs", jobId);
 const folderJobId = "ranking-folder-test";
 const folderJobDirectory = path.join(process.cwd(), "workspace", "nova", "jobs", folderJobId);
+const scoreJobId = "ranking-score-test";
+const scoreJobDirectory = path.join(process.cwd(), "workspace", "nova", "jobs", scoreJobId);
 const assetFolder = path.join(process.cwd(), "workspace", "assets", "NOVA-RANKING-FOLDER-TEST");
 const context = { messages: [], turn: 1, system: "test" };
 
@@ -126,6 +128,19 @@ try {
     "CAT ANGRY", "CAT DURING BATH", "CAT FIGHTING",
   ]);
 
+  const scoredResult = await tool.handler({
+    job_id: scoreJobId,
+    target_seconds: 15,
+    clips: [
+      { id: "best", path: "assets/cats/long.mp4", category: "funny", entertainment_score: 90 },
+      { id: "least", path: "assets/cats/short.mp4", category: "angry", entertainment_score: 10 },
+    ],
+  }, context);
+  assert.equal(JSON.parse(String(scoredResult)).ok, true);
+  const scoredSavedPlan = JSON.parse(await fs.readFile(path.join(scoreJobDirectory, "ranking-plan.json"), "utf8"));
+  assert.deepEqual(scoredSavedPlan.segments.map((segment: { clipId: string }) => segment.clipId), ["least", "best"]);
+  assert.deepEqual(scoredSavedPlan.segments.map((segment: { entertainmentScore: number }) => segment.entertainmentScore), [10, 90]);
+
   const bothInputs = await tool.handler({
     target_seconds: 15,
     asset_folder: "assets/NOVA-RANKING-FOLDER-TEST",
@@ -136,6 +151,7 @@ try {
 } finally {
   await fs.rm(jobDirectory, { recursive: true, force: true });
   await fs.rm(folderJobDirectory, { recursive: true, force: true });
+  await fs.rm(scoreJobDirectory, { recursive: true, force: true });
   await fs.rm(assetFolder, { recursive: true, force: true });
 }
 
