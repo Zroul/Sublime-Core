@@ -136,7 +136,7 @@ export function createRankingVideoTool(videoEngine: Tool = videoEngineTool): Too
           }
           throw error;
         }
-        await fs.writeFile(planPath, JSON.stringify(plan, null, 2) + "\\n", "utf8");
+        await fs.writeFile(planPath, JSON.stringify(plan, null, 2) + String.fromCharCode(10), "utf8");
 
         const outputPath = jobRoot + "/final.mp4";
         const renderInput = toRankingRenderInput(plan, jobId, outputPath);
