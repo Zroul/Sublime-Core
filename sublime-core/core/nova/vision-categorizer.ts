@@ -1,6 +1,6 @@
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
-import { promises as fs } from "node:fs";
+import { constants as fsConstants, promises as fs } from "node:fs";
 import path from "node:path";
 import { createHash } from "node:crypto";
 import type { Tool } from "../reasoning/types.js";
@@ -261,7 +261,7 @@ export function createVisionCategorizerTool(): Tool {
             const destinationDirectory = await resolveWorkspacePath("assets/" + destinationName);
             await fs.mkdir(destinationDirectory, { recursive: true });
             const destinationPath = await uniqueDestination(destinationDirectory, path.basename(videoPath));
-            await fs.copyFile(videoPath, destinationPath, fs.constants.COPYFILE_EXCL);
+            await fs.copyFile(videoPath, destinationPath, fsConstants.COPYFILE_EXCL);
             results.push({
               source: relativeSource,
               category: destinationName,
