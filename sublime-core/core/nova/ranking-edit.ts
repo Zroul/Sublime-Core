@@ -163,3 +163,56 @@ export function createRankingEditPlan(input: {
     ],
   };
 }
+
+
+/**
+ * Convert a validated plan into the existing video_engine render contract.
+ * Clip paths must be workspace-relative paths inside workspace/assets.
+ */
+export function toRankingRenderInput(
+  plan: RankingEditPlan,
+  jobId: string,
+  outputPath: string,
+): Record<string, unknown> {
+  if (plan.type !== "nova_ranking_edit_v1" || plan.narration !== false || plan.segments.length === 0) {
+    throw new Error("Invalid or empty NOVA ranking edit plan.");
+  }
+  if (!jobId.trim()) throw new Error("A ranking render needs a non-empty job id.");
+  if (!outputPath.trim()) throw new Error("A ranking render needs an output path.");
+
+  const scenes = plan.segments.map((segment, index) => {
+    const normalized = segment.path.replace(/\\\\/g, "/");
+    if (
+      !normalized.startsWith("assets/") ||
+      normalized.includes("../") ||
+      normalized.startsWith("/") ||
+      /^[a-z]:/i.test(normalized)
+    ) {
+      throw new Error(`Ranking clip "${segment.clipId}" must be inside workspace/assets.`);
+    }
+    if (segment.durationSeconds <= 0 || segment.sourceEndSeconds > segment.sourceDurationSeconds + 0.001) {
+      throw new Error(`Ranking clip "${segment.clipId}" has invalid trim timing.`);
+    }
+    return {
+      index: index + 1,
+      duration: segment.durationSeconds,
+      asset_path: normalized,
+      asset_media_type: "video",
+      asset_fit: "cover",
+      text: segment.onScreenLabel,
+      text_size: plan.aspectRatio === "9:16" ? 48 : 56,
+      text_position: "top",
+      text_max_width: plan.aspectRatio === "9:16" ? 620 : 1120,
+      background: "080808",
+      visual: `Ranking clip ${segment.rank}: ${segment.category}`,
+    };
+  });
+
+  return {
+    action: "render",
+    id: jobId,
+    output: outputPath,
+    aspect_ratio: plan.aspectRatio,
+    scenes,
+  };
+}
