@@ -51,6 +51,53 @@ function validateAssetPath(value: unknown): string {
   return normalized;
 }
 
+const VIDEO_EXTENSIONS = new Set([".mp4", ".mov", ".mkv", ".webm", ".m4v"]);
+
+function inferCategory(relativePath: string): RankingCategory {
+  const normalized = relativePath.toLowerCase().replace(/[\\s_]+/g, "-");
+  if (/\\b(fight|fighting|battle|brawl)\\b/.test(normalized)) return "fighting";
+  if (/\\b(bath|bathing|shower|wash)\\b/.test(normalized)) return "bath";
+  if (/\\b(vet|veterinary|clinic)\\b/.test(normalized)) return "vet";
+  if (/\\b(angry|anger|mad|hiss|hissing)\\b/.test(normalized)) return "angry";
+  if (/\\b(funny|funniest|chaos|silly|fail)\\b/.test(normalized)) return "funny";
+  return "other";
+}
+
+async function discoverAssetClips(folderValue: unknown): Promise<Array<{ id: string; path: string; category: RankingCategory }>> {
+  const folder = validateAssetPath(folderValue);
+  const absoluteFolder = await resolveWorkspacePath(folder);
+  const folderStat = await fs.stat(absoluteFolder);
+  if (!folderStat.isDirectory()) throw new Error("asset_folder must point to a directory inside workspace/assets.");
+
+  const discoveredPaths: string[] = [];
+  let visitedEntries = 0;
+  async function walk(relativeDirectory: string): Promise<void> {
+    const absoluteDirectory = await resolveWorkspacePath(relativeDirectory);
+    const entries = await fs.readdir(absoluteDirectory, { withFileTypes: true });
+    entries.sort((a, b) => a.name.localeCompare(b.name));
+    for (const entry of entries) {
+      visitedEntries += 1;
+      if (visitedEntries > 1000) throw new Error("asset_folder contains too many entries; keep a folder scan under 1000 entries.");
+      const relativePath = path.posix.join(relativeDirectory, entry.name);
+      if (entry.isDirectory()) {
+        await walk(relativePath);
+      } else if (entry.isFile() && VIDEO_EXTENSIONS.has(path.extname(entry.name).toLowerCase())) {
+        discoveredPaths.push(relativePath);
+        if (discoveredPaths.length > 30) throw new Error("asset_folder contains more than 30 video clips; split it into smaller ranking jobs.");
+      }
+    }
+  }
+
+  await walk(folder);
+  discoveredPaths.sort((a, b) => a.localeCompare(b));
+  if (discoveredPaths.length === 0) throw new Error("asset_folder contains no supported video files.");
+  return discoveredPaths.map((clipPath, index) => ({
+    id: "clip-" + String(index + 1).padStart(2, "0"),
+    path: clipPath,
+    category: inferCategory(clipPath),
+  }));
+}
+
 /**
  * End-to-end ranking-video tool: probes supplied source files, builds a plan,
  * renders with the existing local video engine, then probes the final MP4.
@@ -58,7 +105,7 @@ function validateAssetPath(value: unknown): string {
 export function createRankingVideoTool(videoEngine: Tool = videoEngineTool): Tool {
   return {
     name: "ranking_video",
-    description: "Create a narration-free cat/dog ranking edit from user-provided clips in workspace/assets. Probes real source durations, plans ranks and timing, renders with video_engine, saves the plan, and validates the resulting MP4. Does not download or publish footage.",
+    description: "Create a narration-free cat/dog ranking edit from approved clips in workspace/assets. Supply clips explicitly or use asset_folder to discover up to 30 local videos and infer categories from folder names. Probes real durations, renders synthesized hook/rank tones, saves the plan, and validates the final MP4. Does not download or publish footage.",
     parameters: {
       type: "object",
       properties: {
@@ -66,6 +113,7 @@ export function createRankingVideoTool(videoEngine: Tool = videoEngineTool): Too
         job_id: { type: "string", maxLength: 64 },
         target_seconds: { type: "number", minimum: 3, maximum: 600 },
         aspect_ratio: { type: "string", enum: ["16:9", "9:16", "1:1"] },
+        asset_folder: { type: "string", minLength: 1, maxLength: 500 },
         clips: {
           type: "array",
           minItems: 1,
@@ -82,14 +130,20 @@ export function createRankingVideoTool(videoEngine: Tool = videoEngineTool): Too
           },
         },
       },
-      required: ["target_seconds", "clips"],
+      required: ["target_seconds"],
       additionalProperties: false,
     },
     async handler(args: Record<string, unknown>, ctx: AgentState) {
       try {
-        const rawClips = args.clips;
+        let rawClips: unknown = args.clips;
+        if (rawClips === undefined && typeof args.asset_folder === "string") {
+          rawClips = await discoverAssetClips(args.asset_folder);
+        }
         if (!Array.isArray(rawClips) || rawClips.length === 0 || rawClips.length > 30) {
-          throw new Error("Supply between 1 and 30 approved source clips.");
+          throw new Error("Supply 1-30 approved clips or an asset_folder containing 1-30 videos.");
+        }
+        if (args.asset_folder !== undefined && args.clips !== undefined) {
+          throw new Error("Supply either clips or asset_folder, not both.");
         }
         const jobId = safeJobId(typeof args.job_id === "string" ? args.job_id : "ranking-" + Date.now().toString(36));
         const targetSeconds = Number(args.target_seconds);
