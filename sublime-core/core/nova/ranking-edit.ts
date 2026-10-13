@@ -216,5 +216,8 @@ export function toRankingRenderInput(
     output: outputPath,
     aspect_ratio: plan.aspectRatio,
     scenes,
+    sound_cues: plan.segments
+      .filter((segment) => segment.soundCue !== "none")
+      .map((segment) => ({ kind: segment.soundCue, at_seconds: segment.startSeconds })),
   };
 }
