@@ -73,7 +73,7 @@ assert.throws(() => createRankingEditPlan({
 assert.throws(() => createRankingEditPlan({
   targetSeconds: 30,
   clips: [{ id: "short", path: "short.mp4", category: "funny", durationSeconds: 5 }],
-}), /not contain enough source footage/);
+}), /not contain enough usable footage/);
 assert.throws(() => createRankingEditPlan({
   targetSeconds: 3,
   clips: [{ id: "bad-category", path: "bad.mp4", category: "surprise", durationSeconds: 3 } as never],
