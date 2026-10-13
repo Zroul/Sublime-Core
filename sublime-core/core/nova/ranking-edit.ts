@@ -71,9 +71,10 @@ function validateClip(clip: RankingClip): void {
 /** Allocate the target fairly without ever asking for more source footage than exists. */
 function allocateDurations(capacitySeconds: number[], targetSeconds: number): number[] {
   const targetMs = Math.round(targetSeconds * 1000);
-  const capacitiesMs = capacitySeconds.map((duration) => Math.floor(duration * 1000 + 1e-6));
+  // video_engine currently limits each rendered scene to 120 seconds.
+  const capacitiesMs = capacitySeconds.map((duration) => Math.floor(Math.min(duration, 120) * 1000 + 1e-6));
   if (capacitiesMs.reduce((sum, value) => sum + value, 0) < targetMs) {
-    throw new Error("The supplied clips do not contain enough source footage for the requested duration.");
+    throw new Error("The supplied clips do not contain enough usable footage for the requested duration (maximum 120 seconds per rendered clip).");
   }
 
   const allocated = capacitiesMs.map(() => 0);
@@ -190,7 +191,7 @@ export function toRankingRenderInput(
     ) {
       throw new Error(`Ranking clip "${segment.clipId}" must be inside workspace/assets.`);
     }
-    if (segment.durationSeconds <= 0 || segment.sourceEndSeconds > segment.sourceDurationSeconds + 0.001) {
+    if (segment.durationSeconds <= 0 || segment.durationSeconds > 120 || segment.sourceEndSeconds > segment.sourceDurationSeconds + 0.001) {
       throw new Error(`Ranking clip "${segment.clipId}" has invalid trim timing.`);
     }
     return {
