@@ -93,6 +93,9 @@ export function createRankingVideoTool(videoEngine: Tool = videoEngineTool): Too
         }
         const jobId = safeJobId(typeof args.job_id === "string" ? args.job_id : "ranking-" + Date.now().toString(36));
         const targetSeconds = Number(args.target_seconds);
+        if (!Number.isFinite(targetSeconds) || targetSeconds < 3 || targetSeconds > 600) {
+          throw new Error("target_seconds must be between 3 and 600.");
+        }
         const aspectRatio = args.aspect_ratio === undefined ? "9:16" : String(args.aspect_ratio);
         if (aspectRatio !== "16:9" && aspectRatio !== "9:16" && aspectRatio !== "1:1") {
           throw new Error("aspect_ratio must be 16:9, 9:16, or 1:1.");
