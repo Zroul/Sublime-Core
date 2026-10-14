@@ -105,8 +105,8 @@ async function extractFrame(videoPath: string, timestamp: number, outputPath: st
   try {
     await execFileAsync(ffmpegPath, [
       "-hide_banner", "-loglevel", "error", "-y", "-ss", String(Math.max(0, timestamp)),
-      "-i", videoPath, "-frames:v", "1", "-vf", "scale=512:512:force_original_aspect_ratio=decrease",
-      "-q:v", "5", outputPath,
+      "-i", videoPath, "-frames:v", "1", "-vf", "scale=1024:1024:force_original_aspect_ratio=decrease",
+      "-q:v", "2", outputPath,
     ], { timeout: 30000, windowsHide: true });
     const stat = await fs.stat(outputPath);
     return stat.isFile() && stat.size > 0;
@@ -134,8 +134,9 @@ async function classifyFrames(
   const images = await Promise.all(imagePaths.map((imagePath) => fs.readFile(imagePath, "base64")));
   const names = categoryNames(animal);
   const prompt = [
-    "Classify this video using the provided frames in chronological order. The frames come from one video.",
-    "Choose exactly one category key from: angry, bath, vet, fighting, funny, uncertain.",
+    "Classify this video using all provided frames in chronological order. The frames come from one video.",
+    "First inspect the visible scene in each frame: identify the animal, its posture/action, nearby objects, and setting. Then choose exactly one category key from: angry, bath, vet, fighting, funny, uncertain.",
+    "Do not call frames blurry or unreadable unless important visual details truly cannot be seen. Use the clearest visible evidence across all frames; do not require every frame to show the same moment.",
     "Categories: angry = clear signs of an angry/agitated animal such as hissing, growling, defensive posture; bath = animal being bathed/washed; vet = at a veterinary clinic or receiving veterinary care; fighting = animals physically fighting or attempting to fight; funny = a clearly humorous/silly/odd moment not better matched above; uncertain = evidence is insufficient or none of these categories fits.",
     "Do not infer events that are not visible. If the frames are ambiguous, choose uncertain. Confidence must be a number from 0 to 1. Keep reason under 20 words.",
     "Return only JSON: {\"category\":\"angry|bath|vet|fighting|funny|uncertain\",\"confidence\":0.0,\"reason\":\"brief visible evidence\"}.",
@@ -238,7 +239,7 @@ export function createVisionCategorizerTool(): Tool {
             const relativeSource = path.relative(await resolveWorkspacePath("assets"), videoPath).replaceAll("\\", "/");
             const duration = await getDuration(videoPath, capabilities.ffprobePath);
             const framePaths: string[] = [];
-            for (const [frameIndex, fraction] of [0.15, 0.5, 0.85].entries()) {
+            for (const [frameIndex, fraction] of [0.1, 0.3, 0.5, 0.7, 0.9].entries()) {
               const framePath = path.join(tempDirectory, "clip-" + index + "-" + frameIndex + ".jpg");
               if (await extractFrame(videoPath, Math.min(duration * fraction, Math.max(0, duration - 0.05)), framePath, capabilities.ffmpegPath)) {
                 framePaths.push(framePath);
