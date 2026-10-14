@@ -30,6 +30,7 @@ import { createVideoProductionTool, type ProductionDependencies } from "./produc
 import { editingModuleTool } from "../ai/tools/editing-module.js";
 import { visualPlannerTool } from "../ai/tools/visual-planner.js";
 import { resolveWorkspacePath } from "../ai/tools/workspace-path.js";
+import { createVisionCategorizerTool } from "./vision-categorizer.js";
 import { createNovaGuard } from "./guard.js";
 import { NOVA_SYSTEM_PROMPT } from "./system.js";
 import {
@@ -89,6 +90,7 @@ export async function runTask(
     contentJobTool,
     contentArtifactTool,
     contentQaTool,
+    createVisionCategorizerTool(),
     visualPlannerTool,
     editingModuleTool,
     options.videoEngine ?? videoEngineTool,
@@ -99,9 +101,14 @@ export async function runTask(
     }),
     runCommandTool,
   ];
-  const activeTools = directVideoProduction
-    ? registeredTools.filter((tool) => tool.name === "video_production")
-    : registeredTools;
+  const directVideoCategorization =
+    /\b(?:categorize|categorise|classify|sort|organize|organise)\b/i.test(task) &&
+    /\b(?:videos?|clips?|footage)\b/i.test(task);
+  const activeTools = directVideoCategorization
+    ? registeredTools.filter((tool) => tool.name === "categorize_videos")
+    : directVideoProduction
+      ? registeredTools.filter((tool) => tool.name === "video_production")
+      : registeredTools;
 
   let result: AgentRunResult;
   try {
