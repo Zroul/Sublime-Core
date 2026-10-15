@@ -11,7 +11,6 @@
   <main class="obsidian" aria-label="OBSIDIAN After Effects assistant">
     <header class="topbar">
       <div class="brand">
-        <span class="status-dot"></span>
         <span>OBSIDIAN</span>
       </div>
       <button id="menu" class="menu-button" type="button" aria-label="OBSIDIAN menu">☰</button>
@@ -21,8 +20,7 @@
       <div class="welcome-orb" aria-hidden="true">
         <span></span>
       </div>
-      <h1>Ready when you are.</h1>
-      <p>Tell me what you want to change in After Effects.</p>
+      <h1 id="welcome-message">READY WHEN U ARE</h1>
     </section>
 
     <section class="composer-wrap">
@@ -33,13 +31,12 @@
           maxlength="1000"
           autocomplete="off"
           spellcheck="false"
-          placeholder="Tell OBSIDIAN what to do..."
+          placeholder="Ask OBSIDIAN to edit..."
           aria-label="OBSIDIAN command"
         ></textarea>
         <button id="voice" class="action-button voice-button" type="button" aria-label="Voice command">●</button>
         <button class="action-button send-button" type="submit" aria-label="Send command">↑</button>
       </form>
-      <div class="hint">OBSIDIAN can work with the selected layer and your composition.</div>
     </section>
 
     <div id="progress" class="progress hidden" aria-live="polite">
