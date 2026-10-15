@@ -1,10 +1,10 @@
 <?xml version="1.0" encoding="UTF-8" standalone="no"?>
 <ExtensionManifest xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-    ExtensionBundleId="com.zroul.vanta"
+    ExtensionBundleId="com.zroul.obsidian"
     ExtensionBundleVersion="0.1.0"
     Version="12.0">
     <ExtensionList>
-        <Extension Id="com.zroul.vanta.panel" Version="0.1.0"/>
+        <Extension Id="com.zroul.obsidian.panel" Version="0.1.0"/>
     </ExtensionList>
 
     <ExecutionEnvironment>
@@ -20,7 +20,7 @@
     </ExecutionEnvironment>
 
     <DispatchInfoList>
-        <Extension Id="com.zroul.vanta.panel">
+        <Extension Id="com.zroul.obsidian.panel">
             <DispatchInfo>
                 <Resources>
                     <MainPath>./html/index.html</MainPath>
@@ -35,7 +35,7 @@
                 </Lifecycle>
                 <UI>
                     <Type>Panel</Type>
-                    <Menu>VANTA</Menu>
+                    <Menu>OBSIDIAN</Menu>
                     <Geometry>
                         <Size>
                             <Height>160</Height>

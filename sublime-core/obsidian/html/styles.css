@@ -25,7 +25,7 @@ html, body {
 
 button, textarea { font: inherit; }
 
-.vanta {
+.obsidian {
   position: relative;
   display: flex;
   flex-direction: column;
@@ -40,7 +40,7 @@ button, textarea { font: inherit; }
     linear-gradient(145deg, #08070a 0%, #0d090f 55%, #08070a 100%);
 }
 
-.vanta::before {
+.obsidian::before {
   content: "";
   position: absolute;
   inset: 0;
@@ -322,7 +322,7 @@ textarea::placeholder {
 .hidden { display: none; }
 
 @media (max-width: 360px) {
-  .vanta { padding: 12px; }
+  .obsidian { padding: 12px; }
   .welcome h1 { font-size: 20px; }
   .welcome p { font-size: 12px; }
   .hint { font-size: 9px; }

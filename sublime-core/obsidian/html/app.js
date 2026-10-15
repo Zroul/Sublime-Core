@@ -46,7 +46,7 @@ function runAE(command) {
     .replace(/\n/g, "\\n");
 
   window.__adobe_cep__.evalScript(
-    'VANTA_executeCommand("' + escaped + '")',
+    'OBSIDIAN_executeCommand("' + escaped + '")',
     (response) => {
       setProgress(100, response && response.indexOf("ERROR|") === 0 ? "Couldn't apply" : "Applied");
 

@@ -1,9 +1,9 @@
-/* VANTA After Effects host tools.
+/* OBSIDIAN After Effects host tools.
  * Loaded into After Effects by CEP through ScriptPath.
  * Keep this file ExtendScript-compatible.
  */
 
-function VANTA_getSelectedLayers() {
+function OBSIDIAN_getSelectedLayers() {
     var comp = app.project.activeItem;
 
     if (!(comp instanceof CompItem)) {
@@ -17,15 +17,15 @@ function VANTA_getSelectedLayers() {
     return comp.selectedLayers;
 }
 
-function VANTA_addGlow() {
-    var layers = VANTA_getSelectedLayers();
+function OBSIDIAN_addGlow() {
+    var layers = OBSIDIAN_getSelectedLayers();
 
     if (!layers) {
         return "ERROR|Open a composition and select at least one layer.";
     }
 
     var changed = 0;
-    app.beginUndoGroup("VANTA - Add Glow");
+    app.beginUndoGroup("OBSIDIAN - Add Glow");
 
     try {
         for (var i = 0; i < layers.length; i++) {
@@ -64,15 +64,15 @@ function VANTA_addGlow() {
     return "OK|Added Glow to " + changed + " selected layer(s).";
 }
 
-function VANTA_removeGlow() {
-    var layers = VANTA_getSelectedLayers();
+function OBSIDIAN_removeGlow() {
+    var layers = OBSIDIAN_getSelectedLayers();
 
     if (!layers) {
         return "ERROR|Open a composition and select at least one layer.";
     }
 
     var removed = 0;
-    app.beginUndoGroup("VANTA - Remove Glow");
+    app.beginUndoGroup("OBSIDIAN - Remove Glow");
 
     try {
         for (var i = 0; i < layers.length; i++) {
@@ -98,8 +98,8 @@ function VANTA_removeGlow() {
     return "OK|Removed Glow from " + removed + " effect instance(s).";
 }
 
-function VANTA_setOpacity(value) {
-    var layers = VANTA_getSelectedLayers();
+function OBSIDIAN_setOpacity(value) {
+    var layers = OBSIDIAN_getSelectedLayers();
 
     if (!layers) {
         return "ERROR|Open a composition and select at least one layer.";
@@ -113,7 +113,7 @@ function VANTA_setOpacity(value) {
 
     value = Math.max(0, Math.min(100, value));
 
-    app.beginUndoGroup("VANTA - Set Opacity");
+    app.beginUndoGroup("OBSIDIAN - Set Opacity");
 
     try {
         for (var i = 0; i < layers.length; i++) {
@@ -134,14 +134,14 @@ function VANTA_setOpacity(value) {
     return "OK|Set opacity to " + value + "% on " + layers.length + " selected layer(s).";
 }
 
-function VANTA_reduceOpacity() {
-    var layers = VANTA_getSelectedLayers();
+function OBSIDIAN_reduceOpacity() {
+    var layers = OBSIDIAN_getSelectedLayers();
 
     if (!layers) {
         return "ERROR|Open a composition and select at least one layer.";
     }
 
-    app.beginUndoGroup("VANTA - Reduce Opacity");
+    app.beginUndoGroup("OBSIDIAN - Reduce Opacity");
 
     try {
         for (var i = 0; i < layers.length; i++) {
@@ -163,28 +163,28 @@ function VANTA_reduceOpacity() {
     return "OK|Reduced opacity by 20% on " + layers.length + " selected layer(s).";
 }
 
-function VANTA_executeCommand(command) {
+function OBSIDIAN_executeCommand(command) {
     var text = String(command || "").toLowerCase();
 
     if (text.indexOf("remove") !== -1 && text.indexOf("glow") !== -1) {
-        return VANTA_removeGlow();
+        return OBSIDIAN_removeGlow();
     }
 
     if (text.indexOf("glow") !== -1) {
-        return VANTA_addGlow();
+        return OBSIDIAN_addGlow();
     }
 
     var opacityMatch = text.match(/(?:opacity|opaque)[^0-9]*(\d{1,3})\s*%?/);
 
     if (opacityMatch) {
-        return VANTA_setOpacity(Number(opacityMatch[1]));
+        return OBSIDIAN_setOpacity(Number(opacityMatch[1]));
     }
 
     if (text.indexOf("reduce opacity") !== -1 ||
         text.indexOf("lower opacity") !== -1 ||
         text.indexOf("decrease opacity") !== -1) {
-        return VANTA_reduceOpacity();
+        return OBSIDIAN_reduceOpacity();
     }
 
-    return "ERROR|I don't have a VANTA action for that command yet.";
+    return "ERROR|I don't have a OBSIDIAN action for that command yet.";
 }
