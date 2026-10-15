@@ -75,8 +75,7 @@ function runAE(command) {
     return;
   }
 
-  setProgress(20, "Thinking...");
-  setProgress(55, "Editing After Effects...");
+  setProgress(55, "Waiting for After Effects...");
 
   // JSON.stringify safely escapes quotes, backslashes and newlines for the JSX call.
   const encodedCommand = JSON.stringify(String(command));
@@ -84,12 +83,11 @@ function runAE(command) {
   window.__adobe_cep__.evalScript(
     "OBSIDIAN_executeCommand(" + encodedCommand + ")",
     (response) => {
-      setProgress(100, response && response.indexOf("ERROR|") === 0 ? "Couldn't apply" : "Applied");
-
-      const isError = !response || response.indexOf("ERROR|") === 0;
-      const message = response
-        ? response.replace(/^(ERROR|OK)\|/, "")
-        : "After Effects returned no result.";
+      const isError = !response || response.indexOf("ERROR|") === 0 || response === "EvalScript error.";
+      setProgress(100, isError ? "Failed" : "Host responded");
+      const message = response === "EvalScript error."
+        ? "After Effects could not execute the host script. Check the CEP host script path and ExtendScript errors."
+        : response ? response.replace(/^(ERROR|OK)\|/, "") : "After Effects returned no result.";
 
       showResult(message, isError);
     }
