@@ -5,26 +5,48 @@ OBSIDIAN is the After Effects motion-design assistant in Sublime Core.
 ## Layout
 
 - `frontend/` — CEP panel UI, styles, browser-side interaction, and UI assets.
-- `backend/host/` — ExtendScript host bridge loaded by After Effects.
-- `backend/core/` — OBSIDIAN-specific orchestration and command planning (add only when implemented).
-- `backend/inspection/` — project/layer inspection tools (add only when implemented).
-- `backend/verification/` — post-edit verification (add only when implemented).
-- `backend/knowledge/` — searchable design knowledge and reference metadata (add only when implemented).
+- `backend/host/` — ExtendScript host bridge loaded by After Effects, including project/layer inspection and guarded Glow/Opacity actions.
+- `backend/core/` — reserved for OBSIDIAN-specific orchestration and command planning.
+- `backend/inspection/` — reserved for extracting inspection logic from the host bridge when the interface is stable.
+- `backend/verification/` — reserved for richer post-edit verification.
+- `backend/knowledge/` — reserved for searchable motion-design knowledge and reference metadata.
 - `CSXS/manifest.xml` — Adobe CEP extension manifest; it must remain at the extension root.
 
-## Important architecture boundary
+## Current implemented capabilities
 
-The existing shared `../core` runtime contains code used by other Sublime Core features, including NOVA. Do not blindly move that shared runtime into this folder: doing so would break existing imports and couple unrelated products. OBSIDIAN-specific code belongs here; shared modules should be imported through explicit, tested interfaces.
+- Read-only inspection of the active composition and selected layers.
+- Composition dimensions, frame rate, duration, playhead time, layer count and selection count.
+- Selected-layer type, enabled/3D/locked/shy state, in/out points, opacity, transform values and effect names.
+- Text content, font name and font size where the host exposes them.
+- Glow add/remove and opacity set/reduce actions, with property read-back checks after edits.
+- Explicit rejection of commands that do not map to a supported action.
 
-## Current capability status
+## Not implemented yet
 
-The CEP panel currently sends text commands to the ExtendScript host. The host supports a small allowlist of Glow and Opacity operations. It does not yet connect the prompt to the local CORE model, provide comprehensive project inspection, or verify visual quality. Those are future milestones, not existing capabilities.
+- CORE/Qwen natural-language planning or tool calling.
+- General-purpose motion-design editing, keyframe generation or complex multi-step edits.
+- Visual render assessment, style learning, or current-trend research.
+- A full in-After-Effects runtime test. The Node tests use a mock host and verify command logic; they do not prove CEP/ExtendScript compatibility.
 
-## Smoke-test checklist
+## Run the host logic tests
 
-1. Confirm the CEP extension loads in After Effects.
-2. Confirm the panel UI and CSS/JS assets load.
-3. Select a layer in an open composition and test adding Glow.
-4. Test setting opacity to a numeric percentage.
-5. Confirm invalid commands return an error without modifying the project.
-6. Confirm the moved JSX host loads and its command bridge remains callable.
+From the repository root, run:
+
+```sh
+node --test sublime-core/obsidian/backend/host/host.test.cjs
+```
+
+The test harness uses Node's built-in test runner and a mocked After Effects host, so it needs no added dependencies.
+
+## Manual After Effects smoke test
+
+1. Confirm the CEP extension loads and its UI assets appear.
+2. Open a project and composition; run `inspect project`.
+3. Select a text layer and run `inspect selected layers`.
+4. Set opacity to 50% and confirm the Timeline value.
+5. Add Glow, inspect selected layers, remove Glow, and inspect again.
+6. Try an unsupported request and confirm OBSIDIAN returns an error without claiming it edited the project.
+
+## Shared runtime boundary
+
+The existing shared `../core` runtime contains code used by other Sublime Core features, including NOVA. Do not move it into this folder blindly. OBSIDIAN-specific orchestration should integrate through explicit, tested interfaces so unrelated tools remain intact.

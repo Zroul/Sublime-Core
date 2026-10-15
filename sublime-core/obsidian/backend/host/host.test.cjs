@@ -1,0 +1,135 @@
+const assert = require("node:assert/strict");
+const fs = require("node:fs");
+const path = require("node:path");
+const vm = require("node:vm");
+const test = require("node:test");
+
+class CompItem {}
+class TextLayer {}
+class ShapeLayer {}
+class AVLayer {}
+class SolidSource {}
+
+function scalarProperty(value) {
+  return {
+    value,
+    setValue(next) { this.value = next; },
+  };
+}
+
+function propertyGroup(children) {
+  return {
+    _children: children || [],
+    get numProperties() { return this._children.length; },
+    property(key) {
+      if (typeof key === "number") return this._children[key - 1] || null;
+      return this._children.find((item) => item.matchName === key || item.name === key) || null;
+    },
+    canAddProperty(matchName) {
+      return matchName === "ADBE Glo2";
+    },
+    addProperty(matchName) {
+      const effect = { name: "Glow", matchName };
+      this._children.push(effect);
+      return effect;
+    },
+  };
+}
+
+function makeTextLayer(name, index, opacityValue) {
+  const opacity = scalarProperty(opacityValue);
+  const position = scalarProperty([960, 540]);
+  const scale = scalarProperty([100, 100]);
+  const rotation = scalarProperty(0);
+  const textDocument = scalarProperty({ text: "Launch faster", font: "ArialMT", fontSize: 64 });
+  const transform = propertyGroup([
+    Object.assign(opacity, { name: "Opacity", matchName: "ADBE Opacity" }),
+    Object.assign(position, { name: "Position", matchName: "ADBE Position" }),
+    Object.assign(scale, { name: "Scale", matchName: "ADBE Scale" }),
+    Object.assign(rotation, { name: "Rotation", matchName: "ADBE Rotation" }),
+  ]);
+  const textProperties = propertyGroup([
+    Object.assign(textDocument, { name: "Text Document", matchName: "ADBE Text Document" }),
+  ]);
+  const effects = propertyGroup([]);
+  const layer = {
+    name, index, enabled: true, threeDLayer: false, shy: false, locked: false,
+    inPoint: 0, outPoint: 5,
+    _opacity: opacity,
+    property(key) {
+      if (key === "ADBE Transform Group") return transform;
+      if (key === "ADBE Effect Parade") return effects;
+      if (key === "ADBE Text Properties") return textProperties;
+      return null;
+    },
+  };
+  Object.setPrototypeOf(layer, TextLayer.prototype);
+  return layer;
+}
+
+function makeContext() {
+  const layer = makeTextLayer("Headline", 1, 100);
+  const comp = {
+    name: "SaaS Hero",
+    width: 1920,
+    height: 1080,
+    frameRate: 30,
+    duration: 5,
+    time: 1.25,
+    numLayers: 1,
+    selectedLayers: [layer],
+  };
+  Object.setPrototypeOf(comp, CompItem.prototype);
+  const project = { file: { fsName: "C:/mock/saas.aep" }, activeItem: comp };
+  const context = {
+    app: {
+      project,
+      beginUndoGroup() {},
+      endUndoGroup() {},
+    },
+    CompItem, TextLayer, ShapeLayer, AVLayer, SolidSource,
+  };
+  vm.createContext(context);
+  const source = fs.readFileSync(path.join(__dirname, "host.jsx"), "utf8");
+  vm.runInContext(source, context, { filename: "host.jsx" });
+  return { context, layer, comp, project };
+}
+
+test("project inspection reports the active composition and selected text layer", () => {
+  const { context } = makeContext();
+  const result = context.OBSIDIAN_executeCommand("inspect project");
+  assert.match(result, /PROJECT INSPECTION/);
+  assert.match(result, /Composition: SaaS Hero/);
+  assert.match(result, /Resolution: 1920 x 1080/);
+  assert.match(result, /Selected layers: 1/);
+  assert.match(result, /Headline/);
+});
+
+test("selected-layer inspection includes text and transform details", () => {
+  const { context } = makeContext();
+  const result = context.OBSIDIAN_executeCommand("inspect selected layers");
+  assert.match(result, /SELECTION INSPECTION/);
+  assert.match(result, /Text: Launch faster/);
+  assert.match(result, /Font: ArialMT; Size: 64/);
+  assert.match(result, /Position: \[960, 540\]/);
+});
+
+test("opacity command reads back and verifies the applied value", () => {
+  const { context, layer } = makeContext();
+  const result = context.OBSIDIAN_executeCommand("set opacity to 50%");
+  assert.match(result, /^OK\|Verified opacity at 50% on 1 selected layer\.$/);
+  assert.equal(layer._opacity.value, 50);
+});
+
+test("commands fail safely when there is no active composition", () => {
+  const { context, project } = makeContext();
+  project.activeItem = null;
+  const result = context.OBSIDIAN_executeCommand("inspect project");
+  assert.match(result, /^ERROR\|No active composition/);
+});
+
+test("unsupported commands are rejected instead of silently claiming success", () => {
+  const { context } = makeContext();
+  const result = context.OBSIDIAN_executeCommand("make this look like a premium SaaS ad");
+  assert.match(result, /^ERROR\|I can't safely perform that command yet/);
+});
