@@ -125,7 +125,7 @@ test("selected-layer inspection includes text and transform details", () => {
 test("opacity command reads back and verifies the applied value", () => {
   const { context, layer } = makeContext();
   const result = context.OBSIDIAN_executeCommand("set opacity to 50%");
-  assert.match(result, /^OK\|Verified opacity at 50% on 1 selected layer\.$/);
+  assert.equal(result, "OK|Verified opacity at 50% on 1 selected layer(s).");
   assert.equal(layer._opacity.value, 50);
 });
 
@@ -160,12 +160,12 @@ test("Glow add and remove are verified against the selected layer", () => {
 test("reduce opacity verifies the target value for each selected layer", () => {
   const { context, layer } = makeContext();
   const result = context.OBSIDIAN_executeCommand("reduce opacity");
-  assert.match(result, /^OK\|Verified opacity reduction on 1 selected layer\(s\)\.$/);
+  assert.equal(result, "OK|Verified opacity reduction on 1 selected layer(s).");
   assert.equal(layer._opacity.value, 80);
 });
 
 test("fade in refuses to run when the host cannot create opacity keyframes", () => {
   const { context } = makeContext();
   const result = context.OBSIDIAN_executeCommand("fade in");
-  assert.match(result, /^ERROR\|Opacity keyframes unavailable/);
+  assert.equal(result, "ERROR|Opacity keyframes unavailable.");
 });
