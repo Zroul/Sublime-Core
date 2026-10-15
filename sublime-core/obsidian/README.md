@@ -19,6 +19,7 @@ OBSIDIAN is the After Effects motion-design assistant in Sublime Core.
 - Selected-layer type, enabled/3D/locked/shy state, in/out points, opacity, transform values and effect names.
 - Text content, font name and font size where the host exposes them.
 - Glow add/remove and opacity set/reduce actions, with property read-back checks after edits.
+- A guarded 0.5-second opacity fade-in for selected layers. It checks locked layers, short durations, and existing opacity keyframes/expressions before editing, then reads keyframes back to verify the result.
 - Explicit rejection of commands that do not map to a supported action.
 
 ## Not implemented yet
