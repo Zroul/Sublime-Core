@@ -29,7 +29,15 @@ function propertyGroup(children) {
       return matchName === "ADBE Glo2";
     },
     addProperty(matchName) {
-      const effect = { name: "Glow", matchName };
+      const group = this;
+      const effect = {
+        name: "Glow",
+        matchName,
+        remove() {
+          const index = group._children.indexOf(effect);
+          if (index >= 0) group._children.splice(index, 1);
+        },
+      };
       this._children.push(effect);
       return effect;
     },
@@ -132,4 +140,26 @@ test("unsupported commands are rejected instead of silently claiming success", (
   const { context } = makeContext();
   const result = context.OBSIDIAN_executeCommand("make this look like a premium SaaS ad");
   assert.match(result, /^ERROR\|I can't safely perform that command yet/);
+});
+
+test("Glow add and remove are verified against the selected layer", () => {
+  const { context } = makeContext();
+  const added = context.OBSIDIAN_executeCommand("add glow");
+  assert.match(added, /^OK\|Verified Glow on 1 selected layer\(s\); added 1 new effect\(s\)\.$/);
+
+  const inspected = context.OBSIDIAN_executeCommand("inspect selected layers");
+  assert.match(inspected, /Effects \(1\): Glow/);
+
+  const removed = context.OBSIDIAN_executeCommand("remove glow");
+  assert.match(removed, /^OK\|Verified Glow removed from selected layers\./);
+
+  const afterRemoval = context.OBSIDIAN_executeCommand("inspect selected layers");
+  assert.match(afterRemoval, /Effects \(0\): none/);
+});
+
+test("reduce opacity verifies the target value for each selected layer", () => {
+  const { context, layer } = makeContext();
+  const result = context.OBSIDIAN_executeCommand("reduce opacity");
+  assert.match(result, /^OK\|Verified opacity reduction on 1 selected layer\(s\)\.$/);
+  assert.equal(layer._opacity.value, 80);
 });
