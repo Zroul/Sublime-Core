@@ -7,6 +7,47 @@ const progressValue = document.querySelector("#progress-value");
 const progressLabel = document.querySelector("#progress-label");
 const result = document.querySelector("#result");
 const resultText = document.querySelector("#result-text");
+const welcomeMessage = document.querySelector("#welcome-message");
+
+const welcomePhrases = [
+  "READY WHEN U ARE",
+  "Ask me to Edit",
+  "Good to see you Editor",
+  "Keep working, Keep Winning",
+  "I can Edit In Your style",
+  "I Adapt To Your Style"
+];
+
+let phraseIndex = 0;
+let phraseTimer;
+
+function typeWelcomePhrase() {
+  window.clearTimeout(phraseTimer);
+  const phrase = welcomePhrases[phraseIndex];
+  let characterIndex = 0;
+
+  welcomeMessage.textContent = "";
+  welcomeMessage.classList.add("typing");
+
+  function typeNextCharacter() {
+    if (characterIndex < phrase.length) {
+      welcomeMessage.textContent += phrase.charAt(characterIndex);
+      characterIndex += 1;
+      phraseTimer = window.setTimeout(typeNextCharacter, 68);
+      return;
+    }
+
+    welcomeMessage.classList.remove("typing");
+    phraseTimer = window.setTimeout(() => {
+      phraseIndex = (phraseIndex + 1) % welcomePhrases.length;
+      typeWelcomePhrase();
+    }, 30000);
+  }
+
+  typeNextCharacter();
+}
+
+typeWelcomePhrase();
 
 function resetStatus() {
   progress.classList.add("hidden");
@@ -25,9 +66,7 @@ function setProgress(value, label) {
 function showResult(message, isError) {
   resultText.textContent = message;
   result.classList.remove("hidden");
-
-  const mark = result.querySelector(".result-mark");
-  mark.textContent = isError ? "!" : "✓";
+  result.querySelector(".result-mark").textContent = isError ? "!" : "✓";
 }
 
 function runAE(command) {
@@ -39,14 +78,11 @@ function runAE(command) {
   setProgress(20, "Thinking...");
   setProgress(55, "Editing After Effects...");
 
-  const escaped = String(command)
-    .replace(/\\/g, "\\\\")
-    .replace(/"/g, "\\"")
-    .replace(/\r/g, "\\r")
-    .replace(/\n/g, "\\n");
+  // JSON.stringify safely escapes quotes, backslashes and newlines for the JSX call.
+  const encodedCommand = JSON.stringify(String(command));
 
   window.__adobe_cep__.evalScript(
-    'OBSIDIAN_executeCommand("' + escaped + '")',
+    "OBSIDIAN_executeCommand(" + encodedCommand + ")",
     (response) => {
       setProgress(100, response && response.indexOf("ERROR|") === 0 ? "Couldn't apply" : "Applied");
 
@@ -72,13 +108,15 @@ form.addEventListener("submit", (event) => {
   resetStatus();
   runAE(command);
   commandInput.value = "";
+  commandInput.style.height = "auto";
 });
 
 commandInput.addEventListener("keydown", (event) => {
-  if (event.key === "Enter" && !event.shiftKey) {
+  if (event.key === "Enter" && !event.shiftKey && !event.isComposing) {
     event.preventDefault();
     form.requestSubmit();
   }
+  // Shift+Enter is intentionally left untouched so the textarea inserts a newline.
 });
 
 commandInput.addEventListener("input", () => {
@@ -87,8 +125,7 @@ commandInput.addEventListener("input", () => {
 });
 
 voiceButton.addEventListener("click", () => {
-  const SpeechRecognition =
-    window.SpeechRecognition || window.webkitSpeechRecognition;
+  const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
 
   if (!SpeechRecognition) {
     showResult("Voice input is not available in this CEP runtime yet.", true);
@@ -108,19 +145,11 @@ voiceButton.addEventListener("click", () => {
     commandInput.focus();
   };
 
-  recognition.onerror = () => {
-    showResult("Voice input unavailable.", true);
-  };
-
-  recognition.onend = () => {
-    voiceButton.classList.remove("listening");
-  };
-
+  recognition.onerror = () => showResult("Voice input unavailable.", true);
+  recognition.onend = () => voiceButton.classList.remove("listening");
   recognition.start();
 });
 
 window.addEventListener("keydown", (event) => {
-  if (event.key === "Escape") {
-    commandInput.blur();
-  }
+  if (event.key === "Escape") commandInput.blur();
 });
