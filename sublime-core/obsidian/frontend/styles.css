@@ -32,7 +32,7 @@ textarea::placeholder{color:#8ba0a5;opacity:1}
 #progress-value{color:var(--bright);font-variant-numeric:tabular-nums}
 .progress-track{height:4px;margin-top:7px;overflow:hidden;border-radius:999px;background:rgba(255,255,255,.07)}
 .progress-bar{width:0;height:100%;border-radius:inherit;background:linear-gradient(90deg,#167c86,#66ead8,#7776e8);transition:width 80ms linear}
-.result{position:relative;z-index:1;display:flex;align-items:center;justify-content:center;gap:8px;flex:0 0 auto;max-width:min(100%,620px);margin:10px auto 0;padding:6px 13px;border:1px solid rgba(126,200,205,.12);border-radius:999px;background:rgba(10,18,25,.72);color:#c5d6d8;font-size:11px}
+.result{position:relative;z-index:1;display:flex;align-items:flex-start;justify-content:flex-start;gap:8px;flex:0 1 auto;max-width:min(100%,620px);max-height:220px;overflow:auto;margin:10px auto 0;padding:10px 13px;border:1px solid rgba(126,200,205,.16);border-radius:14px;background:rgba(10,18,25,.88);color:#c5d6d8;font-size:11px;line-height:1.55;text-align:left;white-space:pre-wrap;overflow-wrap:anywhere}
 .result-mark{display:grid;flex:0 0 auto;width:20px;height:20px;place-items:center;border-radius:50%;background:rgba(25,183,165,.14);color:var(--bright)}
 .hidden{display:none}
 @media(max-width:360px){.obsidian{padding:12px}.welcome h1{font-size:19px}.composer{padding-left:15px;gap:6px}.action-button{width:35px;height:35px}textarea{font-size:13px}}
