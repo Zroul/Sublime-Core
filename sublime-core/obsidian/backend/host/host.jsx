@@ -247,18 +247,21 @@ function OBSIDIAN_reduceOpacity() {
     if (!layers.length) return "ERROR|Open a composition and select at least one layer.";
     var changed = 0;
     var verified = 0;
+    var expectedValues = [];
     app.beginUndoGroup("OBSIDIAN - Reduce Opacity");
     try {
         for (var i = 0; i < layers.length; i++) {
             var opacity = layers[i].property("ADBE Transform Group").property("ADBE Opacity");
             if (opacity) {
-                opacity.setValue(Math.max(0, Number(opacity.value) - 20));
+                var target = Math.max(0, Number(opacity.value) - 20);
+                opacity.setValue(target);
+                expectedValues[i] = target;
                 changed++;
             }
         }
         for (var j = 0; j < layers.length; j++) {
             var check = layers[j].property("ADBE Transform Group").property("ADBE Opacity");
-            if (check && Number(check.value) <= 80) verified++;
+            if (check && expectedValues[j] !== undefined && Math.abs(Number(check.value) - expectedValues[j]) < 0.01) verified++;
         }
     } catch (error) {
         app.endUndoGroup();
