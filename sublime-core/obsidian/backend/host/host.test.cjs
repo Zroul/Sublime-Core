@@ -163,3 +163,9 @@ test("reduce opacity verifies the target value for each selected layer", () => {
   assert.match(result, /^OK\|Verified opacity reduction on 1 selected layer\(s\)\.$/);
   assert.equal(layer._opacity.value, 80);
 });
+
+test("fade in refuses to run when the host cannot create opacity keyframes", () => {
+  const { context } = makeContext();
+  const result = context.OBSIDIAN_executeCommand("fade in");
+  assert.match(result, /^ERROR\|Opacity keyframes unavailable/);
+});
