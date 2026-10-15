@@ -23,8 +23,8 @@
         <Extension Id="com.zroul.obsidian.panel">
             <DispatchInfo>
                 <Resources>
-                    <MainPath>./html/index.html</MainPath>
-                    <ScriptPath>./jsx/host.jsx</ScriptPath>
+                    <MainPath>./frontend/index.html</MainPath>
+                    <ScriptPath>./backend/host/host.jsx</ScriptPath>
                     <CEFCommandLine>
                         <Parameter>--enable-speech-input</Parameter>
                         <Parameter>--enable-media-stream</Parameter>
