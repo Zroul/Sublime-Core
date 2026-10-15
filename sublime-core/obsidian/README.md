@@ -46,7 +46,9 @@ The test harness uses Node's built-in test runner and a mocked After Effects hos
 3. Select a text layer and run `inspect selected layers`.
 4. Set opacity to 50% and confirm the Timeline value.
 5. Add Glow, inspect selected layers, remove Glow, and inspect again.
-6. Try an unsupported request and confirm OBSIDIAN returns an error without claiming it edited the project.
+6. Select a layer with no existing opacity keyframes or expression and run `fade in`; verify two opacity keyframes appear over up to 0.5 seconds.
+7. Try `fade in` on a layer with existing opacity animation; it should refuse instead of overwriting those keyframes.
+8. Try an unsupported request and confirm OBSIDIAN returns an error without claiming it edited the project.
 
 ## Shared runtime boundary
 
