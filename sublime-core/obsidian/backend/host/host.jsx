@@ -272,6 +272,48 @@ function OBSIDIAN_reduceOpacity() {
     return "OK|Verified opacity reduction on " + verified + " selected layer(s).";
 }
 
+function OBSIDIAN_fadeIn() {
+    var layers = OBSIDIAN_getSelectedLayers();
+    if (!layers.length) return "ERROR|Open a composition and select at least one layer.";
+    var prepared = [];
+    for (var i = 0; i < layers.length; i++) {
+        var layer = layers[i];
+        if (layer.locked) return "ERROR|Fade in cancelled: unlock '" + OBSIDIAN_cleanText(layer.name) + "'.";
+        var group = layer.property("ADBE Transform Group");
+        var opacity = group ? group.property("ADBE Opacity") : null;
+        if (!opacity || typeof opacity.setValueAtTime !== "function") return "ERROR|Opacity keyframes unavailable.";
+        if (opacity.numKeys > 0 || opacity.expressionEnabled) return "ERROR|Fade in cancelled: existing opacity animation or expression was preserved.";
+        var start = Number(layer.inPoint);
+        var end = Math.min(start + 0.5, Number(layer.outPoint));
+        if (!isFinite(start) || !isFinite(end) || end - start < 0.05) return "ERROR|Selected layer is too short for a fade-in.";
+        prepared.push({ opacity: opacity, start: start, end: end, target: Number(opacity.value) });
+    }
+    var verified = 0;
+    app.beginUndoGroup("OBSIDIAN - Fade In");
+    try {
+        for (var j = 0; j < prepared.length; j++) {
+            prepared[j].opacity.setValueAtTime(prepared[j].start, 0);
+            prepared[j].opacity.setValueAtTime(prepared[j].end, prepared[j].target);
+        }
+        for (var k = 0; k < prepared.length; k++) {
+            var item = prepared[k];
+            var first = item.opacity.nearestKeyIndex(item.start);
+            var last = item.opacity.nearestKeyIndex(item.end);
+            if (item.opacity.numKeys === 2 &&
+                Math.abs(item.opacity.keyTime(first) - item.start) < 0.001 &&
+                Math.abs(item.opacity.keyTime(last) - item.end) < 0.001 &&
+                Math.abs(Number(item.opacity.keyValue(first))) < 0.01 &&
+                Math.abs(Number(item.opacity.keyValue(last)) - item.target) < 0.01) verified++;
+        }
+    } catch (error) {
+        app.endUndoGroup();
+        return "ERROR|Fade in failed: " + error.toString();
+    }
+    app.endUndoGroup();
+    if (verified !== prepared.length) return "ERROR|Fade-in keyframes could not be verified on every selected layer.";
+    return "OK|Verified fade-in keyframes on " + verified + " selected layer(s).";
+}
+
 function OBSIDIAN_executeCommand(command) {
     var text = String(command || "").toLowerCase().replace(/^\s+|\s+$/g, "");
     if (!text) return "ERROR|Enter a command first.";
@@ -283,6 +325,8 @@ function OBSIDIAN_executeCommand(command) {
             text.indexOf("these layer") !== -1) return OBSIDIAN_inspectSelection();
         return OBSIDIAN_inspectProject();
     }
+
+    if (text === "fade in" || text === "fade-in" || text === "fade in selected layers") return OBSIDIAN_fadeIn();
 
     if (text.indexOf("remove") !== -1 && text.indexOf("glow") !== -1) return OBSIDIAN_removeGlow();
     if (text.indexOf("glow") !== -1) return OBSIDIAN_addGlow();
