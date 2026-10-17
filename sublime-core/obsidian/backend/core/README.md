@@ -1,15 +1,30 @@
-# OBSIDIAN command planning (v1)
+# OBSIDIAN command planning and execution
 
-`planner.mjs` is a side-effect-free first step toward contextual editing. It maps a small set of explicit requests to typed proposals and returns clarification/unsupported states instead of guessing.
+The command planner is shared by the CEP frontend and Node tests through `frontend/planner.shared.js`. The `planner.mjs` module is a test-facing ES module facade over that single implementation.
 
-## Current boundaries
+## Request path
 
-- No project edits happen in this module.
-- Only a fixed allowlist of existing host actions is considered executable.
-- “Cinematic” and “attention” Glow are intent labels only. The current host applies basic Glow and does not yet tune effect parameters by profile.
-- This is not CORE/Qwen integration. It is a deterministic baseline for testing the plan/execute boundary before connecting the model.
-- Do not bypass host-side validation or verification when executing a plan.
+1. The CEP frontend plans the user's natural-language request.
+2. Requests that need clarification or are unsupported are shown to the user and never sent to After Effects.
+3. The frontend checks the action against the planner allowlist.
+4. The frontend sends only a typed action and its narrow arguments through CEP's existing `evalScript` bridge.
+5. `host.jsx` validates the action and arguments again, runs an existing guarded handler, and returns its verification result.
 
-## Test
+There is no new server, dependency, or model loaded by this integration. The current planner is deterministic; it is not CORE/Qwen integration.
 
-`node --test sublime-core/obsidian/backend/core/planner.test.mjs`
+## Safety and current limits
+
+- The host does not parse free-form natural language. It accepts only the fixed action allowlist.
+- Opacity must be between 0% and 100%; the host rejects out-of-range values instead of silently clamping them.
+- Existing host edit handlers retain their undo groups and read-back verification.
+- "Cinematic" and "attention" Glow are recognized intent labels only. The current host adds basic Glow and explicitly reports that calibrated profile settings were not applied.
+- This is a first integrated vertical slice, not yet a context-aware creative editor. CORE reasoning, composition-aware effect parameter selection, and visual outcome analysis remain future work.
+
+## Tests
+
+Run from the repository's `sublime-core` directory:
+
+```powershell
+node --test obsidian/backend/core/planner.test.mjs
+node --test obsidian/backend/host/host.test.cjs
+```
