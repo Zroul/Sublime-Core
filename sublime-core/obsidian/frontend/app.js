@@ -70,28 +70,56 @@ function showResult(message, isError) {
 }
 
 function runAE(command) {
-  if (!window.__adobe_cep__ || typeof window.__adobe_cep__.evalScript !== "function") {
-    showResult("AE bridge is unavailable.", true);
+  const planner = window.OBSIDIANPlanner;
+  if (!planner || typeof planner.planObsidianCommand !== "function" ||
+      typeof planner.isExecutablePlan !== "function") {
+    showResult("OBSIDIAN planner is unavailable. Reload the panel before trying again.", true);
     return;
   }
 
-  setProgress(55, "Waiting for After Effects...");
+  setProgress(20, "Planning command...");
+  const plan = planner.planObsidianCommand(command);
 
-  // JSON.stringify safely escapes quotes, backslashes and newlines for the JSX call.
-  const encodedCommand = JSON.stringify(String(command));
+  if (!plan || plan.status !== "planned") {
+    setProgress(100, plan && plan.status === "needs_clarification" ? "Needs clarification" : "Not supported");
+    showResult(plan && plan.question ? plan.question : "OBSIDIAN could not create a safe action plan.", true);
+    return;
+  }
 
-  window.__adobe_cep__.evalScript(
-    "OBSIDIAN_executeCommand(" + encodedCommand + ")",
-    (response) => {
-      const isError = !response || response.indexOf("ERROR|") === 0 || response === "EvalScript error.";
-      setProgress(100, isError ? "Failed" : "Host responded");
-      const message = response === "EvalScript error."
-        ? "After Effects could not execute the host script. Check the CEP host script path and ExtendScript errors."
-        : response ? response.replace(/^(ERROR|OK)\|/, "") : "After Effects returned no result.";
+  if (!planner.isExecutablePlan(plan)) {
+    setProgress(100, "Blocked");
+    showResult("This action is not on OBSIDIAN's approved action list.", true);
+    return;
+  }
 
-      showResult(message, isError);
-    }
-  );
+  if (!window.__adobe_cep__ || typeof window.__adobe_cep__.evalScript !== "function") {
+    setProgress(100, "Unavailable");
+    showResult("After Effects bridge is unavailable. The request was planned but not executed.", true);
+    return;
+  }
+
+  const args = plan.args || {};
+  const valueArgument = typeof args.value === "number" ? String(args.value) : "null";
+  const profileArgument = JSON.stringify(typeof args.profile === "string" ? args.profile : "");
+  const expression = "OBSIDIAN_executePlan(" +
+    JSON.stringify(plan.action) + "," + valueArgument + "," + profileArgument + ")";
+
+  setProgress(55, "Executing approved action...");
+  window.__adobe_cep__.evalScript(expression, (response) => {
+    const isError = typeof response !== "string" ||
+      response.indexOf("ERROR|") === 0 ||
+      response === "EvalScript error.";
+    setProgress(100, isError ? "Failed" : "Verified by host");
+
+    const message = response === "EvalScript error."
+      ? "After Effects could not execute the host script. Check the CEP host script path and ExtendScript errors."
+      : typeof response === "string" && response
+        ? response.replace(/^(ERROR|OK)\|/, "")
+        : "After Effects returned no result.";
+
+    const explanation = plan.explanation ? "\n\nPlan: " + plan.explanation : "";
+    showResult(message + explanation, isError);
+  });
 }
 
 form.addEventListener("submit", (event) => {
