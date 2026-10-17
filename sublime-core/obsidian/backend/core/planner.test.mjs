@@ -35,3 +35,20 @@ test("only approved actions are executable", () => {
   assert.equal(isExecutablePlan({ status: "planned", action: "add_glow" }), true);
   assert.equal(isExecutablePlan({ status: "planned", action: "run_shell" }), false);
 });
+
+
+test("understands natural phrasing for visual intent", () => {
+  const plan = planObsidianCommand("give this title a subtle cinematic glow");
+  assert.equal(plan.status, "planned");
+  assert.equal(plan.action, "add_glow");
+  assert.equal(plan.args.profile, "cinematic");
+  assert.equal(isExecutablePlan(plan), true);
+});
+
+test("makes it explicit that profile labels do not tune Glow settings yet", () => {
+  const plan = planObsidianCommand("make this title pop with a bold glow");
+  assert.equal(plan.action, "add_glow");
+  assert.equal(plan.args.profile, "attention");
+  assert.match(plan.explanation, /basic Glow only/i);
+  assert.match(plan.explanation, /not implemented/i);
+});
