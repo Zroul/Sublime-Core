@@ -63,6 +63,8 @@ export async function resolveObsidianPath(root: string, input: unknown, allowMis
 
 export function createLinexTools(projectRoot: string): Tool[] {
   const root = path.resolve(projectRoot);
+  let editCount = 0;
+  let testCount = 0;
   const listFiles: Tool = {
     name: "obsidian_list_files",
     description: "List relative file paths in the OBSIDIAN project. Use this before guessing paths.",
@@ -166,6 +168,7 @@ export function createLinexTools(projectRoot: string): Tool[] {
     },
     async handler(args) {
       try {
+        if (editCount >= 3) throw new Error("Edit budget exhausted: LINEX may make at most three edits per task.");
         const content = String(args.content ?? "");
         if (Buffer.byteLength(content, "utf8") > MAX_WRITE_BYTES) throw new Error("File content exceeds the 300 KB limit.");
         const target = await resolveObsidianPath(root, args.path);
@@ -178,7 +181,8 @@ export function createLinexTools(projectRoot: string): Tool[] {
         await fs.mkdir(path.dirname(backup), { recursive: true });
         await fs.writeFile(backup, oldContent);
         await fs.writeFile(target, content, "utf8");
-        return JSON.stringify({ edited: path.relative(root, target), backup });
+        editCount += 1;
+        return JSON.stringify({ edited: path.relative(root, target), backup, editsRemaining: 3 - editCount });
       } catch (error) {
         return { toolCallId: "", content: error instanceof Error ? error.message : String(error), isError: true };
       }
@@ -190,9 +194,11 @@ export function createLinexTools(projectRoot: string): Tool[] {
     description: "Run the fixed OBSIDIAN host test suite. No arbitrary shell commands are accepted.",
     parameters: { type: "object", properties: {}, required: [], additionalProperties: false },
     async handler() {
+      if (testCount >= 3) return { toolCallId: "", content: "Test budget exhausted: LINEX may run the host suite at most three times per task.", isError: true };
       const testPath = path.join(root, "backend", "host", "host.test.cjs");
       try {
         await fs.access(testPath);
+        testCount += 1;
         const result = await execFileAsync(process.execPath, ["--test", testPath], {
           cwd: path.dirname(root),
           timeout: 45_000,
