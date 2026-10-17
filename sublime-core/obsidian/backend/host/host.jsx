@@ -325,6 +325,9 @@ function OBSIDIAN_executePlan(action, value, profile) {
     if (action === "inspect_selection") return OBSIDIAN_inspectSelection();
 
     if (action === "set_opacity") {
+        if (value === null || value === undefined || value === "") {
+            return "ERROR|Opacity must be a number between 0 and 100.";
+        }
         value = Number(value);
         if (!isFinite(value) || value < 0 || value > 100) {
             return "ERROR|Opacity must be a number between 0 and 100.";
