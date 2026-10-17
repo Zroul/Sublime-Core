@@ -314,29 +314,41 @@ function OBSIDIAN_fadeIn() {
     return "OK|Verified fade-in keyframes on " + verified + " selected layer(s).";
 }
 
-function OBSIDIAN_executeCommand(command) {
-    var text = String(command || "").toLowerCase().replace(/^\s+|\s+$/g, "");
-    if (!text) return "ERROR|Enter a command first.";
+/**
+ * Execute only typed actions produced by the frontend planner.
+ * Never parse free-form natural language inside ExtendScript.
+ */
+function OBSIDIAN_executePlan(action, value, profile) {
+    action = String(action || "");
 
-    if (text.indexOf("inspect") !== -1 || text.indexOf("what is in") !== -1 ||
-        text.indexOf("what's in") !== -1 || text.indexOf("analyze project") !== -1 ||
-        text.indexOf("analyse project") !== -1 || text.indexOf("project status") !== -1) {
-        if (text.indexOf("selection") !== -1 || text.indexOf("selected layer") !== -1 ||
-            text.indexOf("these layer") !== -1) return OBSIDIAN_inspectSelection();
-        return OBSIDIAN_inspectProject();
+    if (action === "inspect_project") return OBSIDIAN_inspectProject();
+    if (action === "inspect_selection") return OBSIDIAN_inspectSelection();
+
+    if (action === "set_opacity") {
+        value = Number(value);
+        if (!isFinite(value) || value < 0 || value > 100) {
+            return "ERROR|Opacity must be a number between 0 and 100.";
+        }
+        return OBSIDIAN_setOpacity(value);
     }
 
-    if (text === "fade in" || text === "fade-in" || text === "fade in selected layers") return OBSIDIAN_fadeIn();
+    if (action === "reduce_opacity") return OBSIDIAN_reduceOpacity();
 
-    if (text.indexOf("remove") !== -1 && text.indexOf("glow") !== -1) return OBSIDIAN_removeGlow();
-    if (text.indexOf("glow") !== -1) return OBSIDIAN_addGlow();
+    if (action === "add_glow") {
+        profile = String(profile || "unspecified");
+        if (profile !== "cinematic" && profile !== "attention" && profile !== "unspecified") {
+            return "ERROR|Unsupported Glow profile.";
+        }
+        var glowResult = OBSIDIAN_addGlow();
+        if (glowResult.indexOf("OK|") === 0) {
+            return glowResult + " Requested profile: " + profile +
+                ". Profile is intent-only; calibrated Glow settings were not applied.";
+        }
+        return glowResult;
+    }
 
-    var opacityMatch = text.match(/(?:opacity|opaque)[^0-9]*(\d{1,3})\s*%?/);
-    if (opacityMatch) return OBSIDIAN_setOpacity(Number(opacityMatch[1]));
+    if (action === "remove_glow") return OBSIDIAN_removeGlow();
+    if (action === "fade_in") return OBSIDIAN_fadeIn();
 
-    if (text.indexOf("reduce opacity") !== -1 ||
-        text.indexOf("lower opacity") !== -1 ||
-        text.indexOf("decrease opacity") !== -1) return OBSIDIAN_reduceOpacity();
-
-    return "ERROR|I can't safely perform that command yet. Try 'inspect project', 'inspect selected layers', 'add glow', 'remove glow', or 'set opacity to 50%'.";
+    return "ERROR|Unsupported planned action: " + OBSIDIAN_cleanText(action) + ".";
 }
