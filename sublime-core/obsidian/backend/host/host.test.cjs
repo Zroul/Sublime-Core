@@ -184,3 +184,11 @@ test("host rejects unknown Glow profiles before making an edit", () => {
   assert.equal(result, "ERROR|Unsupported Glow profile.");
   assert.equal(context.OBSIDIAN_getEffectNames(layer).length, 0);
 });
+
+
+test("host rejects a missing opacity argument", () => {
+  const { context, layer } = makeContext();
+  const result = context.OBSIDIAN_executePlan("set_opacity", null, "");
+  assert.equal(result, "ERROR|Opacity must be a number between 0 and 100.");
+  assert.equal(layer._opacity.value, 100);
+});
