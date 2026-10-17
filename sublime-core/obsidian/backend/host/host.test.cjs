@@ -105,7 +105,7 @@ function makeContext() {
 
 test("project inspection reports the active composition and selected text layer", () => {
   const { context } = makeContext();
-  const result = context.OBSIDIAN_executeCommand("inspect project");
+  const result = context.OBSIDIAN_executePlan("inspect_project", null, "");
   assert.match(result, /PROJECT INSPECTION/);
   assert.match(result, /Composition: SaaS Hero/);
   assert.match(result, /Resolution: 1920 x 1080/);
@@ -115,7 +115,7 @@ test("project inspection reports the active composition and selected text layer"
 
 test("selected-layer inspection includes text and transform details", () => {
   const { context } = makeContext();
-  const result = context.OBSIDIAN_executeCommand("inspect selected layers");
+  const result = context.OBSIDIAN_executePlan("inspect_selection", null, "");
   assert.match(result, /SELECTION INSPECTION/);
   assert.match(result, /Text: Launch faster/);
   assert.match(result, /Font: ArialMT; Size: 64/);
@@ -124,7 +124,7 @@ test("selected-layer inspection includes text and transform details", () => {
 
 test("opacity command reads back and verifies the applied value", () => {
   const { context, layer } = makeContext();
-  const result = context.OBSIDIAN_executeCommand("set opacity to 50%");
+  const result = context.OBSIDIAN_executePlan("set_opacity", 50, "");
   assert.equal(result, "OK|Verified opacity at 50% on 1 selected layer(s).");
   assert.equal(layer._opacity.value, 50);
 });
@@ -132,40 +132,63 @@ test("opacity command reads back and verifies the applied value", () => {
 test("commands fail safely when there is no active composition", () => {
   const { context, project } = makeContext();
   project.activeItem = null;
-  const result = context.OBSIDIAN_executeCommand("inspect project");
+  const result = context.OBSIDIAN_executePlan("inspect_project", null, "");
   assert.match(result, /^ERROR\|No active composition/);
 });
 
 test("unsupported commands are rejected instead of silently claiming success", () => {
   const { context } = makeContext();
-  const result = context.OBSIDIAN_executeCommand("make this look like a premium SaaS ad");
-  assert.match(result, /^ERROR\|I can't safely perform that command yet/);
+  const result = context.OBSIDIAN_executePlan("run_shell", null, "");
+  assert.match(result, /^ERROR\|Unsupported planned action: run_shell/);
 });
 
 test("Glow add and remove are verified against the selected layer", () => {
   const { context } = makeContext();
-  const added = context.OBSIDIAN_executeCommand("add glow");
-  assert.match(added, /^OK\|Verified Glow on 1 selected layer\(s\); added 1 new effect\(s\)\.$/);
+  const added = context.OBSIDIAN_executePlan("add_glow", null, "unspecified");
+  assert.match(added, /^OK\|Verified Glow on 1 selected layer\(s\); added 1 new effect\(s\)\. Requested profile: unspecified\. Profile is intent-only; calibrated Glow settings were not applied\.$/);
 
-  const inspected = context.OBSIDIAN_executeCommand("inspect selected layers");
+  const inspected = context.OBSIDIAN_executePlan("inspect_selection", null, "");
   assert.match(inspected, /Effects \(1\): Glow/);
 
-  const removed = context.OBSIDIAN_executeCommand("remove glow");
+  const removed = context.OBSIDIAN_executePlan("remove_glow", null, "");
   assert.match(removed, /^OK\|Verified Glow removed from selected layers\./);
 
-  const afterRemoval = context.OBSIDIAN_executeCommand("inspect selected layers");
+  const afterRemoval = context.OBSIDIAN_executePlan("inspect_selection", null, "");
   assert.match(afterRemoval, /Effects \(0\): none/);
 });
 
 test("reduce opacity verifies the target value for each selected layer", () => {
   const { context, layer } = makeContext();
-  const result = context.OBSIDIAN_executeCommand("reduce opacity");
+  const result = context.OBSIDIAN_executePlan("reduce_opacity", null, "");
   assert.equal(result, "OK|Verified opacity reduction on 1 selected layer(s).");
   assert.equal(layer._opacity.value, 80);
 });
 
 test("fade in refuses to run when the host cannot create opacity keyframes", () => {
   const { context } = makeContext();
-  const result = context.OBSIDIAN_executeCommand("fade in");
+  const result = context.OBSIDIAN_executePlan("fade_in", null, "");
   assert.equal(result, "ERROR|Opacity keyframes unavailable.");
+});
+
+
+test("host rejects out-of-range opacity instead of silently clamping it", () => {
+  const { context, layer } = makeContext();
+  const result = context.OBSIDIAN_executePlan("set_opacity", 140, "");
+  assert.equal(result, "ERROR|Opacity must be a number between 0 and 100.");
+  assert.equal(layer._opacity.value, 100);
+});
+
+test("host rejects unknown Glow profiles before making an edit", () => {
+  const { context, layer } = makeContext();
+  const result = context.OBSIDIAN_executePlan("add_glow", null, "run_shell");
+  assert.equal(result, "ERROR|Unsupported Glow profile.");
+  assert.equal(context.OBSIDIAN_getEffectNames(layer).length, 0);
+});
+
+
+test("host rejects a missing opacity argument", () => {
+  const { context, layer } = makeContext();
+  const result = context.OBSIDIAN_executePlan("set_opacity", null, "");
+  assert.equal(result, "ERROR|Opacity must be a number between 0 and 100.");
+  assert.equal(layer._opacity.value, 100);
 });
