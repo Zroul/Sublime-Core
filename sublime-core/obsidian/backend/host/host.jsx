@@ -180,12 +180,25 @@ function OBSIDIAN_removeGlow() {
     app.beginUndoGroup("OBSIDIAN - Remove Glow");
     try {
         for (var i = 0; i < layers.length; i++) {
+            // Removing an effect can invalidate indexed-property references in AE.
+            // Reacquire the Effect Parade after each removal before inspecting it again.
             var effects = layers[i].property("ADBE Effect Parade");
             if (!effects) continue;
-            for (var j = effects.numProperties; j >= 1; j--) {
-                if (effects.property(j).matchName === "ADBE Glo2") {
-                    effects.property(j).remove();
+            var j = effects.numProperties;
+            while (j >= 1) {
+                effects = layers[i].property("ADBE Effect Parade");
+                if (!effects || j > effects.numProperties) {
+                    j = effects ? effects.numProperties : 0;
+                    continue;
+                }
+                var effect = effects.property(j);
+                if (effect && effect.matchName === "ADBE Glo2") {
+                    effect.remove();
                     removed++;
+                    effects = layers[i].property("ADBE Effect Parade");
+                    j = effects ? effects.numProperties : 0;
+                } else {
+                    j--;
                 }
             }
         }
