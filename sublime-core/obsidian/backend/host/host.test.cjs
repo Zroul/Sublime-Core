@@ -157,6 +157,17 @@ test("Glow add and remove are verified against the selected layer", () => {
   assert.match(afterRemoval, /Effects \(0\): none/);
 });
 
+test("Glow removal reacquires the effect group and removes repeated Glow instances", () => {
+  const { context, layer } = makeContext();
+  const effects = layer.property("ADBE Effect Parade");
+  effects.addProperty("ADBE Glo2");
+  effects.addProperty("ADBE Glo2");
+
+  const result = context.OBSIDIAN_executePlan("remove_glow", null, "");
+  assert.match(result, /^OK\\|Verified Glow removed from selected layers\\./);
+  assert.equal(layer.property("ADBE Effect Parade").numProperties, 0);
+});
+
 test("reduce opacity verifies the target value for each selected layer", () => {
   const { context, layer } = makeContext();
   const result = context.OBSIDIAN_executePlan("reduce_opacity", null, "");
