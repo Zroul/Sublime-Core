@@ -164,7 +164,8 @@ test("Glow removal reacquires the effect group and removes repeated Glow instanc
   effects.addProperty("ADBE Glo2");
 
   const result = context.OBSIDIAN_executePlan("remove_glow", null, "");
-  assert.match(result, /^OK\\|Verified Glow removed from selected layers\\./);
+  assert.ok(result.startsWith("OK|"), result);
+  assert.match(result, /Verified Glow removed from selected layers/);
   assert.equal(layer.property("ADBE Effect Parade").numProperties, 0);
 });
 
