@@ -6,6 +6,8 @@ $ErrorActionPreference = "Stop"
 
 $obsidianRoot = Split-Path -Parent $PSScriptRoot
 $manifestPath = Join-Path $obsidianRoot "CSXS\manifest.xml"
+$timestamp = Get-Date -Format "yyyyMMdd-HHmmss"
+$stagingPath = "$ExtensionPath-staging-$timestamp"
 
 if (-not (Test-Path -LiteralPath $manifestPath -PathType Leaf)) {
     throw "Source CEP manifest not found: $manifestPath"
@@ -38,22 +40,45 @@ if (-not (Test-Path -LiteralPath $sourceHost -PathType Leaf)) {
 $parent = Split-Path -Parent $ExtensionPath
 New-Item -ItemType Directory -Path $parent -Force | Out-Null
 
+if (Test-Path -LiteralPath $stagingPath) {
+    Remove-Item -LiteralPath $stagingPath -Recurse -Force
+}
+New-Item -ItemType Directory -Path $stagingPath -Force | Out-Null
+Get-ChildItem -LiteralPath $obsidianRoot -Force | Copy-Item -Destination $stagingPath -Recurse -Force
+
+$stagedManifest = Join-Path $stagingPath "CSXS\manifest.xml"
+[xml]$stagedXml = Get-Content -LiteralPath $stagedManifest -Raw
+$stagedMain = Resolve-ManifestPath $stagingPath ([string]$stagedXml.SelectSingleNode("//*[local-name()='MainPath']").InnerText)
+$stagedHost = Resolve-ManifestPath $stagingPath ([string]$stagedXml.SelectSingleNode("//*[local-name()='ScriptPath']").InnerText)
+
+if (-not (Test-Path -LiteralPath $stagedMain -PathType Leaf)) {
+    Remove-Item -LiteralPath $stagingPath -Recurse -Force
+    throw "Staging verification failed: active MainPath is missing: $stagedMain"
+}
+if (-not (Test-Path -LiteralPath $stagedHost -PathType Leaf)) {
+    Remove-Item -LiteralPath $stagingPath -Recurse -Force
+    throw "Staging verification failed: active ScriptPath is missing: $stagedHost"
+}
+
+$hostHash = (Get-FileHash -LiteralPath $sourceHost -Algorithm SHA256).Hash
+$stagedHostHash = (Get-FileHash -LiteralPath $stagedHost -Algorithm SHA256).Hash
+if ($hostHash -ne $stagedHostHash) {
+    Remove-Item -LiteralPath $stagingPath -Recurse -Force
+    throw "Staging verification failed: source and staged host scripts differ."
+}
+
 if (Test-Path -LiteralPath $ExtensionPath) {
-    $timestamp = Get-Date -Format "yyyyMMdd-HHmmss"
     $backupPath = "$ExtensionPath-backup-$timestamp"
     Copy-Item -LiteralPath $ExtensionPath -Destination $backupPath -Recurse
     if (-not (Test-Path -LiteralPath $backupPath)) {
-        throw "Backup verification failed; installation was not changed."
+        Remove-Item -LiteralPath $stagingPath -Recurse -Force
+        throw "Backup verification failed; installed extension was not changed."
     }
     Write-Output "Backup created: $backupPath"
-}
-
-if (Test-Path -LiteralPath $ExtensionPath) {
     Remove-Item -LiteralPath $ExtensionPath -Recurse -Force
 }
 
-New-Item -ItemType Directory -Path $ExtensionPath -Force | Out-Null
-Get-ChildItem -LiteralPath $obsidianRoot -Force | Copy-Item -Destination $ExtensionPath -Recurse -Force
+Move-Item -LiteralPath $stagingPath -Destination $ExtensionPath
 
 $installedManifest = Join-Path $ExtensionPath "CSXS\manifest.xml"
 [xml]$installedXml = Get-Content -LiteralPath $installedManifest -Raw
@@ -67,7 +92,6 @@ if (-not (Test-Path -LiteralPath $installedHost -PathType Leaf)) {
     throw "Install verification failed: active ScriptPath is missing: $installedHost"
 }
 
-$hostHash = (Get-FileHash -LiteralPath $sourceHost -Algorithm SHA256).Hash
 $installedHostHash = (Get-FileHash -LiteralPath $installedHost -Algorithm SHA256).Hash
 if ($hostHash -ne $installedHostHash) {
     throw "Install verification failed: source and installed host scripts differ."
