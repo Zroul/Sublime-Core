@@ -18,8 +18,10 @@ test("parses opacity values and rejects values above 100", () => {
 test("maps cinematic and attention language to the matching Glow preset", () => {
   assert.equal(planObsidianCommand("add a subtle cinematic glow").args.profile, "cinematic");
   assert.equal(planObsidianCommand("add a bold attention-grabbing glow").args.profile, "attention");
-  assert.match(planObsidianCommand("add a subtle cinematic glow").explanation, /restrained Glow preset/i);
-  assert.match(planObsidianCommand("add a bold attention-grabbing glow").explanation, /attention-grabbing Glow preset/i);
+  assert.match(planObsidianCommand("add a subtle cinematic glow").explanation, /cinematic intent detected/i);
+  assert.match(planObsidianCommand("add a subtle cinematic glow").explanation, /basic Glow only/i);
+  assert.match(planObsidianCommand("add a bold attention-grabbing glow").explanation, /attention-grabbing intent detected/i);
+  assert.match(planObsidianCommand("add a bold attention-grabbing glow").explanation, /basic Glow only/i);
 });
 
 test("uses knowledge cues for common visual language", () => {
