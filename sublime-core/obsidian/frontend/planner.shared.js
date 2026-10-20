@@ -18,6 +18,23 @@
     fade_in: true
   };
 
+  var KNOWLEDGE = root.OBSIDIANKnowledge || { concepts: [] };
+
+  function hasCue(conceptName, fallbackCues, command) {
+    var concepts = KNOWLEDGE.concepts || [];
+    for (var i = 0; i < concepts.length; i++) {
+      if (concepts[i].name === conceptName) {
+        for (var j = 0; j < concepts[i].cues.length; j++) {
+          if (new RegExp("\\\\b" + concepts[i].cues[j].replace(/[.*+?^${}()|[\\]\\\\]/g, "\\\\  function normalize(text) {") + "\\\\b", "i").test(command)) return true;
+        }
+      }
+    }
+    for (var k = 0; k < fallbackCues.length; k++) {
+      if (new RegExp("\\\\b" + fallbackCues[k] + "\\\\b", "i").test(command)) return true;
+    }
+    return false;
+  }
+
   function normalize(text) {
     return String(text === undefined || text === null ? "" : text)
       .trim()
