@@ -15,10 +15,10 @@ test("parses opacity values and rejects values above 100", () => {
   assert.equal(planObsidianCommand("set opacity to 140%").status, "needs_clarification");
 });
 
-test("distinguishes cinematic and attention glow requests without claiming calibrated execution", () => {
+test("distinguishes cinematic and attention glow requests", () => {
   assert.equal(planObsidianCommand("add a subtle cinematic glow").args.profile, "cinematic");
   assert.equal(planObsidianCommand("add a bold attention-grabbing glow").args.profile, "attention");
-  assert.match(planObsidianCommand("add a subtle cinematic glow").explanation, /proposal—not a claim/i);
+  assert.match(planObsidianCommand("add a subtle cinematic glow").explanation, /restrained Glow preset/i);
 });
 
 test("asks when glow style cues conflict", () => {
@@ -45,7 +45,7 @@ test("understands natural phrasing for visual intent", () => {
   assert.equal(isExecutablePlan(plan), true);
 });
 
-test("makes it explicit that profile labels do not tune Glow settings yet", () => {
+test("plans an actual attention Glow preset", () => {
   const plan = planObsidianCommand("make this title pop with a bold glow");
   assert.equal(plan.action, "add_glow");
   assert.equal(plan.args.profile, "attention");
