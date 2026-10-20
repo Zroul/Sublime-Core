@@ -91,12 +91,13 @@
     var cinematicCue = cinematic && hasCue(cinematic.cues, command);
     var attentionCue = attention && hasCue(attention.cues, command);
     var glowVerb = /\b(add|apply|use|put|give|create|make)\b/.test(command);
-    var glowMention = /\bglow\b/.test(command);
+    var glowMention = /\bglow\b|\bbloom\b/.test(command);
     var titlePopIntent = /\b(make|give|help)\b/.test(command) &&
-      /\b(title|text|subject|this)\b/.test(command) && /\b(pop|stand out|eye catching|eye-catching)\b/.test(command);
+      /\b(title|text|subject|this)\b/.test(command) &&
+      /\b(pop|stand out|eye catching|eye-catching)\b/.test(command);
 
-    if (glowMention && (glowVerb || cinematicCue || attentionCue) ||
-        titlePopIntent && attentionCue) {
+    if ((glowMention && (glowVerb || cinematicCue || attentionCue)) ||
+        (titlePopIntent && attentionCue)) {
       if (cinematicCue && attentionCue) {
         return {
           status: "needs_clarification",
@@ -124,8 +125,8 @@
 
     var fade = concept("fade_in");
     if (/\bfade\s*in\b/.test(command) ||
-        fade && hasCue(fade.cues, command) &&
-        /\b(add|apply|make|give|create|use)\b/.test(command)) {
+        (fade && hasCue(fade.cues, command) &&
+         /\b(add|apply|make|give|create|use)\b/.test(command))) {
       return result(
         "fade_in",
         {},
