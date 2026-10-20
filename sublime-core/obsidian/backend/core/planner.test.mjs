@@ -27,6 +27,17 @@ test("uses knowledge cues for common visual language", () => {
   assert.equal(planObsidianCommand("make this title pop").args.profile, "attention");
 });
 
+test("answers basic motion-design questions without executing an edit", () => {
+  const easing = planObsidianCommand("What is easing?");
+  assert.equal(easing.status, "knowledge_answer");
+  assert.match(easing.answer, /speed changes/i);
+  assert.equal(isExecutablePlan(easing), false);
+
+  const title = planObsidianCommand("How do I make this title pop?");
+  assert.equal(title.status, "knowledge_answer");
+  assert.match(title.answer, /contrast/i);
+});
+
 test("asks when Glow style cues conflict", () => {
   assert.equal(planObsidianCommand("add subtle but flashy dramatic glow").status, "needs_clarification");
 });
