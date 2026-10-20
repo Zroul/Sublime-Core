@@ -25,12 +25,12 @@
     for (var i = 0; i < concepts.length; i++) {
       if (concepts[i].name === conceptName) {
         for (var j = 0; j < concepts[i].cues.length; j++) {
-          if (new RegExp("\\\\b" + concepts[i].cues[j].replace(/[.*+?^${}()|[\\]\\\\]/g, "\\\\  function normalize(text) {") + "\\\\b", "i").test(command)) return true;
+          if (command.indexOf(concepts[i].cues[j]) !== -1) return true;
         }
       }
     }
     for (var k = 0; k < fallbackCues.length; k++) {
-      if (new RegExp("\\\\b" + fallbackCues[k] + "\\\\b", "i").test(command)) return true;
+      if (command.indexOf(fallbackCues[k]) !== -1) return true;
     }
     return false;
   }
