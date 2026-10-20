@@ -146,32 +146,76 @@ function OBSIDIAN_inspectSelection() {
     return lines.join("\n");
 }
 
-function OBSIDIAN_addGlow() {
+function OBSIDIAN_applyGlowProfile(effect, profile) {
+    var threshold = profile === "cinematic" ? 68 : 52;
+    var radius = profile === "cinematic" ? 38 : 78;
+    var intensity = profile === "cinematic" ? 0.65 : 1.35;
+    var thresholdProp = effect.property(2);
+    var radiusProp = effect.property(3);
+    var intensityProp = effect.property(4);
+    if (!thresholdProp || !radiusProp || !intensityProp) {
+        throw new Error("Glow parameter properties were unavailable; preset was not verified.");
+    }
+    thresholdProp.setValue(threshold);
+    radiusProp.setValue(radius);
+    intensityProp.setValue(intensity);
+    if (Math.abs(Number(thresholdProp.value) - threshold) > 0.1 ||
+        Math.abs(Number(radiusProp.value) - radius) > 0.1 ||
+        Math.abs(Number(intensityProp.value) - intensity) > 0.01) {
+        throw new Error("Glow preset read-back did not match the requested settings.");
+    }
+}
+
+function OBSIDIAN_addGlow(profile) {
     var layers = OBSIDIAN_getSelectedLayers();
     if (!layers.length) return "ERROR|Open a composition and select at least one layer.";
+    profile = String(profile || "unspecified");
+    if (profile !== "cinematic" && profile !== "attention" && profile !== "unspecified") {
+        return "ERROR|Unsupported Glow profile.";
+    }
 
     var changed = 0;
     var verified = 0;
+    var configured = 0;
     app.beginUndoGroup("OBSIDIAN - Add Glow");
     try {
         for (var i = 0; i < layers.length; i++) {
             var effects = layers[i].property("ADBE Effect Parade");
-            if (!effects || !effects.canAddProperty("ADBE Glo2")) continue;
-
-            var hasGlow = false;
+            if (!effects) continue;
+            var glow = null;
             for (var j = 1; j <= effects.numProperties; j++) {
-                if (effects.property(j).matchName === "ADBE Glo2") { hasGlow = true; break; }
+                if (effects.property(j).matchName === "ADBE Glo2") {
+                    glow = effects.property(j);
+                    break;
+                }
             }
-            if (!hasGlow) {
+            if (!glow && effects.canAddProperty("ADBE Glo2")) {
                 effects.addProperty("ADBE Glo2");
                 changed++;
+                /* AE can invalidate an effect-group reference after addProperty. Reacquire it. */
+                effects = layers[i].property("ADBE Effect Parade");
+                if (effects) {
+                    for (var k = 1; k <= effects.numProperties; k++) {
+                        if (effects.property(k).matchName === "ADBE Glo2") {
+                            glow = effects.property(k);
+                            break;
+                        }
+                    }
+                }
+            }
+            if (glow && (profile === "cinematic" || profile === "attention")) {
+                OBSIDIAN_applyGlowProfile(glow, profile);
+                configured++;
             }
         }
-        for (var k = 0; k < layers.length; k++) {
-            var verifyEffects = layers[k].property("ADBE Effect Parade");
+        for (var n = 0; n < layers.length; n++) {
+            var verifyEffects = layers[n].property("ADBE Effect Parade");
             if (!verifyEffects) continue;
             for (var m = 1; m <= verifyEffects.numProperties; m++) {
-                if (verifyEffects.property(m).matchName === "ADBE Glo2") { verified++; break; }
+                if (verifyEffects.property(m).matchName === "ADBE Glo2") {
+                    verified++;
+                    break;
+                }
             }
         }
     } catch (error) {
@@ -181,7 +225,12 @@ function OBSIDIAN_addGlow() {
     app.endUndoGroup();
 
     if (verified === 0) return "ERROR|Glow was not found after the edit. No successful result could be verified.";
-    return "OK|Verified Glow on " + verified + " selected layer(s); added " + changed + " new effect(s).";
+    var message = "OK|Verified Glow on " + verified + " selected layer(s); added " + changed + " new effect(s).";
+    if (profile === "cinematic" || profile === "attention") {
+        if (configured !== verified) return "ERROR|Glow exists, but its requested preset was not configured on every selected layer.";
+        message += " Applied and verified " + profile + " preset on " + configured + " layer(s).";
+    }
+    return message;
 }
 
 function OBSIDIAN_removeGlow() {
@@ -373,7 +422,7 @@ function OBSIDIAN_executePlan(action, value, profile) {
         if (profile !== "cinematic" && profile !== "attention" && profile !== "unspecified") {
             return "ERROR|Unsupported Glow profile.";
         }
-        var glowResult = OBSIDIAN_addGlow();
+        var glowResult = OBSIDIAN_addGlow(profile);
         if (glowResult.indexOf("OK|") === 0) {
             return glowResult + " Requested profile: " + profile +
                 ". Profile is intent-only; calibrated Glow settings were not applied.";
