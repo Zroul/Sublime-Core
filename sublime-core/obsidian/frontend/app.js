@@ -77,8 +77,14 @@ function runAE(command) {
     return;
   }
 
-  setProgress(20, "Planning command...");
+  setProgress(20, "Understanding request...");
   const plan = planner.planObsidianCommand(command);
+
+  if (plan && plan.status === "knowledge_answer") {
+    setProgress(100, "Local motion-design knowledge");
+    showResult(plan.answer || "I don't have a useful answer for that topic yet.", false);
+    return;
+  }
 
   if (!plan || plan.status !== "planned") {
     setProgress(100, plan && plan.status === "needs_clarification" ? "Needs clarification" : "Not supported");
@@ -107,7 +113,7 @@ function runAE(command) {
   setProgress(55, "Executing approved action...");
   window.__adobe_cep__.evalScript(expression, (response) => {
     const isError = typeof response !== "string" ||
-      response.indexOf("ERROR|") === 0 ||
+      response.indexOf("OK|") !== 0 ||
       response === "EvalScript error.";
     setProgress(100, isError ? "Failed" : "Verified by host");
 
