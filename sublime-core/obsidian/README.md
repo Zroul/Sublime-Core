@@ -9,18 +9,25 @@ OBSIDIAN is the After Effects motion-design assistant in Sublime Core. It curren
 - `backend/core/` — Node-testable facade for the shared browser planner.
 - `CSXS/manifest.xml` — Adobe CEP extension manifest; it must remain at the extension root.
 
-## Working command model
+## Working small-knowledge model
 
-The current small knowledge brain is explicit JavaScript data in `frontend/knowledge.js`, consumed by `frontend/planner.shared.js`. It recognizes common motion-design intent such as:
+The current knowledge brain is explicit JavaScript data in `frontend/knowledge.js`, consumed by `frontend/planner.shared.js`. It can answer a small set of direct motion-design questions and map familiar language to supported edits.
 
 - **Cinematic Glow:** subtle, soft, restrained, atmospheric, dreamy, bloom, filmic.
 - **Attention Glow:** bold, strong, punchy, dramatic, neon, pop, stand out.
-- **Fade-in:** fade up, appear gradually, reveal gradually, gentle entrance.
-- **Readability:** recognizes readability requests and asks before claiming it can judge pixels.
+- **Motion basics:** easing, visual hierarchy, fade-ins, and text readability.
+- **Commands:** inspect project/layers, set or reduce opacity, add/remove Glow, and fade-in.
 
-The planner maps requests to a narrow allowlist: inspect project, inspect selected layers, set/reduce opacity, add/remove Glow, and fade-in. Conflicting Glow styles prompt a question. Unsupported requests are not executed.
+Examples to try in the panel:
+- `What is easing?` — returns a short knowledge answer; does not edit the composition.
+- `How do I make this title pop?` — returns design guidance; does not edit the composition.
+- `Add a subtle cinematic glow` — proposes the cinematic Glow profile for the selected layers.
+- `Make this title pop` — proposes the attention Glow profile for the selected layers.
+- `Set opacity to 45%` — requests the guarded opacity action.
 
-**Boundary:** this is a small knowledge-backed rule planner, not yet the CORE/Qwen language model. It does not understand arbitrary requests, see the rendered composition, learn a user's style, or research trends. Its knowledge can be expanded without adding dependencies or starting another model/server.
+Conflicting Glow styles prompt a question. Unsupported requests are not executed. Knowledge answers are local and deterministic, so this is a small knowledge-backed model rather than a general conversational AI.
+
+**Boundary:** CORE/Qwen is not connected to this planner yet. It does not understand arbitrary requests, see rendered pixels, learn a user's style, or research trends. Its knowledge can be expanded without adding dependencies or starting another model/server.
 
 ## Current host capabilities
 
