@@ -145,12 +145,12 @@ test("unsupported commands are rejected instead of silently claiming success", (
 test("Glow mutations are blocked during investigation of the After Effects render crash", () => {
   const { context, layer } = makeContext();
   const added = context.OBSIDIAN_executePlan("add_glow", null, "unspecified");
-  assert.match(added, /^ERROR\\|Glow edits are temporarily disabled while investigating/);
+  assert.match(added, /^ERROR\|Glow edits are temporarily disabled while investigating/);
   assert.equal(layer.property("ADBE Effect Parade").numProperties, 0);
 
   layer.property("ADBE Effect Parade").addProperty("ADBE Glo2");
   const removed = context.OBSIDIAN_executePlan("remove_glow", null, "");
-  assert.match(removed, /^ERROR\\|Glow edits are temporarily disabled while investigating/);
+  assert.match(removed, /^ERROR\|Glow edits are temporarily disabled while investigating/);
   assert.equal(layer.property("ADBE Effect Parade").numProperties, 1);
 });
 test("Glow removal is blocked without changing existing Glow instances during crash investigation", () => {
