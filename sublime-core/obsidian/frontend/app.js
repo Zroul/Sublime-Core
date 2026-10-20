@@ -19,6 +19,7 @@ const welcomePhrases = [
 ];
 
 let phraseIndex = 0;
+let commandInFlight = false;
 let phraseTimer;
 
 function typeWelcomePhrase() {
@@ -70,6 +71,10 @@ function showResult(message, isError) {
 }
 
 function runAE(command) {
+  if (commandInFlight) {
+    showResult("An OBSIDIAN command is still running. Wait for its result before sending another edit.", true);
+    return;
+  }
   const planner = window.OBSIDIANPlanner;
   if (!planner || typeof planner.planObsidianCommand !== "function" ||
       typeof planner.isExecutablePlan !== "function") {
@@ -110,8 +115,10 @@ function runAE(command) {
   const expression = "OBSIDIAN_executePlan(" +
     JSON.stringify(plan.action) + "," + valueArgument + "," + profileArgument + ")";
 
+  commandInFlight = true;
   setProgress(55, "Executing approved action...");
   window.__adobe_cep__.evalScript(expression, (response) => {
+    commandInFlight = false;
     const isError = typeof response !== "string" ||
       response.indexOf("OK|") !== 0 ||
       response === "EvalScript error.";
