@@ -45,6 +45,19 @@ function OBSIDIAN_getOpacity(layer) {
     }
 }
 
+/* Never overwrite opacity keyframes or expressions (including loop expressions). */
+function OBSIDIAN_opacityEditBlockReason(layers) {
+    for (var i = 0; i < layers.length; i++) {
+        var transform = layers[i].property("ADBE Transform Group");
+        var opacity = transform ? transform.property("ADBE Opacity") : null;
+        if (opacity && (Number(opacity.numKeys) > 0 || opacity.expressionEnabled)) {
+            return "ERROR|Opacity edit cancelled: existing opacity animation or expression on '" +
+                OBSIDIAN_cleanText(layers[i].name) + "' was preserved.";
+        }
+    }
+    return "";
+}
+
 function OBSIDIAN_getEffectNames(layer) {
     var names = [];
     try {
@@ -226,6 +239,9 @@ function OBSIDIAN_setOpacity(value) {
     if (isNaN(value)) return "ERROR|Opacity must be a number.";
     value = Math.max(0, Math.min(100, value));
 
+    var blockReason = OBSIDIAN_opacityEditBlockReason(layers);
+    if (blockReason) return blockReason;
+
     var changed = 0;
     var verified = 0;
     app.beginUndoGroup("OBSIDIAN - Set Opacity");
@@ -258,6 +274,8 @@ function OBSIDIAN_setOpacity(value) {
 function OBSIDIAN_reduceOpacity() {
     var layers = OBSIDIAN_getSelectedLayers();
     if (!layers.length) return "ERROR|Open a composition and select at least one layer.";
+    var blockReason = OBSIDIAN_opacityEditBlockReason(layers);
+    if (blockReason) return blockReason;
     var changed = 0;
     var verified = 0;
     var expectedValues = [];

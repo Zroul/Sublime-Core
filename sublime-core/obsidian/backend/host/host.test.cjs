@@ -176,6 +176,34 @@ test("reduce opacity verifies the target value for each selected layer", () => {
   assert.equal(layer._opacity.value, 80);
 });
 
+test("set opacity preserves existing opacity keyframes", () => {
+  const { context, layer } = makeContext();
+  layer._opacity.numKeys = 2;
+  const result = context.OBSIDIAN_executePlan("set_opacity", 35, "");
+  assert.match(result, /^ERROR\|Opacity edit cancelled: existing opacity animation or expression/);
+  assert.equal(layer._opacity.value, 100);
+});
+
+test("set opacity preserves an enabled loop expression", () => {
+  const { context, layer } = makeContext();
+  layer._opacity.expressionEnabled = true;
+  layer._opacity.expression = "loopOut('cycle')";
+  const result = context.OBSIDIAN_executePlan("set_opacity", 35, "");
+  assert.match(result, /^ERROR\|Opacity edit cancelled: existing opacity animation or expression/);
+  assert.equal(layer._opacity.value, 100);
+  assert.equal(layer._opacity.expressionEnabled, true);
+});
+
+test("reduce opacity preserves an enabled loop expression", () => {
+  const { context, layer } = makeContext();
+  layer._opacity.expressionEnabled = true;
+  layer._opacity.expression = "loopOut('cycle')";
+  const result = context.OBSIDIAN_executePlan("reduce_opacity", null, "");
+  assert.match(result, /^ERROR\|Opacity edit cancelled: existing opacity animation or expression/);
+  assert.equal(layer._opacity.value, 100);
+  assert.equal(layer._opacity.expressionEnabled, true);
+});
+
 test("fade in refuses to run when the host cannot create opacity keyframes", () => {
   const { context } = makeContext();
   const result = context.OBSIDIAN_executePlan("fade_in", null, "");
