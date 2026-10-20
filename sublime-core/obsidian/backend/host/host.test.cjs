@@ -142,21 +142,17 @@ test("unsupported commands are rejected instead of silently claiming success", (
   assert.match(result, /^ERROR\|Unsupported planned action: run_shell/);
 });
 
-test("Glow add and remove are verified against the selected layer", () => {
-  const { context } = makeContext();
+test("Glow mutations are blocked during investigation of the After Effects render crash", () => {
+  const { context, layer } = makeContext();
   const added = context.OBSIDIAN_executePlan("add_glow", null, "unspecified");
-  assert.match(added, /^OK\|Verified Glow on 1 selected layer\(s\); added 1 new effect\(s\)\. Requested profile: unspecified\. Profile is intent-only; calibrated Glow settings were not applied\.$/);
+  assert.match(added, /^ERROR\\|Glow edits are temporarily disabled while investigating/);
+  assert.equal(layer.property("ADBE Effect Parade").numProperties, 0);
 
-  const inspected = context.OBSIDIAN_executePlan("inspect_selection", null, "");
-  assert.match(inspected, /Effects \(1\): Glow/);
-
+  layer.property("ADBE Effect Parade").addProperty("ADBE Glo2");
   const removed = context.OBSIDIAN_executePlan("remove_glow", null, "");
-  assert.match(removed, /^OK\|Verified Glow removed from selected layers\./);
-
-  const afterRemoval = context.OBSIDIAN_executePlan("inspect_selection", null, "");
-  assert.match(afterRemoval, /Effects \(0\): none/);
+  assert.match(removed, /^ERROR\\|Glow edits are temporarily disabled while investigating/);
+  assert.equal(layer.property("ADBE Effect Parade").numProperties, 1);
 });
-
 test("Glow removal reacquires the effect group and removes repeated Glow instances", () => {
   const { context, layer } = makeContext();
   const effects = layer.property("ADBE Effect Parade");
