@@ -6,7 +6,7 @@
   "use strict";
 
   root.OBSIDIANKnowledge = {
-    version: "0.3.0",
+    version: "0.3.1",
     concepts: [
       {
         id: "cinematic_glow",
@@ -44,12 +44,12 @@
       },
       {
         id: "attention_design",
-        cues: ["make a title pop", "make title pop", "attention grabbing", "attention-grabbing", "stand out"],
+        cues: ["make a title pop", "make title pop", "title pop", "attention grabbing", "attention-grabbing", "stand out"],
         answer: "To make a title stand out, use a clear contrast from the background, strong size hierarchy, clean spacing, and one deliberate accent. A bold Glow can help, but it should support the title rather than replace contrast."
       },
       {
         id: "readability_basics",
-        cues: ["readable text", "text readability", "make text readable", "improve readability", "hard to read"],
+        cues: ["readable", "legible", "hard to read", "text readability", "make text readable", "improve readability"],
         answer: "For readable text, start with contrast against the background, sufficient size, clear type, and spacing. A subtle shadow or Glow may separate text from a busy background, but it cannot fix weak contrast or an unsuitable font by itself."
       },
       {
