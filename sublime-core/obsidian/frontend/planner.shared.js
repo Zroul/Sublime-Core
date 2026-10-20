@@ -130,21 +130,12 @@
         status: "planned",
         action: "add_glow",
         args: { profile: profile },
-<<<<<<< Updated upstream
         explanation: (profile === "cinematic"
-          ? "Apply the restrained cinematic Glow preset. "
+          ? "Cinematic intent detected. This is a proposal—not a claim of calibrated execution; calibrated Glow settings are not implemented, and the host currently adds basic Glow only. "
           : profile === "attention"
-            ? "Apply the attention-grabbing Glow preset. "
-            : "Add basic Glow. ") + note,
+            ? "Attention-grabbing intent detected. This is a proposal—not a claim of calibrated execution; calibrated Glow settings are not implemented, and the host currently adds basic Glow only. "
+            : "Add basic Glow. The request does not specify a visual treatment. ") + note,
         confidence: profile === "unspecified" ? 0.65 : 0.85
-=======
-        explanation: profile === "cinematic"
-          ? "Cinematic intent detected. This is a proposal—not a claim of calibrated execution; calibrated Glow settings are not implemented, and the host currently adds basic Glow only."
-          : profile === "attention"
-            ? "Attention-grabbing intent detected. This is a proposal—not a claim of calibrated execution; calibrated Glow settings are not implemented, and the host currently adds basic Glow only."
-            : "Add basic Glow. The request does not specify a visual treatment.",
-        confidence: profile === "unspecified" ? 0.65 : 0.8
->>>>>>> Stashed changes
       };
     }
 
