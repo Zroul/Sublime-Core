@@ -1,9 +1,9 @@
 /**
  * Shared OBSIDIAN command planner.
  *
- * Uses a tiny, explicit local knowledge base to map familiar motion-design
- * language to a narrow set of approved host actions. It does not use an LLM,
- * inspect pixels, or invent unsupported edits.
+ * Uses a tiny, explicit local knowledge base to answer basic motion-design
+ * questions and map familiar language to a narrow set of approved host actions.
+ * It does not use an LLM, inspect pixels, or invent unsupported edits.
  */
 (function (root) {
   "use strict";
@@ -18,7 +18,7 @@
     fade_in: true
   };
 
-  var KNOWLEDGE = root.OBSIDIANKnowledge || { concepts: [], guardrails: [] };
+  var KNOWLEDGE = root.OBSIDIANKnowledge || { concepts: [], answers: [], guardrails: [] };
 
   function normalize(text) {
     return String(text === undefined || text === null ? "" : text)
@@ -43,6 +43,17 @@
     return null;
   }
 
+  function findKnowledgeAnswer(command) {
+    var isQuestion = /^(what|why|how|when|explain|tell me|teach me)\b/.test(command) ||
+      /\?$/.test(command);
+    if (!isQuestion) return null;
+    var answers = KNOWLEDGE.answers || [];
+    for (var i = 0; i < answers.length; i++) {
+      if (hasCue(answers[i].cues || [], command)) return answers[i].answer;
+    }
+    return null;
+  }
+
   function result(action, args, explanation, confidence) {
     return {
       status: "planned",
@@ -57,6 +68,11 @@
     var command = normalize(input);
     if (!command) {
       return { status: "needs_clarification", question: "What would you like OBSIDIAN to do?" };
+    }
+
+    var answer = findKnowledgeAnswer(command);
+    if (answer) {
+      return { status: "knowledge_answer", answer: answer, confidence: 0.9 };
     }
 
     if (/\b(inspect|show|analyze|analyse|check)\b/.test(command) &&
@@ -145,7 +161,7 @@
 
     return {
       status: "unsupported",
-      question: "I don't know a safe edit for that request yet. I understand project/layer inspection, opacity, Glow, and fade-in. Try one of those, or describe the visual treatment more specifically."
+      question: "I don't know a safe edit for that request yet. I understand project/layer inspection, opacity, Glow, and fade-in. Try one of those, or ask me a basic motion-design question."
     };
   }
 
