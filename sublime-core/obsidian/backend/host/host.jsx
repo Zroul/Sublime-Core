@@ -167,6 +167,8 @@ function OBSIDIAN_applyGlowProfile(effect, profile) {
 }
 
 function OBSIDIAN_addGlow(profile) {
+    return "ERROR|Glow edits are temporarily disabled while investigating the After Effects RenderTaskManager crash involving ADBE Glo2. No changes were made.";
+
     var layers = OBSIDIAN_getSelectedLayers();
     if (!layers.length) return "ERROR|Open a composition and select at least one layer.";
     profile = String(profile || "unspecified");
@@ -234,6 +236,8 @@ function OBSIDIAN_addGlow(profile) {
 }
 
 function OBSIDIAN_removeGlow() {
+    return "ERROR|Glow edits are temporarily disabled while investigating the After Effects RenderTaskManager crash involving ADBE Glo2. No changes were made.";
+
     var layers = OBSIDIAN_getSelectedLayers();
     if (!layers.length) return "ERROR|Open a composition and select at least one layer.";
 
