@@ -15,13 +15,19 @@ test("parses opacity values and rejects values above 100", () => {
   assert.equal(planObsidianCommand("set opacity to 140%").status, "needs_clarification");
 });
 
-test("distinguishes cinematic and attention glow requests", () => {
+test("maps cinematic and attention language to the matching Glow preset", () => {
   assert.equal(planObsidianCommand("add a subtle cinematic glow").args.profile, "cinematic");
   assert.equal(planObsidianCommand("add a bold attention-grabbing glow").args.profile, "attention");
   assert.match(planObsidianCommand("add a subtle cinematic glow").explanation, /restrained Glow preset/i);
+  assert.match(planObsidianCommand("add a bold attention-grabbing glow").explanation, /attention-grabbing Glow preset/i);
 });
 
-test("asks when glow style cues conflict", () => {
+test("uses knowledge cues for common visual language", () => {
+  assert.equal(planObsidianCommand("give this title a dreamy bloom").args.profile, "cinematic");
+  assert.equal(planObsidianCommand("make this title pop").args.profile, "attention");
+});
+
+test("asks when Glow style cues conflict", () => {
   assert.equal(planObsidianCommand("add subtle but flashy dramatic glow").status, "needs_clarification");
 });
 
@@ -36,19 +42,13 @@ test("only approved actions are executable", () => {
   assert.equal(isExecutablePlan({ status: "planned", action: "run_shell" }), false);
 });
 
-
-test("understands natural phrasing for visual intent", () => {
-  const plan = planObsidianCommand("give this title a subtle cinematic glow");
-  assert.equal(plan.status, "planned");
-  assert.equal(plan.action, "add_glow");
-  assert.equal(plan.args.profile, "cinematic");
-  assert.equal(isExecutablePlan(plan), true);
+test("plans a guarded fade-in from natural language", () => {
+  assert.equal(planObsidianCommand("apply a fade up").action, "fade_in");
+  assert.match(planObsidianCommand("apply a fade up").explanation, /existing opacity animation/i);
 });
 
-test("plans an actual attention Glow preset", () => {
-  const plan = planObsidianCommand("make this title pop with a bold glow");
-  assert.equal(plan.action, "add_glow");
-  assert.equal(plan.args.profile, "attention");
-  assert.match(plan.explanation, /basic Glow only/i);
-  assert.match(plan.explanation, /not implemented/i);
+test("does not pretend to judge text readability from pixels", () => {
+  const plan = planObsidianCommand("make this text more readable");
+  assert.equal(plan.status, "needs_clarification");
+  assert.equal(isExecutablePlan(plan), false);
 });
