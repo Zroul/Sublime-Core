@@ -29,8 +29,10 @@
   }
 
   function hasCue(cues, command) {
+    var paddedCommand = " " + command + " ";
     for (var i = 0; i < cues.length; i++) {
-      if (command.indexOf(normalize(cues[i])) !== -1) return true;
+      var cue = normalize(cues[i]);
+      if (cue && paddedCommand.indexOf(" " + cue + " ") !== -1) return true;
     }
     return false;
   }
