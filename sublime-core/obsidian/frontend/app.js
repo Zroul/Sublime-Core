@@ -99,7 +99,10 @@ function runAE(command) {
       "Intent: " + (recipe.intent || []).join(", "),
       "Palette: " + (look.palette || []).join(", "),
       "Lighting: " + (look.lighting || []).join(", "),
+      "Atmosphere: " + (look.atmosphere || []).join(", "),
       "Contrast: " + (look.contrast || "inspect footage before deciding"),
+      "Requirements: " + (recipe.requirements || []).join(", "),
+      "Cautions: " + (recipe.cautions || []).join(", "),
       "Not applied: this is a proposal, not an executed edit."
     ];
     showResult(lines.join("\n"), false);
