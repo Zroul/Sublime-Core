@@ -27,3 +27,9 @@ The library contains:
 - Keep sourced/reference-heavy future material in this backend knowledge area; keep the current CEP-compatible runtime data simple and dependency-free.
 
 This directory is reserved for a future searchable reference corpus, provenance metadata, and richer retrieval. It is not yet wired into runtime retrieval.
+
+## Creative style recipes
+
+The CEP-compatible style catalog lives in `../../frontend/style-recipes.js`. It maps familiar vibe language to a descriptive creative direction (intent, palette, lighting, contrast, requirements, and cautions). The planner can return this as a `style_plan`, which the panel displays without executing host edits.
+
+Recipes are proposals only. They are not calibrated presets and do not prove the selected footage supports the look. Keep `executable: false` until each recipe has a tested host implementation, appropriate parameter controls, rollback/safety checks, and verification. In particular, do not bypass the existing Glow crash-investigation block.
