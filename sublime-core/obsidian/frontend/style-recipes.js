@@ -64,8 +64,8 @@
   function normalize(value) {
     return String(value == null ? "" : value)
       .toLowerCase()
-      .replace(/[^a-z0-9\\s-]/g, " ")
-      .replace(/\\s+/g, " ")
+      .replace(/[^a-z0-9\s-]/g, " ")
+      .replace(/\s+/g, " ")
       .trim();
   }
 
