@@ -102,7 +102,7 @@ function runAE(command) {
       "Contrast: " + (look.contrast || "inspect footage before deciding"),
       "Not applied: this is a proposal, not an executed edit."
     ];
-    showResult(lines.join("\\n"), false);
+    showResult(lines.join("\n"), false);
     setProgress(100, "Creative direction prepared");
     return;
   }
