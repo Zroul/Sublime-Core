@@ -44,6 +44,14 @@ test("asks when Glow style cues conflict", () => {
   assert.equal(planObsidianCommand("add subtle but flashy dramatic glow").status, "needs_clarification");
 });
 
+test("turns a vibe request into a non-executable creative direction plan", () => {
+  const plan = planObsidianCommand("Give it neon lighting like it's in a dream city");
+  assert.equal(plan.status, "style_plan");
+  assert.equal(plan.recipe.id, "neon_dream_city");
+  assert.equal(isExecutablePlan(plan), false);
+  assert.match(plan.explanation, /not an executed/i);
+});
+
 test("does not treat unsupported natural language as executable", () => {
   const plan = planObsidianCommand("make this look like a premium SaaS ad");
   assert.equal(plan.status, "unsupported");
