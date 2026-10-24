@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import "../frontend/style-recipes.js";
+import "../../frontend/style-recipes.js";
 
 const recipes = globalThis.OBSIDIANStyleRecipes;
 
