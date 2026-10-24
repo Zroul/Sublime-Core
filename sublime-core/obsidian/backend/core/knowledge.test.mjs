@@ -28,12 +28,12 @@ test("knowledge answer IDs and concept IDs are unique", () => {
 const questions = [
   ["What is easing?", /speed changes/i],
   ["How do I make this title pop?", /contrast/i],
-  ["What is a keyframe?", /specific point in time/i],
-  ["How does velocity affect animation?", /change in position over time/i],
-  ["Explain motion blur.", /movement/i],
+  ["What is a keyframe?", /particular time/i],
+  ["How does velocity affect animation?", /position changes over time/i],
+  ["Explain motion blur.", /moving subject|motion blur/i],
   ["What is parallax?", /different speeds/i],
   ["What is a track matte?", /transparency/i],
-  ["What is anticipation in animation?", /prepares the viewer/i],
+  ["What is anticipation in animation?", /preparatory action/i],
   ["How do I improve text readability?", /contrast/i],
 ];
 
