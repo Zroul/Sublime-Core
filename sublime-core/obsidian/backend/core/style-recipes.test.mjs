@@ -23,6 +23,9 @@ test("interprets neon dream city as a creative direction plan", () => {
   assert.equal(plan.recipe.id, "neon_dream_city");
   assert.ok(plan.recipe.look.palette.includes("cyan"));
   assert.equal(plan.executable, false);
+  assert.ok(plan.recipe.steps.length >= 4);
+  const glowStep = plan.recipe.steps.find((step) => /Glow/.test(step.label));
+  assert.equal(glowStep.status, "blocked_pending_crash_investigation");
 });
 
 test("normalizes repeated whitespace before matching phrases", () => {
