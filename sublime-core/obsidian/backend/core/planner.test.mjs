@@ -65,3 +65,8 @@ test("does not pretend to judge text readability from pixels", () => {
   assert.equal(plan.status, "needs_clarification");
   assert.equal(isExecutablePlan(plan), false);
 });
+
+test("style cues require whole words rather than matching inside unrelated words", () => {
+  assert.equal(planObsidianCommand("add a popular glow").args.profile, "unspecified");
+  assert.equal(planObsidianCommand("add a software glow").args.profile, "unspecified");
+});
