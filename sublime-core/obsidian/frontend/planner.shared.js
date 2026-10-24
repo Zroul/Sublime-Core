@@ -29,8 +29,10 @@
   }
 
   function hasCue(cues, command) {
+    var paddedCommand = " " + command + " ";
     for (var i = 0; i < cues.length; i++) {
-      if (command.indexOf(normalize(cues[i])) !== -1) return true;
+      var cue = normalize(cues[i]);
+      if (cue && paddedCommand.indexOf(" " + cue + " ") !== -1) return true;
     }
     return false;
   }
@@ -157,6 +159,20 @@
         status: "needs_clarification",
         question: "I can inspect the selected layers, but I cannot judge visual readability from pixels yet. Want me to inspect the selected layers first?"
       };
+    }
+
+    var stylePlanner = root.OBSIDIANStyleRecipes;
+    if (stylePlanner && typeof stylePlanner.planStyle === "function") {
+      var stylePlan = stylePlanner.planStyle(command);
+      if (stylePlan.status === "style_plan") {
+        return {
+          status: "style_plan",
+          recipe: stylePlan.recipe,
+          explanation: stylePlan.note,
+          confidence: 0.75
+        };
+      }
+      if (stylePlan.status === "needs_clarification") return stylePlan;
     }
 
     return {

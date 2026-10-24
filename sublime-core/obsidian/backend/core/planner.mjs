@@ -3,6 +3,7 @@
  * Keep one implementation so browser behavior and unit tests cannot drift.
  */
 import "../../frontend/knowledge.js";
+import "../../frontend/style-recipes.js";
 import "../../frontend/planner.shared.js";
 
 const planner = globalThis.OBSIDIANPlanner;

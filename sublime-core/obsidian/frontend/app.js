@@ -91,6 +91,26 @@ function runAE(command) {
     return;
   }
 
+  if (plan && plan.status === "style_plan" && plan.recipe) {
+    const recipe = plan.recipe;
+    const look = recipe.look || {};
+    const lines = [
+      recipe.name + " direction",
+      "Intent: " + (recipe.intent || []).join(", "),
+      "Palette: " + (look.palette || []).join(", "),
+      "Lighting: " + (look.lighting || []).join(", "),
+      "Atmosphere: " + (look.atmosphere || []).join(", "),
+      "Contrast: " + (look.contrast || "inspect footage before deciding"),
+      "Workflow: " + (recipe.steps || []).map((step) => step.label + " [" + step.status + "]").join(" → "),
+      "Requirements: " + (recipe.requirements || []).join(", "),
+      "Cautions: " + (recipe.cautions || []).join(", "),
+      "Not applied: this is a proposal, not an executed edit."
+    ];
+    showResult(lines.join("\n"), false);
+    setProgress(100, "Creative direction prepared");
+    return;
+  }
+
   if (!plan || plan.status !== "planned") {
     setProgress(100, plan && plan.status === "needs_clarification" ? "Needs clarification" : "Not supported");
     showResult(plan && plan.question ? plan.question : "OBSIDIAN could not create a safe action plan.", true);

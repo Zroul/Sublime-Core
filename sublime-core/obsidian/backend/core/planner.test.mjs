@@ -44,6 +44,14 @@ test("asks when Glow style cues conflict", () => {
   assert.equal(planObsidianCommand("add subtle but flashy dramatic glow").status, "needs_clarification");
 });
 
+test("turns a vibe request into a non-executable creative direction plan", () => {
+  const plan = planObsidianCommand("Give it neon lighting like it's in a dream city");
+  assert.equal(plan.status, "style_plan");
+  assert.equal(plan.recipe.id, "neon_dream_city");
+  assert.equal(isExecutablePlan(plan), false);
+  assert.match(plan.explanation, /not an executed/i);
+});
+
 test("does not treat unsupported natural language as executable", () => {
   const plan = planObsidianCommand("make this look like a premium SaaS ad");
   assert.equal(plan.status, "unsupported");
@@ -64,4 +72,9 @@ test("does not pretend to judge text readability from pixels", () => {
   const plan = planObsidianCommand("make this text more readable");
   assert.equal(plan.status, "needs_clarification");
   assert.equal(isExecutablePlan(plan), false);
+});
+
+test("style cues require whole words rather than matching inside unrelated words", () => {
+  assert.equal(planObsidianCommand("add a popular glow").args.profile, "unspecified");
+  assert.equal(planObsidianCommand("add a software glow").args.profile, "unspecified");
 });
