@@ -6,8 +6,36 @@ $ErrorActionPreference = "Stop"
 
 $obsidianRoot = Split-Path -Parent $PSScriptRoot
 $manifestPath = Join-Path $obsidianRoot "CSXS\manifest.xml"
-$timestamp = Get-Date -Format "yyyyMMdd-HHmmss"
-$stagingPath = "$ExtensionPath-staging-$timestamp"
+$installId = [guid]::NewGuid().ToString("N")
+$ExtensionPath = [System.IO.Path]::GetFullPath($ExtensionPath)
+$obsidianRoot = [System.IO.Path]::GetFullPath($obsidianRoot)
+$sourceRoot = $obsidianRoot.TrimEnd([System.IO.Path]::DirectorySeparatorChar, [System.IO.Path]::AltDirectorySeparatorChar)
+$targetRoot = $ExtensionPath.TrimEnd([System.IO.Path]::DirectorySeparatorChar, [System.IO.Path]::AltDirectorySeparatorChar)
+$separator = [System.IO.Path]::DirectorySeparatorChar
+$sourcePrefix = $sourceRoot + $separator
+$targetPrefix = $targetRoot + $separator
+$driveRoot = [System.IO.Path]::GetPathRoot($ExtensionPath).TrimEnd([System.IO.Path]::DirectorySeparatorChar, [System.IO.Path]::AltDirectorySeparatorChar)
+
+if ($targetRoot -eq $driveRoot -or
+    $targetRoot.Equals($sourceRoot, [System.StringComparison]::OrdinalIgnoreCase) -or
+    $targetRoot.StartsWith($sourcePrefix, [System.StringComparison]::OrdinalIgnoreCase) -or
+    $sourceRoot.StartsWith($targetPrefix, [System.StringComparison]::OrdinalIgnoreCase)) {
+    throw "ExtensionPath must be a non-root directory outside the OBSIDIAN source tree."
+}
+
+$stagingPath = "$ExtensionPath-staging-$installId"
+$backupPath = "$ExtensionPath-backup-$installId"
+$failedPath = "$ExtensionPath-failed-$installId"
+
+function Assert-PathUnderRoot([string]$root, [string]$candidate, [string]$description) {
+    $resolvedRoot = [System.IO.Path]::GetFullPath($root).TrimEnd([System.IO.Path]::DirectorySeparatorChar, [System.IO.Path]::AltDirectorySeparatorChar)
+    $resolvedCandidate = [System.IO.Path]::GetFullPath($candidate)
+    $rootPrefix = $resolvedRoot + [System.IO.Path]::DirectorySeparatorChar
+    if (-not $resolvedCandidate.Equals($resolvedRoot, [System.StringComparison]::OrdinalIgnoreCase) -and
+        -not $resolvedCandidate.StartsWith($rootPrefix, [System.StringComparison]::OrdinalIgnoreCase)) {
+        throw "$description escapes its extension root: $resolvedCandidate"
+    }
+}
 
 if (-not (Test-Path -LiteralPath $manifestPath -PathType Leaf)) {
     throw "Source CEP manifest not found: $manifestPath"
@@ -29,6 +57,8 @@ function Resolve-ManifestPath([string]$root, [string]$relativePath) {
 
 $sourceMain = Resolve-ManifestPath $obsidianRoot $mainPath
 $sourceHost = Resolve-ManifestPath $obsidianRoot $scriptPath
+Assert-PathUnderRoot $obsidianRoot $sourceMain "Manifest MainPath"
+Assert-PathUnderRoot $obsidianRoot $sourceHost "Manifest ScriptPath"
 
 if (-not (Test-Path -LiteralPath $sourceMain -PathType Leaf)) {
     throw "Manifest MainPath does not exist in source: $sourceMain"
@@ -41,7 +71,7 @@ $parent = Split-Path -Parent $ExtensionPath
 New-Item -ItemType Directory -Path $parent -Force | Out-Null
 
 if (Test-Path -LiteralPath $stagingPath) {
-    Remove-Item -LiteralPath $stagingPath -Recurse -Force
+    throw "Unique staging directory already exists; refusing to remove it: $stagingPath"
 }
 New-Item -ItemType Directory -Path $stagingPath -Force | Out-Null
 Get-ChildItem -LiteralPath $obsidianRoot -Force | Copy-Item -Destination $stagingPath -Recurse -Force
@@ -50,6 +80,8 @@ $stagedManifest = Join-Path $stagingPath "CSXS\manifest.xml"
 [xml]$stagedXml = Get-Content -LiteralPath $stagedManifest -Raw
 $stagedMain = Resolve-ManifestPath $stagingPath ([string]$stagedXml.SelectSingleNode("//*[local-name()='MainPath']").InnerText)
 $stagedHost = Resolve-ManifestPath $stagingPath ([string]$stagedXml.SelectSingleNode("//*[local-name()='ScriptPath']").InnerText)
+Assert-PathUnderRoot $stagingPath $stagedMain "Staged manifest MainPath"
+Assert-PathUnderRoot $stagingPath $stagedHost "Staged manifest ScriptPath"
 
 if (-not (Test-Path -LiteralPath $stagedMain -PathType Leaf)) {
     Remove-Item -LiteralPath $stagingPath -Recurse -Force
@@ -67,34 +99,50 @@ if ($hostHash -ne $stagedHostHash) {
     throw "Staging verification failed: source and staged host scripts differ."
 }
 
-if (Test-Path -LiteralPath $ExtensionPath) {
-    $backupPath = "$ExtensionPath-backup-$timestamp"
-    Copy-Item -LiteralPath $ExtensionPath -Destination $backupPath -Recurse
-    if (-not (Test-Path -LiteralPath $backupPath)) {
-        Remove-Item -LiteralPath $stagingPath -Recurse -Force
-        throw "Backup verification failed; installed extension was not changed."
+$hadExistingInstall = Test-Path -LiteralPath $ExtensionPath
+if ($hadExistingInstall -and -not (Test-Path -LiteralPath $ExtensionPath -PathType Container)) {
+    throw "ExtensionPath exists but is not a directory: $ExtensionPath"
+}
+if ($hadExistingInstall) {
+    Move-Item -LiteralPath $ExtensionPath -Destination $backupPath
+    if (-not (Test-Path -LiteralPath $backupPath -PathType Container)) {
+        throw "Backup move could not be verified; the existing extension was not replaced."
     }
-    Write-Output "Backup created: $backupPath"
-    Remove-Item -LiteralPath $ExtensionPath -Recurse -Force
+    Write-Output "Existing extension preserved at: $backupPath"
 }
 
-Move-Item -LiteralPath $stagingPath -Destination $ExtensionPath
+try {
+    Move-Item -LiteralPath $stagingPath -Destination $ExtensionPath
 
-$installedManifest = Join-Path $ExtensionPath "CSXS\manifest.xml"
-[xml]$installedXml = Get-Content -LiteralPath $installedManifest -Raw
-$installedMain = Resolve-ManifestPath $ExtensionPath ([string]$installedXml.SelectSingleNode("//*[local-name()='MainPath']").InnerText)
-$installedHost = Resolve-ManifestPath $ExtensionPath ([string]$installedXml.SelectSingleNode("//*[local-name()='ScriptPath']").InnerText)
+    $installedManifest = Join-Path $ExtensionPath "CSXS\manifest.xml"
+    [xml]$installedXml = Get-Content -LiteralPath $installedManifest -Raw
+    $installedMain = Resolve-ManifestPath $ExtensionPath ([string]$installedXml.SelectSingleNode("//*[local-name()='MainPath']").InnerText)
+    $installedHost = Resolve-ManifestPath $ExtensionPath ([string]$installedXml.SelectSingleNode("//*[local-name()='ScriptPath']").InnerText)
+    Assert-PathUnderRoot $ExtensionPath $installedMain "Installed manifest MainPath"
+    Assert-PathUnderRoot $ExtensionPath $installedHost "Installed manifest ScriptPath"
 
-if (-not (Test-Path -LiteralPath $installedMain -PathType Leaf)) {
-    throw "Install verification failed: active MainPath is missing: $installedMain"
-}
-if (-not (Test-Path -LiteralPath $installedHost -PathType Leaf)) {
-    throw "Install verification failed: active ScriptPath is missing: $installedHost"
-}
+    if (-not (Test-Path -LiteralPath $installedMain -PathType Leaf)) {
+        throw "Install verification failed: active MainPath is missing: $installedMain"
+    }
+    if (-not (Test-Path -LiteralPath $installedHost -PathType Leaf)) {
+        throw "Install verification failed: active ScriptPath is missing: $installedHost"
+    }
 
-$installedHostHash = (Get-FileHash -LiteralPath $installedHost -Algorithm SHA256).Hash
-if ($hostHash -ne $installedHostHash) {
-    throw "Install verification failed: source and installed host scripts differ."
+    $installedHostHash = (Get-FileHash -LiteralPath $installedHost -Algorithm SHA256).Hash
+    if ($hostHash -ne $installedHostHash) {
+        throw "Install verification failed: source and installed host scripts differ."
+    }
+} catch {
+    $installFailure = $_.Exception.Message
+    if (Test-Path -LiteralPath $ExtensionPath) {
+        Move-Item -LiteralPath $ExtensionPath -Destination $failedPath
+        Write-Output "Unverified staged install preserved at: $failedPath"
+    }
+    if ($hadExistingInstall -and (Test-Path -LiteralPath $backupPath -PathType Container)) {
+        Move-Item -LiteralPath $backupPath -Destination $ExtensionPath
+        throw "Install verification failed; previous extension was restored. $installFailure"
+    }
+    throw "Install verification failed; no prior extension existed to restore. $installFailure"
 }
 
 Write-Output "OBSIDIAN CEP files installed and verified."
