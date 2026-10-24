@@ -1,90 +1,75 @@
-/* OBSIDIAN style recipes: descriptive plans only, not host-executable edits. */
+/* OBSIDIAN's descriptive creative recipe library. Recipes never execute host edits. */
 (function (root) {
   "use strict";
 
+  var IMPLEMENTED = "IMPLEMENTED";
+  var PROPOSED = "PROPOSED";
+  var BLOCKED = "BLOCKED";
+  var REQUIRES_INPUT = "REQUIRES_INPUT";
+
+  function step(order, label, status) {
+    return { order: order, label: label, status: status || PROPOSED };
+  }
+
+  function recipe(id, name, category, cues, intent, parameters, prerequisites, steps, compatibility, fallback) {
+    return {
+      id: id,
+      name: name,
+      category: category,
+      cues: cues,
+      intent: intent,
+      parameters: parameters,
+      prerequisites: prerequisites,
+      steps: steps,
+      compatibility: compatibility,
+      executionReadiness: PROPOSED,
+      fallback: fallback,
+      look: {
+        palette: parameters.palette || ["choose after inspecting the footage"],
+        lighting: parameters.lighting || ["choose after inspecting the footage"],
+        atmosphere: parameters.atmosphere || ["only if supported by the source"],
+        contrast: parameters.contrast || "preserve important detail"
+      },
+      cautions: [fallback, "This recipe is creative direction only; no visual edit has been applied."]
+    };
+  }
+
   var RECIPES = [
-    {
-      id: "neon_dream_city",
-      name: "Neon Dream City",
-      cues: ["neon", "dream city", "dreamy city", "cyberpunk", "futuristic neon"],
-      intent: ["futuristic", "dreamy", "surreal"],
-      look: {
-        palette: ["cyan", "magenta", "deep blue"],
-        lighting: ["controlled glow on bright highlights", "selective bloom"],
-        atmosphere: ["soft haze if source footage supports it"],
-        contrast: "preserve dark detail; keep highlights from clipping"
-      },
-      steps: [
-        { label: "Inspect footage and selected layers", status: "read_only_action_available" },
-        { label: "Build cyan / magenta / deep-blue color grade", status: "not_implemented" },
-        { label: "Apply selective Glow to suitable highlights", status: "blocked_pending_crash_investigation" },
-        { label: "Add subtle atmospheric haze if appropriate", status: "not_implemented" },
-        { label: "Verify highlight detail and readability", status: "not_implemented" }
-      ],
-      requirements: ["inspect footage and selected layers", "confirm suitable bright areas or light sources"],
-      cautions: ["color grading and haze are not yet executable by OBSIDIAN", "Glow stays blocked pending the crash investigation", "avoid applying Glow blindly to every layer"]
-    },
-    {
-      id: "cinematic",
-      name: "Cinematic",
-      cues: ["cinematic", "filmic", "movie look"],
-      intent: ["restrained", "atmospheric", "film-inspired"],
-      look: {
-        palette: ["chosen to suit the footage"],
-        lighting: ["restrained highlight bloom"],
-        atmosphere: ["controlled contrast"],
-        contrast: "retain texture and shadow detail"
-      },
-      steps: [
-        { label: "Inspect footage and selected layers", status: "read_only_action_available" },
-        { label: "Establish a restrained contrast and color grade", status: "not_implemented" },
-        { label: "Apply restrained highlight bloom", status: "blocked_pending_crash_investigation" },
-        { label: "Verify texture and shadow detail", status: "not_implemented" }
-      ],
-      requirements: ["inspect footage before choosing parameters"],
-      cautions: ["a style label alone is not enough to choose calibrated effect values"]
-    },
-    {
-      id: "high_energy",
-      name: "High Energy",
-      cues: ["punchy", "high energy", "aggressive edit", "intense"],
-      intent: ["fast", "bold", "high contrast"],
-      look: {
-        palette: ["strong accent color"],
-        lighting: ["selective emphasis"],
-        motion: ["consider motion blur only where movement warrants it"],
-        contrast: "keep the subject and text readable"
-      },
-      steps: [
-        { label: "Inspect motion and subject placement", status: "read_only_action_available" },
-        { label: "Choose accent colors and contrast", status: "not_implemented" },
-        { label: "Design cut timing and motion emphasis", status: "not_implemented" },
-        { label: "Evaluate whether motion blur is appropriate", status: "not_implemented" },
-        { label: "Verify subject and text readability", status: "not_implemented" }
-      ],
-      requirements: ["inspect motion and subject placement"],
-      cautions: ["do not invent cuts, timing, or footage analysis without inspecting the media"]
-    },
-    {
-      id: "nostalgic",
-      name: "Nostalgic",
-      cues: ["nostalgic", "retro", "vintage", "old film"],
-      intent: ["warm", "softened", "era-inspired"],
-      look: {
-        palette: ["warm or faded tones chosen for the footage"],
-        lighting: ["softened highlights"],
-        texture: ["grain only if available and appropriate"],
-        contrast: "avoid crushing detail"
-      },
-      steps: [
-        { label: "Inspect footage and clarify the intended era", status: "read_only_action_available" },
-        { label: "Build a warm or faded color grade", status: "not_implemented" },
-        { label: "Add restrained grain if available", status: "not_implemented" },
-        { label: "Verify texture and shadow detail", status: "not_implemented" }
-      ],
-      requirements: ["inspect footage and ask which era if the reference is ambiguous"],
-      cautions: ["specific film-stock emulation is not currently implemented"]
-    }
+    recipe("cinematic_film", "Cinematic Film", "cinematic_film", ["cinematic", "cinematic film look", "filmic cinematic grade", "restrained movie look"], ["restrained", "story-led", "naturalistic"], { palette: ["footage-led neutral"], lighting: ["restrained highlight roll-off"], contrast: "retain shadow texture and skin detail", grain: "optional, source-dependent" }, ["Inspect footage, composition, and selected layers", "Confirm target mood and whether grain is wanted"], [step(1, "Inspect active composition and selected layers", IMPLEMENTED), step(2, "Choose a footage-led palette and contrast direction", REQUIRES_INPUT), step(3, "Plan restrained highlight treatment; Glow remains unavailable", BLOCKED), step(4, "Review skin, shadow, and highlight detail", PROPOSED)], "Any footage type; grade remains conceptual until a tested color workflow exists.", "Use a neutral, detail-preserving direction and omit grain or bloom unless explicitly requested."),
+    recipe("anamorphic_noir", "Anamorphic Noir", "cinematic_film", ["anamorphic noir", "wide screen noir", "noir film look"], ["noir", "graphic", "tense"], { palette: ["cool shadows", "warm practical highlights"], framing: "wide composition as an editorial suggestion", lighting: ["motivated practicals", "deep but readable shadows"], contrast: "protect faces and shadow detail" }, ["Inspect composition and subject placement", "Confirm whether reframing is acceptable"], [step(1, "Inspect composition and selected layers", IMPLEMENTED), step(2, "Choose a cool-shadow and warm-practical color direction", REQUIRES_INPUT), step(3, "Plan motivated light emphasis without adding effects", PROPOSED), step(4, "Check faces and shadow detail", PROPOSED)], "Wide framing is a suggestion only; no crop or lens effect is applied.", "Keep the original framing and use a restrained contrast proposal."),
+    recipe("warm_35mm", "Warm 35mm Memory", "cinematic_film", ["warm 35mm film", "35mm home movie", "warm film memory"], ["intimate", "warm", "organic"], { palette: ["warm highlights", "soft neutral shadows"], texture: "optional fine grain only if a verified tool exists", lighting: ["soft practical light"], contrast: "gentle, not washed out" }, ["Inspect footage and existing texture", "Ask whether the memory should feel clean or aged"], [step(1, "Inspect footage and selected layers", IMPLEMENTED), step(2, "Choose clean film warmth or a visibly aged direction", REQUIRES_INPUT), step(3, "Keep any grain suggestion optional and unexecuted", PROPOSED), step(4, "Check faces and shadow texture", PROPOSED)], "Grain and film emulation are not implemented; footage-led direction only.", "Keep footage clean and propose warmth without simulated grain."),
+    recipe("muted_documentary", "Muted Documentary", "cinematic_film", ["muted documentary look", "natural documentary grade", "observational film look"], ["observational", "credible", "understated"], { palette: ["natural, source-led"], saturation: "restrained by direction" , lighting: ["preserve available light"], contrast: "moderate and legible" }, ["Inspect source footage", "Confirm if the scene should remain naturalistic"], [step(1, "Inspect active composition and selected layers", IMPLEMENTED), step(2, "Confirm naturalistic versus stylized treatment", REQUIRES_INPUT), step(3, "Propose restrained contrast and source-led color", PROPOSED), step(4, "Review people and environmental detail", PROPOSED)], "Designed for live-action footage; no automatic grading or scene analysis.", "Keep the original palette and use only a written treatment direction."),
+
+    recipe("neon_dream_city", "Neon Dream City", "neon_cyberpunk", ["neon", "neon bloom", "dream city", "neon dream city", "dreamy neon city", "cyberpunk dream city", "cyberpunk neon"], ["surreal", "luminous", "urban"], { palette: ["cyan", "magenta", "deep blue"], lighting: ["selective neon emphasis"], bloom: "BLOCKED; no Glow mutation", atmosphere: ["haze only if already present or separately verified"] }, ["Inspect footage and selected layers", "Confirm whether the source contains practical lights"], [step(1, "Inspect footage and selected layers", IMPLEMENTED), step(2, "Choose cyan, magenta, and deep-blue color direction", REQUIRES_INPUT), step(3, "Plan selective neon bloom; Glow mutation is blocked", BLOCKED), step(4, "Preserve dark detail and check highlight clipping", PROPOSED)], "Works as a direction for footage with lights or signage; no color grade or haze is applied.", "If no suitable lights exist, keep the neon palette as a restrained accent direction and omit bloom."),
+    recipe("cyberpunk_rain", "Cyberpunk Rain", "neon_cyberpunk", ["cyberpunk rain", "rainy cyberpunk street", "neon soaked rain"], ["urban", "reflective", "moody"], { palette: ["electric cyan", "hot pink", "wet asphalt neutral"], lighting: ["reflections as source-led accents"], atmosphere: ["use existing rain or haze only"], bloom: "BLOCKED" }, ["Inspect whether rain, reflections, or signage are present", "Confirm desired accent color"], [step(1, "Inspect footage and selected layers", IMPLEMENTED), step(2, "Confirm source has reflective or rainy details", REQUIRES_INPUT), step(3, "Propose cyan and pink accents around existing sources", PROPOSED), step(4, "Keep Glow/bloom blocked and avoid inventing rain", BLOCKED)], "Requires suitable source detail; no generated rain or effects are available.", "Use color accents only as a proposal; do not add simulated rain or Glow."),
+    recipe("neon_noir", "Neon Noir", "neon_cyberpunk", ["neon noir", "noir with neon", "dark neon thriller"], ["mysterious", "graphic", "selective"], { palette: ["near-black", "one neon accent"], lighting: ["small motivated highlights"], contrast: "deep but not crushed", bloom: "BLOCKED" }, ["Inspect exposure and existing practical lights", "Choose one accent hue"], [step(1, "Inspect composition and selected layers", IMPLEMENTED), step(2, "Choose one neon accent and protect the dark range", REQUIRES_INPUT), step(3, "Keep any bloom suggestion blocked", BLOCKED), step(4, "Check that the subject remains legible", PROPOSED)], "Needs a readable subject and source lights; effect treatment is not implemented.", "Limit the proposal to one accent hue and retain original exposure."),
+    recipe("synthwave_sunset", "Synthwave Sunset", "neon_cyberpunk", ["synthwave sunset", "outrun sunset", "retrowave neon horizon"], ["retro-futurist", "graphic", "high energy"], { palette: ["violet", "fuchsia", "orange"], shapes: "horizon or grid only if already in the design", lighting: ["graphic accent"], bloom: "BLOCKED" }, ["Confirm whether the composition already contains graphic shapes", "Ask whether the look should feel nostalgic or modern"], [step(1, "Inspect selected layers and existing graphic elements", IMPLEMENTED), step(2, "Choose nostalgic versus modern synthwave emphasis", REQUIRES_INPUT), step(3, "Propose violet, fuchsia, and orange hierarchy", PROPOSED), step(4, "Glow remains blocked; do not invent grids or horizons", BLOCKED)], "For graphic compositions or footage with a compatible horizon; no new shapes are created.", "Use the palette direction on existing elements only; omit invented grid graphics."),
+    recipe("chromatic_future", "Chromatic Future", "neon_cyberpunk", ["chromatic future", "futuristic neon interface", "clean sci fi neon"], ["precise", "futuristic", "clean"], { palette: ["cool white", "cyan", "limited violet"], lighting: ["clean edge accents"], bloom: "BLOCKED", contrast: "clear hierarchy over haze" }, ["Inspect existing interface or subject layers", "Confirm primary information that must stay clear"], [step(1, "Inspect composition and selected layers", IMPLEMENTED), step(2, "Identify the primary subject or information hierarchy", REQUIRES_INPUT), step(3, "Propose cool-white and cyan accents", PROPOSED), step(4, "Keep bloom blocked and legibility first", BLOCKED)], "For interface or futuristic subject matter; does not create UI elements.", "Favor clean flat color accents over haze or Glow."),
+
+    recipe("haunted_forest", "Haunted Forest", "horror_dark", ["haunted forest", "eerie forest horror", "dark haunted woods"], ["eerie", "isolated", "slow"], { palette: ["blue-green shadows", "desaturated earth"], lighting: ["preserve existing practical sources"], atmosphere: ["use existing fog only"], contrast: "dark while preserving readable forms" }, ["Inspect whether source has forest or night detail", "Ask desired horror intensity"], [step(1, "Inspect footage and selected layers", IMPLEMENTED), step(2, "Confirm horror intensity and visible detail priority", REQUIRES_INPUT), step(3, "Propose blue-green shadows and restrained color", PROPOSED), step(4, "Do not invent fog or crush shadow detail", PROPOSED)], "Requires compatible source content; no fog generation or scene recognition.", "Keep the source exposure intact and provide a mood direction only."),
+    recipe("analog_horror", "Analog Horror", "horror_dark", ["analog horror", "vhs horror", "found footage horror"], ["uncanny", "lo-fi", "documentary"], { texture: "VHS/noise artifacts are descriptive only", palette: ["faded neutrals", "signal-red accent if present"], motion: "distortion is not implemented", contrast: "preserve legibility" }, ["Confirm source format and whether artifacts already exist", "Ask whether text or timestamps are part of the concept"], [step(1, "Inspect selected layers and existing text", IMPLEMENTED), step(2, "Confirm which analog artifacts are intentional", REQUIRES_INPUT), step(3, "Plan a restrained faded palette", PROPOSED), step(4, "Do not add noise, distortion, or timestamps", BLOCKED)], "No VHS, noise, glitch, or timestamp effect is available.", "Describe the pacing and palette only; keep the source image unaltered."),
+    recipe("gothic_candlelight", "Gothic Candlelight", "horror_dark", ["gothic candlelight", "candlelit gothic", "gothic horror lighting"], ["ornate", "warm-dark", "dramatic"], { palette: ["amber practical highlights", "cool muted shadows"], lighting: ["existing candle or warm practicals"], contrast: "protect face detail" }, ["Check for warm practical light sources", "Confirm whether warmth or dread leads"], [step(1, "Inspect footage and selected layers", IMPLEMENTED), step(2, "Confirm warm candlelight is present in the source", REQUIRES_INPUT), step(3, "Propose amber highlights against muted shadows", PROPOSED), step(4, "Review faces and deep shadow detail", PROPOSED)], "Live-action direction only; no lighting, color, or haze mutation is available.", "If no warm practicals are visible, use a neutral dark palette proposal instead."),
+    recipe("psychological_thriller", "Psychological Thriller", "horror_dark", ["psychological thriller", "paranoia thriller look", "unsettling thriller"], ["controlled", "ambiguous", "tense"], { palette: ["restrained neutrals", "single disquieting accent"], framing: "composition notes only", contrast: "controlled shifts, keep faces readable" }, ["Inspect composition and existing edit", "Ask what emotional change the scene should convey"], [step(1, "Inspect composition and selected layers", IMPLEMENTED), step(2, "Clarify the desired emotional turn", REQUIRES_INPUT), step(3, "Propose a restrained accent and contrast arc", PROPOSED), step(4, "Do not invent cuts or change framing", REQUIRES_INPUT)], "No timeline, camera, or scene analysis actions are available.", "Provide a written treatment outline without changing framing or edit timing."),
+
+    recipe("anime_impact", "Anime Impact", "anime_energetic", ["anime impact frame", "anime action impact", "manga action energy"], ["graphic", "kinetic", "high contrast"], { palette: ["bold source-led accents"], motion: "impact frames and speed lines are not generated", pacing: "editor-specified beats", contrast: "keep focal subject clear" }, ["Inspect action and subject placement", "Ask whether graphic overlays already exist"], [step(1, "Inspect selected layers and composition", IMPLEMENTED), step(2, "Confirm subject and desired impact beats", REQUIRES_INPUT), step(3, "Propose accent-color and pacing direction", PROPOSED), step(4, "Do not invent speed lines or cuts", REQUIRES_INPUT)], "No anime overlays, impact frames, or automatic timing are implemented.", "Plan emphasis around existing footage and graphic elements only."),
+    recipe("shonen_energy", "Shonen Energy", "anime_energetic", ["shonen energy", "shonen anime energy", "shonen anime look", "high energy anime edit"], ["aspirational", "bold", "momentum-driven"], { palette: ["one hero accent", "supporting complementary tones"], pacing: "build and release; timing needs references", lighting: ["selective emphasis; Glow blocked"], contrast: "protect facial and text detail" }, ["Inspect footage and existing edit", "Ask for character focus and reference beats"], [step(1, "Inspect selected layers and composition", IMPLEMENTED), step(2, "Confirm character focus and reference beats", REQUIRES_INPUT), step(3, "Choose a hero accent-color direction", REQUIRES_INPUT), step(4, "Glow remains blocked; do not invent cuts", BLOCKED)], "No character recognition, cut generation, or effects are available.", "Use a written rhythm map after the editor identifies the key beats."),
+    recipe("speed_ramp_energy", "Speed-Ramp Energy", "anime_energetic", ["speed ramp edit", "speed ramp energy", "fast slow motion edit"], ["kinetic", "rhythmic", "impactful"], { pacing: "speed changes require source frame-rate and beat references", motion: "motion blur is not assumed", transitions: "cut points require editor input" }, ["Inspect edit context and source clips", "Ask for target beats and source frame rate"], [step(1, "Inspect active composition and selected layers", IMPLEMENTED), step(2, "Confirm source frame rate and intended beat points", REQUIRES_INPUT), step(3, "Propose a timing map without changing the timeline", PROPOSED), step(4, "Do not invent time-remapping or blur edits", BLOCKED)], "No time-remapping or motion-blur host action is supported.", "Provide timing notes only; keep the existing clip speed and keyframes untouched."),
+    recipe("glitch_pulse", "Glitch Pulse", "anime_energetic", ["glitch pulse", "digital glitch edit", "glitchy energetic transition"], ["digital", "erratic", "punchy"], { palette: ["high-contrast digital accents"], transitions: "glitch transitions are not implemented", pacing: "requires editor reference points" }, ["Inspect existing graphics and transitions", "Confirm glitch intensity and reference"], [step(1, "Inspect selected layers and text", IMPLEMENTED), step(2, "Confirm reference and acceptable distortion level", REQUIRES_INPUT), step(3, "Propose accent and pacing direction only", PROPOSED), step(4, "Do not apply unverified distortion effects", BLOCKED)], "No glitch effect or transition action exists.", "Suggest a restrained cut rhythm around existing material without modifying it."),
+
+    recipe("ethereal_dream", "Ethereal Dream", "dreamy_ethereal", ["ethereal dream look", "dreamlike ethereal", "soft otherworldly look"], ["weightless", "soft", "luminous"], { palette: ["pale source-led color"], lighting: ["soft highlight direction; Glow blocked"], atmosphere: ["haze not implemented"], contrast: "retain fine detail" }, ["Inspect source highlights and subject detail", "Ask whether softness or clarity takes priority"], [step(1, "Inspect footage and selected layers", IMPLEMENTED), step(2, "Choose softness versus clarity priority", REQUIRES_INPUT), step(3, "Glow and haze remain blocked or unimplemented", BLOCKED), step(4, "Protect fine detail in the proposal", PROPOSED)], "No blur, haze, or Glow mutation is available.", "Keep the source sharp and offer only a pale palette direction."),
+    recipe("pastel_daydream", "Pastel Daydream", "dreamy_ethereal", ["pastel daydream", "pastel dreamy look", "soft pastel aesthetic"], ["gentle", "airy", "playful"], { palette: ["pastel pink", "powder blue", "soft cream"], saturation: "muted by direction only", contrast: "keep text and faces distinct" }, ["Inspect existing colors and text", "Ask whether the pastel palette should be warm or cool"], [step(1, "Inspect selected layers and text", IMPLEMENTED), step(2, "Choose warm or cool pastel balance", REQUIRES_INPUT), step(3, "Propose reduced visual intensity without numeric settings", PROPOSED), step(4, "Check text and face separation", PROPOSED)], "Color changes are not implemented; palettes are descriptive.", "Retain original colors if the subject or text loses separation."),
+    recipe("underwater_reverie", "Underwater Reverie", "dreamy_ethereal", ["underwater reverie", "dreamy underwater look", "submerged dream atmosphere"], ["immersive", "slow", "cool"], { palette: ["teal", "sea-glass green", "deep blue"], motion: "slow movement is a pacing note only", atmosphere: ["bubbles and caustics are not generated"], contrast: "preserve silhouettes" }, ["Confirm source has underwater or water imagery", "Ask whether the mood is calm or ominous"], [step(1, "Inspect footage and selected layers", IMPLEMENTED), step(2, "Confirm water imagery and emotional direction", REQUIRES_INPUT), step(3, "Propose teal and deep-blue color direction", PROPOSED), step(4, "Do not generate caustics, bubbles, or haze", BLOCKED)], "No underwater overlays, reframing, or color effect is available.", "Use only source-supported color and pacing notes."),
+    recipe("nostalgic_fade", "Nostalgic Fade", "dreamy_ethereal", ["nostalgic faded look", "faded nostalgic film", "soft vintage memory"], ["reflective", "softened", "personal"], { palette: ["warm faded neutrals"], texture: "grain is not implemented", contrast: "lifted impression without numeric settings; retain detail" }, ["Ask which era or reference is intended", "Inspect source quality and existing texture"], [step(1, "Inspect footage and selected layers", IMPLEMENTED), step(2, "Ask for era or reference when it matters", REQUIRES_INPUT), step(3, "Propose warm faded neutrals", PROPOSED), step(4, "Do not add grain or film damage", BLOCKED)], "No film emulation or grain action is available.", "Use warm color language without claiming a particular stock or era."),
+
+    recipe("kinetic_title", "Kinetic Title", "typography_motion", ["kinetic title", "kinetic typography", "animated title design"], ["expressive", "readable", "rhythmic"], { typography: "preserve supplied copy and typeface", motion: "timing and transforms require editor input", readability: "visual judgment is not automated" }, ["Inspect selected text layers", "Ask for exact copy, hierarchy, and reading time"], [step(1, "Inspect selected layers and exposed text details", IMPLEMENTED), step(2, "Confirm exact copy, hierarchy, and timing", REQUIRES_INPUT), step(3, "Propose a motion concept without editing properties", PROPOSED), step(4, "Have editor verify readability in the composition", REQUIRES_INPUT)], "Text animation properties and pixel-level legibility are not implemented.", "Provide a storyboard or timing outline; do not change text, font, or keyframes."),
+    recipe("editorial_lower_thirds", "Editorial Lower Thirds", "typography_motion", ["editorial lower thirds", "documentary lower third", "clean lower third title"], ["clear", "editorial", "understated"], { typography: "exact supplied names and titles", layout: "safe-area placement needs editor review", motion: "fade or slide choice requires input" }, ["Request exact names and titles", "Inspect composition dimensions and text layers"], [step(1, "Inspect composition and selected text layers", IMPLEMENTED), step(2, "Request exact copy and preferred placement", REQUIRES_INPUT), step(3, "Propose hierarchy and motion direction", PROPOSED), step(4, "Do not create or reposition title elements", BLOCKED)], "No text creation, layout, or safe-area validation action is available.", "Return a copy and hierarchy checklist for manual implementation."),
+    recipe("bold_promo_type", "Bold Promo Type", "typography_motion", ["bold promo typography", "bold promotional title", "high impact title design"], ["confident", "direct", "high contrast"], { typography: "use supplied copy; font choice needs approval", palette: ["one supplied or approved accent"], contrast: "text must remain readable", bloom: "BLOCKED" }, ["Inspect existing text", "Ask for exact copy and approved brand colors"], [step(1, "Inspect selected text layers", IMPLEMENTED), step(2, "Confirm copy and brand-color constraints", REQUIRES_INPUT), step(3, "Propose a clear size and contrast hierarchy", PROPOSED), step(4, "Do not invent fonts or apply Glow", BLOCKED)], "No font replacement, text layout, or Glow mutation is available.", "Use the existing typeface and propose hierarchy only."),
+    recipe("minimal_title_card", "Minimal Title Card", "typography_motion", ["minimal title card", "minimalist title design", "simple title card"], ["quiet", "precise", "spacious"], { typography: "one primary line and optional supplied subtitle", layout: "negative-space guidance only", motion: "still or gentle entrance by explicit choice" }, ["Request exact title and subtitle", "Ask whether any entrance animation is desired"], [step(1, "Inspect selected text layers", IMPLEMENTED), step(2, "Confirm exact copy and still versus animated intent", REQUIRES_INPUT), step(3, "Propose spacing and hierarchy direction", PROPOSED), step(4, "Fade-in requires host support and preserves animation", REQUIRES_INPUT)], "No text layout or animation changes are performed by recipe planning.", "Keep existing layout and return concise hierarchy guidance."),
+    recipe("match_cut_transition", "Match-Cut Transition", "typography_motion", ["match cut transition", "match cut edit", "shape match transition"], ["seamless", "visual", "editorial"], { transition: "requires two editor-selected shots", timing: "cut point requires visual review", motion: "no timeline action supported" }, ["Request the two shots or layers to match", "Confirm target object or shape"], [step(1, "Inspect active composition and selected layers", IMPLEMENTED), step(2, "Confirm the intended matching shapes and shots", REQUIRES_INPUT), step(3, "Propose a cut alignment plan", PROPOSED), step(4, "Do not move clips or change edit points", BLOCKED)], "No timeline inspection or editing actions are available.", "Provide an editorial checklist and leave the sequence unchanged."),
+    recipe("soft_dissolve", "Soft Dissolve", "typography_motion", ["soft dissolve transition", "gentle cross dissolve", "slow dissolve between shots"], ["gentle", "continuous", "reflective"], { transition: "cross-dissolve timing requires editor input", duration: "do not infer a numeric duration", opacity: "existing keys and expressions must be preserved" }, ["Confirm transition layers and intended duration", "Inspect any existing opacity animation"], [step(1, "Inspect selected layers", IMPLEMENTED), step(2, "Confirm duration and whether opacity is already animated", REQUIRES_INPUT), step(3, "Do not overwrite existing keyframes or expressions", BLOCKED), step(4, "Propose a manual timing note", PROPOSED)], "No transition action exists; fade-in host handler refuses existing animation.", "Leave the timeline untouched and ask the editor to choose transition timing."),
+    recipe("whip_pan_transition", "Whip-Pan Transition", "typography_motion", ["whip pan transition", "whip pan edit", "fast pan transition"], ["fast", "directional", "energetic"], { transition: "requires matching directional movement in source", blur: "motion blur is not implemented", timing: "editor-specified cut point" }, ["Inspect motion direction in both shots", "Ask for target cut point"], [step(1, "Inspect composition and selected layers", IMPLEMENTED), step(2, "Confirm matching source motion and desired direction", REQUIRES_INPUT), step(3, "Propose an editorial cut point", PROPOSED), step(4, "Do not invent pan, blur, or timeline changes", BLOCKED)], "No motion analysis, blur, or timeline edit is supported.", "Use a hard cut if the source movement does not support a whip-pan."),
+    recipe("parallax_depth", "Parallax Depth", "typography_motion", ["parallax depth motion", "layered parallax effect", "subtle parallax animation"], ["dimensional", "subtle", "spatial"], { motion: "layer separation and movement need manual design", depth: "do not infer 3D properties", pacing: "slow direction only" }, ["Inspect layer structure and 2D/3D flags", "Ask which elements should remain fixed"], [step(1, "Inspect selected layers and exposed 3D state", IMPLEMENTED), step(2, "Confirm foreground, background, and fixed elements", REQUIRES_INPUT), step(3, "Propose a depth map without changing transforms", PROPOSED), step(4, "Do not invent 3D settings or write keyframes", BLOCKED)], "No parallax generator or camera/property controls are available.", "Return a manual layer-separation plan and preserve all current transforms."),
+    recipe("elegant_fade_in", "Elegant Fade-In", "typography_motion", ["elegant fade in", "gentle title fade in", "subtle text entrance"], ["measured", "clear", "quiet"], { motion: "guarded opacity fade-in may be available for selected layers", duration: "host handler uses a fixed guarded duration", condition: "existing opacity keys or expressions block the edit" }, ["Inspect selected layers and opacity animation", "Confirm intended layer and entrance timing"], [step(1, "Inspect selected layers", IMPLEMENTED), step(2, "Confirm target layers and timing intent", REQUIRES_INPUT), step(3, "A guarded fade-in may be requested only with host confirmation", IMPLEMENTED), step(4, "Existing keyframes and expressions must remain untouched", BLOCKED)], "The host can verify its guarded fade-in; recipe itself never executes it.", "If any opacity animation or expression exists, keep it unchanged and request manual review.")
   ];
 
   function normalize(value) {
@@ -95,51 +80,54 @@
       .trim();
   }
 
-  function matchesCue(command, cue) {
-    return (" " + command + " ").indexOf(" " + cue + " ") !== -1;
+  function cueScore(command, cue) {
+    var normalizedCue = normalize(cue);
+    if (!normalizedCue || (" " + command + " ").indexOf(" " + normalizedCue + " ") === -1) return 0;
+    return normalizedCue.split(" ").length * 100 + normalizedCue.length;
   }
 
   function planStyle(input) {
     var command = normalize(input);
-    if (!command) return { status: "needs_clarification", question: "Describe the look you want." };
+    if (!command) return { status: "needs_clarification", question: "Describe the look or motion direction you want." };
 
-    var matches = [];
+    var scores = [];
     for (var i = 0; i < RECIPES.length; i++) {
-      for (var j = 0; j < RECIPES[i].cues.length; j++) {
-        if (matchesCue(command, normalize(RECIPES[i].cues[j]))) {
-          matches.push(RECIPES[i]);
-          break;
-        }
-      }
+      var best = 0;
+      for (var j = 0; j < RECIPES[i].cues.length; j++) best = Math.max(best, cueScore(command, RECIPES[i].cues[j]));
+      if (best) scores.push({ recipe: RECIPES[i], score: best });
+    }
+    scores.sort(function (a, b) { return b.score - a.score; });
+
+    if (!scores.length) {
+      return { status: "unsupported", question: "I don't have a tested creative recipe for that description yet.", executable: false };
     }
 
-    if (matches.length === 0) {
-      return {
-        status: "unsupported",
-        question: "I don't have a tested style recipe for that description yet.",
-        executable: false
-      };
-    }
-
-    if (matches.length > 1) {
+    var top = scores[0];
+    var competing = scores.filter(function (item) {
+      return item.recipe.category !== top.recipe.category && top.score - item.score < 120;
+    });
+    if (competing.length) {
+      var options = [top.recipe].concat(competing.map(function (item) { return item.recipe; }));
       return {
         status: "needs_clarification",
-        question: "Your request matches multiple styles. Which should lead?",
-        options: matches.map(function (item) { return item.id; }),
+        question: "Your request points to more than one distinct look. Which direction should lead?",
+        options: options.map(function (item) { return item.id; }),
         executable: false
       };
     }
 
     return {
       status: "style_plan",
-      recipe: matches[0],
+      recipe: top.recipe,
       executable: false,
-      note: "This is a creative direction plan, not an executed or visually verified edit."
+      readiness: top.recipe.executionReadiness,
+      note: "Creative direction only. No edit was executed or visually verified."
     };
   }
 
   root.OBSIDIANStyleRecipes = {
-    version: "0.1.0",
+    version: "1.0.0",
+    readinessStatuses: [IMPLEMENTED, PROPOSED, BLOCKED, REQUIRES_INPUT],
     list: function () { return RECIPES.slice(); },
     planStyle: planStyle
   };

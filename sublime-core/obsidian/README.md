@@ -13,16 +13,17 @@ OBSIDIAN is the After Effects motion-design assistant in Sublime Core. It curren
 
 The current knowledge brain is explicit JavaScript data in `frontend/knowledge.js`, consumed by `frontend/planner.shared.js`. It can answer a small set of direct motion-design questions and map familiar language to supported edits.
 
-- **Cinematic Glow:** subtle, soft, restrained, atmospheric, dreamy, bloom, filmic.
+- **Cinematic Glow:** cinematic, subtle, soft, restrained, atmospheric, dreamy, filmic.
 - **Attention Glow:** bold, strong, punchy, dramatic, neon, pop, stand out.
 - **Motion basics:** easing, visual hierarchy, fade-ins, and text readability.
-- **Commands:** inspect project/layers, set or reduce opacity, add/remove Glow, and fade-in.
+- **Commands:** inspect project/layers, set or reduce opacity, and request a guarded fade-in. Glow requests are classified but blocked.
+- **Creative recipes:** 30 descriptive recipes across film, neon/cyberpunk, horror, energetic/anime, dreamy/nostalgic, typography, transitions, and motion design.
 
 Examples to try in the panel:
 - `What is easing?` — returns a short knowledge answer; does not edit the composition.
 - `How do I make this title pop?` — returns design guidance; does not edit the composition.
-- `Add a subtle cinematic glow` — proposes the cinematic Glow profile for the selected layers.
-- `Make this title pop` — proposes the attention Glow profile for the selected layers.
+- `Add a subtle cinematic glow` — identifies restrained cinematic intent, then reports that Glow is blocked; no edit is sent to After Effects.
+- `Add a bold neon bloom` — identifies bold neon intent, then reports that Glow is blocked; no edit is sent to After Effects.
 - `Set opacity to 45%` — requests the guarded opacity action.
 
 Conflicting Glow styles prompt a question. Unsupported requests are not executed. Knowledge answers are local and deterministic, so this is a small knowledge-backed model rather than a general conversational AI.
@@ -35,10 +36,14 @@ Conflicting Glow styles prompt a question. Unsupported requests are not executed
 - Composition dimensions, frame rate, duration, playhead time, layer count and selection count.
 - Selected-layer type, enabled/3D/locked/shy state, in/out points, opacity, transform values and effect names.
 - Text content, font name and font size where the host exposes them.
-- Glow add/remove and opacity set/reduce actions, with property read-back checks after edits.
-- Cinematic and attention Glow profiles with parameter read-back verification.
+- Glow add/remove handlers are blocked during the RenderTaskManager crash investigation. Glow actions are excluded from the planner's executable allowlist.
+- Opacity set/reduce actions have property read-back checks and refuse to overwrite existing opacity keyframes or enabled expressions.
 - A guarded 0.5-second opacity fade-in for selected layers. It checks locked layers, short durations, and existing opacity keyframes/expressions before editing, then reads keyframes back to verify the result.
 - Protection against directly changing opacity where keyframes or an enabled expression already exists.
+
+## Creative recipe boundary
+
+The local recipe catalog describes intent, natural-language cues, qualitative parameters, prerequisites, ordered readiness-labeled steps, compatibility, and safe fallbacks. Each recipe is `PROPOSED`; recipe planning never runs a host edit. `IMPLEMENTED` marks an existing supported host capability, `BLOCKED` marks a disabled or unsafe operation, and `REQUIRES_INPUT` marks a decision the editor must provide. Color grading, generated atmosphere, grain, transitions, and other motion-design effects remain proposals until OBSIDIAN has tested host support and read-back verification for them.
 
 ## Next model stage
 

@@ -15,13 +15,19 @@ test("parses opacity values and rejects values above 100", () => {
   assert.equal(planObsidianCommand("set opacity to 140%").status, "needs_clarification");
 });
 
-test("maps cinematic and attention language to the matching Glow preset", () => {
-  assert.equal(planObsidianCommand("add a subtle cinematic glow").args.profile, "cinematic");
-  assert.equal(planObsidianCommand("add a bold attention-grabbing glow").args.profile, "attention");
-  assert.match(planObsidianCommand("add a subtle cinematic glow").explanation, /cinematic intent detected/i);
-  assert.match(planObsidianCommand("add a subtle cinematic glow").explanation, /basic Glow only/i);
-  assert.match(planObsidianCommand("add a bold attention-grabbing glow").explanation, /attention-grabbing intent detected/i);
-  assert.match(planObsidianCommand("add a bold attention-grabbing glow").explanation, /basic Glow only/i);
+test("classifies cinematic and neon Glow intent while keeping both mutations blocked", () => {
+  const cinematic = planObsidianCommand("add a subtle cinematic glow");
+  const neon = planObsidianCommand("add a bold neon bloom");
+  assert.equal(cinematic.status, "blocked");
+  assert.equal(cinematic.readiness, "BLOCKED");
+  assert.equal(cinematic.args.profile, "cinematic");
+  assert.equal(neon.status, "blocked");
+  assert.equal(neon.readiness, "BLOCKED");
+  assert.equal(neon.args.profile, "attention");
+  assert.equal(isExecutablePlan(cinematic), false);
+  assert.equal(isExecutablePlan(neon), false);
+  assert.match(cinematic.explanation, /no change was made/i);
+  assert.match(neon.explanation, /blocked/i);
 });
 
 test("uses knowledge cues for common visual language", () => {
@@ -44,6 +50,14 @@ test("asks when Glow style cues conflict", () => {
   assert.equal(planObsidianCommand("add subtle but flashy dramatic glow").status, "needs_clarification");
 });
 
+test("Glow removal remains blocked and outside the executable allowlist", () => {
+  const plan = planObsidianCommand("remove glow");
+  assert.equal(plan.status, "blocked");
+  assert.equal(plan.readiness, "BLOCKED");
+  assert.equal(plan.action, "remove_glow");
+  assert.equal(isExecutablePlan(plan), false);
+});
+
 test("turns a vibe request into a non-executable creative direction plan", () => {
   const plan = planObsidianCommand("Give it neon lighting like it's in a dream city");
   assert.equal(plan.status, "style_plan");
@@ -59,7 +73,9 @@ test("does not treat unsupported natural language as executable", () => {
 });
 
 test("only approved actions are executable", () => {
-  assert.equal(isExecutablePlan({ status: "planned", action: "add_glow" }), true);
+  assert.equal(isExecutablePlan({ status: "planned", action: "add_glow" }), false);
+  assert.equal(isExecutablePlan({ status: "planned", action: "remove_glow" }), false);
+  assert.equal(isExecutablePlan({ status: "planned", action: "fade_in" }), true);
   assert.equal(isExecutablePlan({ status: "planned", action: "run_shell" }), false);
 });
 

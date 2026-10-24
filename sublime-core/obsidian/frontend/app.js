@@ -91,6 +91,12 @@ function runAE(command) {
     return;
   }
 
+  if (plan && plan.status === "blocked") {
+    setProgress(100, "Blocked");
+    showResult(plan.explanation || "This request is currently blocked. No changes were made.", true);
+    return;
+  }
+
   if (plan && plan.status === "style_plan" && plan.recipe) {
     const recipe = plan.recipe;
     const look = recipe.look || {};
@@ -101,9 +107,12 @@ function runAE(command) {
       "Lighting: " + (look.lighting || []).join(", "),
       "Atmosphere: " + (look.atmosphere || []).join(", "),
       "Contrast: " + (look.contrast || "inspect footage before deciding"),
-      "Workflow: " + (recipe.steps || []).map((step) => step.label + " [" + step.status + "]").join(" → "),
-      "Requirements: " + (recipe.requirements || []).join(", "),
-      "Cautions: " + (recipe.cautions || []).join(", "),
+      "Parameters: " + JSON.stringify(recipe.parameters || {}),
+      "Workflow: " + (recipe.steps || []).map((step) => step.order + ". " + step.label + " [" + step.status + "]").join(" → "),
+      "Prerequisites: " + (recipe.prerequisites || []).join(", "),
+      "Compatibility: " + (recipe.compatibility || "Confirm against the active project."),
+      "Readiness: " + (recipe.executionReadiness || "PROPOSED"),
+      "Safe fallback: " + (recipe.fallback || "Keep the project unchanged until a supported action is confirmed."),
       "Not applied: this is a proposal, not an executed edit."
     ];
     showResult(lines.join("\n"), false);

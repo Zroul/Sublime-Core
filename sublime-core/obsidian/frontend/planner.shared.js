@@ -13,8 +13,6 @@
     inspect_selection: true,
     set_opacity: true,
     reduce_opacity: true,
-    add_glow: true,
-    remove_glow: true,
     fade_in: true
   };
 
@@ -101,7 +99,13 @@
     }
 
     if (/\b(remove|delete)\s+(?:the\s+)?glow\b/.test(command)) {
-      return result("remove_glow", {}, "Remove Glow from selected layers and verify the result.");
+      return {
+        status: "blocked",
+        readiness: "BLOCKED",
+        action: "remove_glow",
+        executable: false,
+        explanation: "Glow mutations are disabled during the After Effects crash investigation. No changes were made."
+      };
     }
 
     var cinematic = concept("cinematic_glow");
@@ -119,7 +123,8 @@
       if (cinematicCue && attentionCue) {
         return {
           status: "needs_clarification",
-          question: "Do you want a restrained cinematic Glow or a bold attention-grabbing Glow?"
+          question: "Do you want a restrained cinematic Glow or a bold neon/attention bloom?",
+          options: ["cinematic", "attention"]
         };
       }
       var profile = cinematicCue ? "cinematic" : attentionCue ? "attention" : "unspecified";
@@ -127,16 +132,19 @@
         ? cinematic.note
         : profile === "attention" && attention.note
           ? attention.note
-          : "Use the basic Glow effect without assuming a specific visual treatment.";
+          : "The desired Glow treatment is unspecified.";
       return {
-        status: "planned",
+        status: "blocked",
         action: "add_glow",
+        readiness: "BLOCKED",
+        executable: false,
         args: { profile: profile },
         explanation: (profile === "cinematic"
-          ? "Cinematic intent detected. This is a proposal—not a claim of calibrated execution; calibrated Glow settings are not implemented, and the host currently adds basic Glow only. "
+          ? "Restrained cinematic Glow intent detected. "
           : profile === "attention"
-            ? "Attention-grabbing intent detected. This is a proposal—not a claim of calibrated execution; calibrated Glow settings are not implemented, and the host currently adds basic Glow only. "
-            : "Add basic Glow. The request does not specify a visual treatment. ") + note,
+            ? "Bold neon/attention bloom intent detected. "
+            : "Glow intent detected without a visual profile. ") +
+          "Glow mutations are blocked during the crash investigation; no change was made. " + note,
         confidence: profile === "unspecified" ? 0.65 : 0.85
       };
     }
@@ -168,7 +176,7 @@
         return {
           status: "style_plan",
           recipe: stylePlan.recipe,
-          explanation: stylePlan.note,
+          explanation: "A creative direction plan, not an executed or visually verified edit.",
           confidence: 0.75
         };
       }

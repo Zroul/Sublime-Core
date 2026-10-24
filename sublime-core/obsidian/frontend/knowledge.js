@@ -11,7 +11,7 @@
       {
         id: "cinematic_glow",
         name: "cinematic glow",
-        cues: ["cinematic", "subtle", "soft", "restrained", "atmospheric", "dreamy", "bloom", "filmic", "diffused", "gentle halo"],
+        cues: ["cinematic", "subtle", "soft", "restrained", "atmospheric", "dreamy", "filmic", "diffused", "gentle halo"],
         profile: "cinematic",
         note: "Keep the halo restrained so highlights and image texture remain visible."
       },
