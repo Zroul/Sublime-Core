@@ -161,6 +161,20 @@
       };
     }
 
+    var stylePlanner = root.OBSIDIANStyleRecipes;
+    if (stylePlanner && typeof stylePlanner.planStyle === "function") {
+      var stylePlan = stylePlanner.planStyle(command);
+      if (stylePlan.status === "style_plan") {
+        return {
+          status: "style_plan",
+          recipe: stylePlan.recipe,
+          explanation: stylePlan.note,
+          confidence: 0.75
+        };
+      }
+      if (stylePlan.status === "needs_clarification") return stylePlan;
+    }
+
     return {
       status: "unsupported",
       question: "I don't know a safe edit for that request yet. I understand project/layer inspection, opacity, Glow, and fade-in. Try one of those, or ask me a basic motion-design question."
