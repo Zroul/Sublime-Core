@@ -35,6 +35,12 @@
         atmosphere: ["controlled contrast"],
         contrast: "retain texture and shadow detail"
       },
+      steps: [
+        { label: "Inspect footage and selected layers", status: "read_only_action_available" },
+        { label: "Establish a restrained contrast and color grade", status: "not_implemented" },
+        { label: "Apply restrained highlight bloom", status: "blocked_pending_crash_investigation" },
+        { label: "Verify texture and shadow detail", status: "not_implemented" }
+      ],
       requirements: ["inspect footage before choosing parameters"],
       cautions: ["a style label alone is not enough to choose calibrated effect values"]
     },
@@ -49,6 +55,13 @@
         motion: ["consider motion blur only where movement warrants it"],
         contrast: "keep the subject and text readable"
       },
+      steps: [
+        { label: "Inspect motion and subject placement", status: "read_only_action_available" },
+        { label: "Choose accent colors and contrast", status: "not_implemented" },
+        { label: "Design cut timing and motion emphasis", status: "not_implemented" },
+        { label: "Evaluate whether motion blur is appropriate", status: "not_implemented" },
+        { label: "Verify subject and text readability", status: "not_implemented" }
+      ],
       requirements: ["inspect motion and subject placement"],
       cautions: ["do not invent cuts, timing, or footage analysis without inspecting the media"]
     },
@@ -63,6 +76,12 @@
         texture: ["grain only if available and appropriate"],
         contrast: "avoid crushing detail"
       },
+      steps: [
+        { label: "Inspect footage and clarify the intended era", status: "read_only_action_available" },
+        { label: "Build a warm or faded color grade", status: "not_implemented" },
+        { label: "Add restrained grain if available", status: "not_implemented" },
+        { label: "Verify texture and shadow detail", status: "not_implemented" }
+      ],
       requirements: ["inspect footage and ask which era if the reference is ambiguous"],
       cautions: ["specific film-stock emulation is not currently implemented"]
     }
