@@ -101,6 +101,7 @@ function runAE(command) {
       "Lighting: " + (look.lighting || []).join(", "),
       "Atmosphere: " + (look.atmosphere || []).join(", "),
       "Contrast: " + (look.contrast || "inspect footage before deciding"),
+      "Workflow: " + (recipe.steps || []).map((step) => step.label + " [" + step.status + "]").join(" → "),
       "Requirements: " + (recipe.requirements || []).join(", "),
       "Cautions: " + (recipe.cautions || []).join(", "),
       "Not applied: this is a proposal, not an executed edit."
