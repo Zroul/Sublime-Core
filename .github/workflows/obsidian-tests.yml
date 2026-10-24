@@ -1,0 +1,29 @@
+name: OBSIDIAN tests
+
+on:
+  push:
+    branches:
+      - "work/obsidian-knowledge-library-ci"
+      - "test/obsidian-planner-execution"
+  pull_request:
+    paths:
+      - ".github/workflows/obsidian-tests.yml"
+      - "sublime-core/obsidian/**"
+      - "sublime-core/package.json"
+      - "sublime-core/package-lock.json"
+
+jobs:
+  obsidian-unit-tests:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: sublime-core
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: sublime-core/package-lock.json
+      - run: npm ci
+      - run: npm run obsidian:test
