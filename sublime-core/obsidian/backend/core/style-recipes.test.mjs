@@ -25,6 +25,12 @@ test("interprets neon dream city as a creative direction plan", () => {
   assert.equal(plan.executable, false);
 });
 
+test("normalizes repeated whitespace before matching phrases", () => {
+  const plan = recipes.planStyle("give it a dreamy   city look");
+  assert.equal(plan.status, "style_plan");
+  assert.equal(plan.recipe.id, "neon_dream_city");
+});
+
 test("does not confuse partial words with style cues", () => {
   assert.equal(recipes.planStyle("make it retroactive").status, "unsupported");
 });
