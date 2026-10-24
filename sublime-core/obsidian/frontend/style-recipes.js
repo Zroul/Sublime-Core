@@ -14,8 +14,15 @@
         atmosphere: ["soft haze if source footage supports it"],
         contrast: "preserve dark detail; keep highlights from clipping"
       },
+      steps: [
+        { label: "Inspect footage and selected layers", status: "read_only_action_available" },
+        { label: "Build cyan / magenta / deep-blue color grade", status: "not_implemented" },
+        { label: "Apply selective Glow to suitable highlights", status: "blocked_pending_crash_investigation" },
+        { label: "Add subtle atmospheric haze if appropriate", status: "not_implemented" },
+        { label: "Verify highlight detail and readability", status: "not_implemented" }
+      ],
       requirements: ["inspect footage and selected layers", "confirm suitable bright areas or light sources"],
-      cautions: ["color grading and haze are not yet executable by OBSIDIAN", "avoid applying Glow blindly to every layer"]
+      cautions: ["color grading and haze are not yet executable by OBSIDIAN", "Glow stays blocked pending the crash investigation", "avoid applying Glow blindly to every layer"]
     },
     {
       id: "cinematic",
