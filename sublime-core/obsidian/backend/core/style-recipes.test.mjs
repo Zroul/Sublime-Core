@@ -14,6 +14,11 @@ test("style recipe library has unique stable IDs and useful direction", () => {
     assert.ok(item.cues.length);
     assert.ok(item.look);
     assert.ok(item.cautions.length);
+    assert.ok(item.steps.length >= 3, item.id);
+    for (const step of item.steps) {
+      assert.ok(step.label, item.id);
+      assert.ok(["read_only_action_available", "not_implemented", "blocked_pending_crash_investigation"].includes(step.status), item.id);
+    }
   }
 });
 
