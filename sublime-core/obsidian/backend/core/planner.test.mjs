@@ -10,6 +10,32 @@ test("maps selected-layer inspection", () => {
   assert.equal(planObsidianCommand("analyze selected layers").action, "inspect_selection");
 });
 
+test("plans only bounded proportional scale changes for the selected layers", () => {
+  const up = planObsidianCommand("scale selected layers up by 10%");
+  assert.equal(up.action, "scale_selected");
+  assert.deepEqual(up.args, { value: 10 });
+  assert.equal(isExecutablePlan(up), true);
+
+  const down = planObsidianCommand("reduce the scale of the selection by 12.5%");
+  assert.equal(down.action, "scale_selected");
+  assert.deepEqual(down.args, { value: -12.5 });
+  assert.equal(isExecutablePlan(down), true);
+
+  for (const request of [
+    "scale selected layers up by 0%",
+    "scale selected layers down by 100%",
+    "scale selected layers up by 101%",
+    "scale selected layers up by 10% and 20%",
+    "scale selected layers by 10%",
+    "scale selected layers up",
+    "scale selected layers up and down by 10%",
+  ]) {
+    const plan = planObsidianCommand(request);
+    assert.equal(plan.status, "needs_clarification", request);
+    assert.equal(isExecutablePlan(plan), false, request);
+  }
+});
+
 test("parses opacity values and rejects values above 100", () => {
   assert.deepEqual(planObsidianCommand("set opacity to 45%").args, { value: 45 });
   assert.equal(planObsidianCommand("set opacity to 140%").status, "needs_clarification");
@@ -103,6 +129,7 @@ test("only approved actions are executable", () => {
   assert.equal(isExecutablePlan({ status: "planned", action: "add_glow" }), false);
   assert.equal(isExecutablePlan({ status: "planned", action: "remove_glow" }), false);
   assert.equal(isExecutablePlan({ status: "planned", action: "fade_in" }), true);
+  assert.equal(isExecutablePlan({ status: "planned", action: "scale_selected" }), true);
   assert.equal(isExecutablePlan({ status: "planned", action: "run_shell" }), false);
 });
 

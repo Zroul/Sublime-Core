@@ -64,6 +64,7 @@ function makeTextLayer(name, index, opacityValue) {
     name, index, enabled: true, threeDLayer: false, shy: false, locked: false,
     inPoint: 0, outPoint: 5,
     _opacity: opacity,
+    _scale: scale,
     property(key) {
       if (key === "ADBE Transform Group") return transform;
       if (key === "ADBE Effect Parade") return effects;
@@ -168,6 +169,84 @@ test("reduce opacity verifies the target value for each selected layer", () => {
   const result = context.OBSIDIAN_executePlan("reduce_opacity", null, "");
   assert.equal(result, "OK|Verified opacity reduction on 1 selected layer(s).");
   assert.equal(layer._opacity.value, 80);
+});
+
+test("proportionally scales selected 2D and 3D layers and verifies the result", () => {
+  const { context, layer, comp } = makeContext();
+  let result = context.OBSIDIAN_executePlan("scale_selected", 10, "");
+  assert.equal(result, "OK|Verified proportional scale change on 1 selected layer(s).");
+  assert.ok(Array.from(layer._scale.value).every((value) => Math.abs(value - 110) < 0.01));
+
+  layer._scale.value = [100, 80, 50];
+  result = context.OBSIDIAN_executePlan("scale_selected", -10, "");
+  assert.equal(result, "OK|Verified proportional scale change on 1 selected layer(s).");
+  assert.ok(Array.from(layer._scale.value).every((value, index) => Math.abs(value - [90, 72, 45][index]) < 0.01));
+
+  const second = makeTextLayer("Caption", 2, 100);
+  comp.selectedLayers.push(second);
+  result = context.OBSIDIAN_executePlan("scale_selected", 5, "");
+  assert.equal(result, "OK|Verified proportional scale change on 2 selected layer(s).");
+  assert.ok(Array.from(layer._scale.value).every((value, index) => Math.abs(value - [94.5, 75.6, 47.25][index]) < 0.01));
+  assert.ok(Array.from(second._scale.value).every((value) => Math.abs(value - 105) < 0.01));
+});
+
+test("scale preflight refuses keyframes, expressions, and locked layers without partial edits", () => {
+  const { context, layer, comp } = makeContext();
+  const animated = makeTextLayer("Animated", 2, 100);
+  animated._scale.numKeys = 2;
+  comp.selectedLayers.push(animated);
+  let result = context.OBSIDIAN_executePlan("scale_selected", 10, "");
+  assert.match(result, /existing scale keyframes or expression/);
+  assert.deepEqual(Array.from(layer._scale.value), [100, 100]);
+  assert.deepEqual(Array.from(animated._scale.value), [100, 100]);
+
+  comp.selectedLayers = [layer];
+  layer._scale.expressionEnabled = true;
+  layer._scale.expression = "value";
+  result = context.OBSIDIAN_executePlan("scale_selected", 10, "");
+  assert.match(result, /existing scale keyframes or expression/);
+  assert.deepEqual(Array.from(layer._scale.value), [100, 100]);
+
+  layer._scale.expressionEnabled = false;
+  layer.locked = true;
+  result = context.OBSIDIAN_executePlan("scale_selected", 10, "");
+  assert.match(result, /unlock 'Headline'/);
+  assert.deepEqual(Array.from(layer._scale.value), [100, 100]);
+});
+
+test("scale rejects invalid percentages and unsupported vector shapes", () => {
+  const { context, layer } = makeContext();
+  for (const value of [0, -100, 100.01, NaN, Infinity]) {
+    const result = context.OBSIDIAN_executePlan("scale_selected", value, "");
+    assert.match(result, /Scale change must be/);
+    assert.deepEqual(Array.from(layer._scale.value), [100, 100]);
+  }
+  layer._scale.value = [100];
+  const unsupported = context.OBSIDIAN_executePlan("scale_selected", 10, "");
+  assert.match(unsupported, /no supported 2D or 3D Scale property/);
+  assert.deepEqual(Array.from(layer._scale.value), [100]);
+
+  layer._scale.value = [900, 900];
+  const excessive = context.OBSIDIAN_executePlan("scale_selected", 20, "");
+  assert.match(excessive, /resulting Scale value is outside the supported range/);
+  assert.deepEqual(Array.from(layer._scale.value), [900, 900]);
+});
+
+test("scale read-back failure restores the original Scale values", () => {
+  const { context, layer } = makeContext();
+  const originalSetValue = layer._scale.setValue;
+  let corruptFirstWrite = true;
+  layer._scale.setValue = function (value) {
+    if (corruptFirstWrite) {
+      corruptFirstWrite = false;
+      this.value = [value[0] + 1, value[1]];
+      return;
+    }
+    originalSetValue.call(this, value);
+  };
+  const result = context.OBSIDIAN_executePlan("scale_selected", 10, "");
+  assert.match(result, /failed and original Scale values were restored/);
+  assert.deepEqual(Array.from(layer._scale.value), [100, 100]);
 });
 
 test("set opacity preserves existing opacity keyframes", () => {

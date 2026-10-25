@@ -16,6 +16,7 @@ There is no new server, dependency, or model loaded by this integration. The cur
 
 - The host does not parse free-form natural language. It accepts only the fixed action allowlist.
 - Opacity must be between 0% and 100%; the host rejects out-of-range values instead of silently clamping them.
+- Proportional Scale changes are limited to a single 1–100% adjustment on selected layers; every selected Scale property must be static, unlocked, and a supported 2D/3D vector before any write begins.
 - Existing host edit handlers retain their undo groups and read-back verification.
 - Cinematic versus bold neon Glow intent is classified for explanation, but all Glow mutations are blocked during the host crash investigation and excluded from the executable planner allowlist.
 - The 32-recipe catalog is descriptive only. Each recipe remains `PROPOSED`; it does not execute or claim a visual result.

@@ -16,7 +16,7 @@ The current knowledge brain is explicit JavaScript data in `frontend/knowledge.j
 - **Cinematic Glow:** cinematic, subtle, soft, restrained, atmospheric, dreamy, filmic.
 - **Attention Glow:** bold, strong, punchy, dramatic, neon, pop, stand out.
 - **Motion basics:** easing, visual hierarchy, fade-ins, and text readability.
-- **Commands:** inspect project/layers, set or reduce opacity, and request a guarded fade-in. Glow requests are classified but blocked.
+- **Commands:** inspect project/layers, set or reduce opacity, request a guarded fade-in, and scale selected layers proportionally. Glow requests are classified but blocked.
 - **Creative recipes:** 32 descriptive recipes across film, neon/cyberpunk, horror, energetic/anime, dreamy/nostalgic, color grading, visual storytelling, typography, transitions, and motion design.
 
 Examples to try in the panel:
@@ -39,6 +39,7 @@ Conflicting Glow styles prompt a question. Unsupported requests are not executed
 - Glow add/remove handlers are blocked during the RenderTaskManager crash investigation. Glow actions are excluded from the planner's executable allowlist.
 - Opacity set/reduce actions have property read-back checks and refuse to overwrite existing opacity keyframes or enabled expressions.
 - A guarded 0.5-second opacity fade-in for selected layers. It checks locked layers, short durations, and existing opacity keyframes/expressions before editing, then reads keyframes back to verify the result.
+- A guarded proportional Scale adjustment for selected layers. It preflights every layer, refuses locks, keyframes, expressions, unsupported value shapes, and excessive results, then verifies the static Scale values.
 - Protection against directly changing opacity where keyframes or an enabled expression already exists.
 
 ## Creative recipe boundary
@@ -50,7 +51,7 @@ The local recipe catalog describes intent, natural-language cues, qualitative pa
 | Capability | Examples | OBSIDIAN behavior |
 | --- | --- | --- |
 | **Executable — read-only** | Inspect the active composition/project; inspect selected layers, text, transforms, and effect names | Sends a typed inspection action to the host. It reads metadata and does not change the project. |
-| **Executable — guarded edits** | Set opacity to a value from 0–100%; reduce selected-layer opacity; fade selected layers in | Host validates arguments and reads back results. Set/reduce refuse existing opacity keyframes or enabled expressions. Fade-in is fixed at 0.5 seconds and refuses locked, too-short, animated, or expression-driven layers. |
+| **Executable — guarded edits** | Set opacity to a value from 0–100%; reduce selected-layer opacity; fade selected layers in; scale selected layers proportionally up/down | Host validates arguments and reads back results. Opacity edits refuse existing opacity keyframes or enabled expressions. Fade-in is fixed at 0.5 seconds and refuses locked, too-short, animated, or expression-driven layers. Scale accepts one relative change from 1% to 100% up or less than 100% down; all selected layers must be unlocked, have a supported 2D/3D Scale vector, and have no Scale keyframes or enabled expression. Scale writes are preflighted and read back, with restoration attempted if verification fails. This scale path is Node-mock-tested but has not been smoke-tested in After Effects. |
 | **Proposal-only** | All 32 creative recipes, including cinematic/color grades, neon, horror, anime, narrative color arcs, typography, transitions, and movement | Returns qualitative parameters and ordered steps. Recipe plans are never sent to the host as edits, even when a step refers to an implemented inspection or guarded action. |
 | **Blocked** | Recognized requests to add, remove, or adjust Glow/bloom | Planner reports recognized Glow mutation requests as blocked; host Glow add/remove handlers also return without mutating. Glow is not in the executable allowlist. Other unrecognized phrasings remain non-executable. |
 | **Unsupported** | Arbitrary scripts, unrecognized edits, or a style request with no matching recipe | Returns an unsupported response and does not call the host. A matched recipe that needs a decision may instead ask for clarification or label a step `REQUIRES_INPUT`. |

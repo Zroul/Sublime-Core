@@ -356,6 +356,94 @@ function OBSIDIAN_reduceOpacity() {
     return "OK|Verified opacity reduction on " + verified + " selected layer(s).";
 }
 
+function OBSIDIAN_scaleSelected(signedPercent) {
+    var layers = OBSIDIAN_getSelectedLayers();
+    if (!layers.length) return "ERROR|Open a composition and select at least one layer.";
+
+    signedPercent = Number(signedPercent);
+    if (!isFinite(signedPercent) || signedPercent === 0 || signedPercent > 100 || signedPercent <= -100) {
+        return "ERROR|Scale change must be 1% to 100% up, or 1% to less than 100% down.";
+    }
+
+    var prepared = [];
+    var factor = 1 + signedPercent / 100;
+    for (var i = 0; i < layers.length; i++) {
+        var layer = layers[i];
+        if (layer.locked) {
+            return "ERROR|Scale change cancelled: unlock '" + OBSIDIAN_cleanText(layer.name) + "'.";
+        }
+        var transform = layer.property("ADBE Transform Group");
+        var scale = transform ? transform.property("ADBE Scale") : null;
+        if (!scale || !scale.value || typeof scale.value.length !== "number" ||
+            (scale.value.length !== 2 && scale.value.length !== 3) || typeof scale.setValue !== "function") {
+            return "ERROR|Scale change cancelled: a selected layer has no supported 2D or 3D Scale property.";
+        }
+        if (Number(scale.numKeys) > 0 || scale.expressionEnabled) {
+            return "ERROR|Scale change cancelled: existing scale keyframes or expression on '" +
+                OBSIDIAN_cleanText(layer.name) + "' were preserved.";
+        }
+
+        var original = [];
+        var target = [];
+        for (var j = 0; j < scale.value.length; j++) {
+            var component = Number(scale.value[j]);
+            var nextComponent = component * factor;
+            if (!isFinite(component) || !isFinite(nextComponent) || Math.abs(nextComponent) > 1000) {
+                return "ERROR|Scale change cancelled: the resulting Scale value is outside the supported range.";
+            }
+            original.push(component);
+            target.push(nextComponent);
+        }
+        prepared.push({ layer: layer, property: scale, original: original, target: target });
+    }
+
+    app.beginUndoGroup("OBSIDIAN - Scale Selected Layers");
+    try {
+        for (var k = 0; k < prepared.length; k++) prepared[k].property.setValue(prepared[k].target);
+
+        var verified = 0;
+        for (var n = 0; n < prepared.length; n++) {
+            var current = prepared[n].property.value;
+            var matches = current && current.length === prepared[n].target.length;
+            if (matches) {
+                for (var p = 0; p < current.length; p++) {
+                    if (!isFinite(Number(current[p])) || Math.abs(Number(current[p]) - prepared[n].target[p]) > 0.01) {
+                        matches = false;
+                        break;
+                    }
+                }
+            }
+            if (matches) verified++;
+        }
+        if (verified !== prepared.length) throw new Error("Scale read-back did not match the requested values.");
+    } catch (error) {
+        var restored = 0;
+        for (var r = 0; r < prepared.length; r++) {
+            try {
+                prepared[r].property.setValue(prepared[r].original);
+                var restoredValue = prepared[r].property.value;
+                var originalMatches = restoredValue && restoredValue.length === prepared[r].original.length;
+                if (originalMatches) {
+                    for (var s = 0; s < restoredValue.length; s++) {
+                        if (!isFinite(Number(restoredValue[s])) || Math.abs(Number(restoredValue[s]) - prepared[r].original[s]) > 0.01) {
+                            originalMatches = false;
+                            break;
+                        }
+                    }
+                }
+                if (originalMatches) restored++;
+            } catch (restoreError) {}
+        }
+        app.endUndoGroup();
+        if (restored === prepared.length) {
+            return "ERROR|Scale change failed and original Scale values were restored. " + error.toString();
+        }
+        return "ERROR|Scale change failed; restoration could not be verified for every layer. Use After Effects Undo and inspect the selected layers. " + error.toString();
+    }
+    app.endUndoGroup();
+    return "OK|Verified proportional scale change on " + prepared.length + " selected layer(s).";
+}
+
 function OBSIDIAN_fadeIn() {
     var layers = OBSIDIAN_getSelectedLayers();
     if (!layers.length) return "ERROR|Open a composition and select at least one layer.";
@@ -420,6 +508,17 @@ function OBSIDIAN_executePlan(action, value, profile) {
     }
 
     if (action === "reduce_opacity") return OBSIDIAN_reduceOpacity();
+
+    if (action === "scale_selected") {
+        if (value === null || value === undefined || value === "") {
+            return "ERROR|Scale change must be 1% to 100% up, or 1% to less than 100% down.";
+        }
+        value = Number(value);
+        if (!isFinite(value) || value === 0 || value > 100 || value <= -100) {
+            return "ERROR|Scale change must be 1% to 100% up, or 1% to less than 100% down.";
+        }
+        return OBSIDIAN_scaleSelected(value);
+    }
 
     if (action === "add_glow") {
         profile = String(profile || "unspecified");

@@ -13,6 +13,7 @@
     inspect_selection: true,
     set_opacity: true,
     reduce_opacity: true,
+    scale_selected: true,
     fade_in: true
   };
 
@@ -85,6 +86,35 @@
     if (/\b(inspect|show|analyze|analyse|check)\b/.test(command) &&
         /\b(selected|selection|layer|layers)\b/.test(command)) {
       return result("inspect_selection", {}, "Read the selected layers and their current properties.");
+    }
+
+    var scaleIntent = /\b(scale|resize)\b/.test(command) &&
+      (/\bselected layers?\b/.test(command) || /\bselection\b/.test(command));
+    if (scaleIntent) {
+      var scaleUp = /\b(up|increase|grow|bigger|larger)\b/.test(command);
+      var scaleDown = /\b(down|decrease|reduce|lower|shrink|smaller)\b/.test(command);
+      var scaleAmounts = command.match(/-?\d+(?:\.\d+)?\s*%/g) || [];
+      var scaleMatch = command.match(/\bby\s+(-?\d+(?:\.\d+)?)\s*%/);
+      if (scaleUp === scaleDown || scaleAmounts.length !== 1 || !scaleMatch) {
+        return {
+          status: "needs_clarification",
+          question: "Specify whether to scale the selected layers up or down, and by one percentage from 1% to 100%. Downward changes must be less than 100%."
+        };
+      }
+      var scalePercent = Number(scaleMatch[1]);
+      if (!isFinite(scalePercent) || scalePercent < 1 || scalePercent > 100 ||
+          (scaleDown && scalePercent >= 100)) {
+        return {
+          status: "needs_clarification",
+          question: "Scale change must be 1% to 100% up, or 1% to less than 100% down."
+        };
+      }
+      var signedScalePercent = scaleUp ? scalePercent : -scalePercent;
+      return result(
+        "scale_selected",
+        { value: signedScalePercent },
+        "Scale every selected layer proportionally by " + scalePercent + "% " + (scaleUp ? "up" : "down") + ". Existing scale keyframes and expressions are preserved by refusing the edit."
+      );
     }
 
     var opacityIntent = /\b(?:set|change)\s+(?:the\s+)?opacity\b/.test(command);
