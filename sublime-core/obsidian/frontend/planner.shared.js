@@ -22,7 +22,9 @@
     return String(text === undefined || text === null ? "" : text)
       .trim()
       .toLowerCase()
-      .replace(/[^a-z0-9%\s-]/g, " ")
+      .replace(/(\d)\.(\d)/g, "$1~$2")
+      .replace(/[^a-z0-9%\s~-]/g, " ")
+      .replace(/~/g, ".")
       .replace(/\s+/g, " ");
   }
 
@@ -85,13 +87,18 @@
       return result("inspect_selection", {}, "Read the selected layers and their current properties.");
     }
 
-    var opacity = command.match(/\b(?:set|change)\s+(?:the\s+)?opacity\s+(?:to\s+)?(\d{1,3})\s*%?/);
+    var opacityIntent = /\b(?:set|change)\s+(?:the\s+)?opacity\b/.test(command);
+    var opacity = command.match(/\b(?:set|change)\s+(?:the\s+)?opacity\s+(?:to\s+)?(-?\d+(?:\.\d+)?)(?:\s*%)?(?=\s|$)/);
     if (opacity) {
       var value = Number(opacity[1]);
-      if (value > 100) {
+      var opacityRemainder = command.slice(opacity.index + opacity[0].length);
+      if (/^\s+\d/.test(opacityRemainder) || !isFinite(value) || value < 0 || value > 100) {
         return { status: "needs_clarification", question: "Opacity must be between 0% and 100%." };
       }
       return result("set_opacity", { value: value }, "Set selected-layer opacity to " + value + "%.");
+    }
+    if (opacityIntent) {
+      return { status: "needs_clarification", question: "Enter one opacity value between 0% and 100%." };
     }
 
     if (/\b(reduce|lower|decrease)\s+(?:the\s+)?opacity\b/.test(command)) {
@@ -112,7 +119,7 @@
     var attention = concept("attention_glow");
     var cinematicCue = cinematic && hasCue(cinematic.cues, command);
     var attentionCue = attention && hasCue(attention.cues, command);
-    var glowVerb = /\b(add|apply|use|put|give|create|make)\b/.test(command);
+    var glowVerb = /\b(add|apply|use|put|give|create|make|set|change|adjust|tune|increase|decrease|reduce|tweak)\b|\bturn\s+(up|down)\b/.test(command);
     var glowMention = /\bglow\b|\bbloom\b/.test(command);
     var titlePopIntent = /\b(make|give|help)\b/.test(command) &&
       /\b(title|text|subject|this)\b/.test(command) &&
@@ -176,6 +183,8 @@
         return {
           status: "style_plan",
           recipe: stylePlan.recipe,
+          readiness: stylePlan.readiness,
+          executable: false,
           explanation: "A creative direction plan, not an executed or visually verified edit.",
           confidence: 0.75
         };
