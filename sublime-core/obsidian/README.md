@@ -26,9 +26,13 @@ Examples to try in the panel:
 - `Add a bold neon bloom` — identifies bold neon intent, then reports that Glow is blocked; no edit is sent to After Effects.
 - `Set opacity to 45%` — requests the guarded opacity action.
 
-Conflicting Glow styles prompt a question. Unsupported requests are not executed. Knowledge answers are local and deterministic, so this is a small knowledge-backed model rather than a general conversational AI.
+Conflicting Glow styles prompt a question. Unsupported requests are not executed by the deterministic planner. Knowledge answers are local and deterministic.
 
-**Boundary:** CORE/Qwen is not connected to this planner yet. It does not understand arbitrary requests, see rendered pixels, learn a user's style, or research trends. Its knowledge can be expanded without adding dependencies or starting another model/server.
+**AI proposals:** OBSIDIAN can optionally ask the existing local CORE/Qwen model (through the shared Ollama provider) to interpret creative requests and return a structured proposal. Start Ollama with the configured model (default model name `core`), then run `npm run obsidian:ai` from the repository root before using the panel. Set `OLLAMA_MODEL`, `OLLAMA_BASE_URL`, or `OBSIDIAN_AI_PORT` in the local environment when needed; `.env` is git-ignored. No hosted provider or API key is used.
+
+The model endpoint is proposal-only: it has no tools and accepts no executable action schema. OBSIDIAN bounds and validates its response, labels it `PROPOSED`, and renders it as text. The deterministic planner still handles executable actions, blocked Glow requests, and clarifications; only recognized recipe proposals and otherwise unsupported requests are sent to CORE. If the local service/model is unavailable, existing deterministic recipe proposals remain available and unsupported requests show setup guidance. Model output is never passed to the After Effects host bridge.
+
+CORE proposals interpret the text request only. They do not inspect project state or rendered pixels, verify visual results, or learn a user's style. They do not claim any edit was applied.
 
 ## Current host capabilities
 
@@ -58,9 +62,11 @@ The local recipe catalog describes intent, natural-language cues, qualitative pa
 
 Knowledge answers are educational text, not project actions. “Executable” describes the tested code path and its guards; the Node host mock does not establish After Effects compatibility or runtime stability.
 
-## Next model stage
+## Local proposal service
 
-The intended next stage is to connect the existing local CORE model to OBSIDIAN for broader language understanding, while keeping the planner/host allowlist as the safety boundary. CORE may propose a plan; it must not directly execute arbitrary scripts. OBSIDIAN must validate the proposed action, execute through the host bridge, and report the host's actual result. No new model or dependency is required for the intended architecture.
+Run `npm run obsidian:ai` in a terminal to start the loopback-only proposal endpoint at `http://127.0.0.1:43127/proposal`. It reuses the existing Ollama provider and its `OLLAMA_MODEL` / `OLLAMA_BASE_URL` settings. Install and start Ollama and make the local model available under the configured name (default `core`) before requesting a proposal. If the service is stopped, deterministic planning continues.
+
+The service has no After Effects connection, tools, or credentials. Its structured proposal is presentation data only. To implement future model-suggested edits, add explicit deterministic planner/host actions with validation, verification, rollback, and tests; do not route model output directly to ExtendScript.
 
 ## After Effects validation
 

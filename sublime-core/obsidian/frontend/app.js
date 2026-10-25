@@ -20,6 +20,7 @@ const welcomePhrases = [
 
 let phraseIndex = 0;
 let commandInFlight = false;
+let proposalInFlight = false;
 let phraseTimer;
 
 function typeWelcomePhrase() {
@@ -70,9 +71,73 @@ function showResult(message, isError) {
   result.querySelector(".result-mark").textContent = isError ? "!" : "✓";
 }
 
+function showRecipePlan(plan) {
+  const recipe = plan.recipe;
+  const look = recipe.look || {};
+  const lines = [
+    recipe.name + " direction",
+    "Intent: " + (recipe.intent || []).join(", "),
+    "Palette: " + (look.palette || []).join(", "),
+    "Lighting: " + (look.lighting || []).join(", "),
+    "Atmosphere: " + (look.atmosphere || []).join(", "),
+    "Contrast: " + (look.contrast || "inspect footage before deciding"),
+    "Parameters: " + JSON.stringify(recipe.parameters || {}),
+    "Workflow: " + (recipe.steps || []).map((step) => step.order + ". " + step.label + " [" + step.status + "]").join(" → "),
+    "Prerequisites: " + (recipe.prerequisites || []).join(", "),
+    "Compatibility: " + (recipe.compatibility || "Confirm against the active project."),
+    "Readiness: " + (recipe.executionReadiness || "PROPOSED"),
+    "Safe fallback: " + (recipe.fallback || "Keep the project unchanged until a supported action is confirmed."),
+    "Not applied: this is a proposal, not an executed edit."
+  ];
+  showResult(lines.join("\n"), false);
+}
+
+function showCoreProposal(proposal) {
+  const lines = [
+    "CORE creative proposal (PROPOSED)",
+    proposal.summary,
+    "Intent: " + proposal.visualIntent,
+    "Parameters: " + Object.entries(proposal.parameters || {}).map(([key, value]) => key + ": " + value).join("; "),
+    "Prerequisites: " + proposal.prerequisites.join("; "),
+    "Workflow: " + proposal.workflow.map((step, index) => (index + 1) + ". " + step).join(" → "),
+    "Safety: " + proposal.safety,
+    "Not applied: model output is proposal-only and cannot execute host actions."
+  ];
+  showResult(lines.join("\n"), false);
+}
+
+async function requestCoreProposal(command, fallbackPlan) {
+  proposalInFlight = true;
+  setProgress(45, "Asking local CORE for a proposal...");
+  try {
+    const response = await fetch("http://127.0.0.1:43127/proposal", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ request: command })
+    });
+    const data = await response.json();
+    if (!response.ok || !data.proposal || data.proposal.executionReadiness !== "PROPOSED" || data.proposal.executable !== false) {
+      throw new Error(data.error || "CORE returned an invalid proposal.");
+    }
+    showCoreProposal(data.proposal);
+    setProgress(100, "Proposal prepared; no edit applied");
+  } catch (error) {
+    if (fallbackPlan && fallbackPlan.status === "style_plan") {
+      showRecipePlan(fallbackPlan);
+      setProgress(100, "Local proposal; CORE unavailable");
+      return;
+    }
+    setProgress(100, "CORE unavailable; deterministic fallback");
+    const detail = error instanceof Error ? error.message : String(error);
+    showResult("Local CORE is not connected. Start Ollama and run `npm run obsidian:ai` to enable AI proposals. " + detail + "\n\n" + ((fallbackPlan && fallbackPlan.question) || "No safe deterministic plan was found. No changes were made."), true);
+  } finally {
+    proposalInFlight = false;
+  }
+}
+
 function runAE(command) {
-  if (commandInFlight) {
-    showResult("An OBSIDIAN command is still running. Wait for its result before sending another edit.", true);
+  if (commandInFlight || proposalInFlight) {
+    showResult("An OBSIDIAN request is still running. Wait for its result before sending another request.", true);
     return;
   }
   const planner = window.OBSIDIANPlanner;
@@ -98,29 +163,15 @@ function runAE(command) {
   }
 
   if (plan && plan.status === "style_plan" && plan.recipe) {
-    const recipe = plan.recipe;
-    const look = recipe.look || {};
-    const lines = [
-      recipe.name + " direction",
-      "Intent: " + (recipe.intent || []).join(", "),
-      "Palette: " + (look.palette || []).join(", "),
-      "Lighting: " + (look.lighting || []).join(", "),
-      "Atmosphere: " + (look.atmosphere || []).join(", "),
-      "Contrast: " + (look.contrast || "inspect footage before deciding"),
-      "Parameters: " + JSON.stringify(recipe.parameters || {}),
-      "Workflow: " + (recipe.steps || []).map((step) => step.order + ". " + step.label + " [" + step.status + "]").join(" → "),
-      "Prerequisites: " + (recipe.prerequisites || []).join(", "),
-      "Compatibility: " + (recipe.compatibility || "Confirm against the active project."),
-      "Readiness: " + (recipe.executionReadiness || "PROPOSED"),
-      "Safe fallback: " + (recipe.fallback || "Keep the project unchanged until a supported action is confirmed."),
-      "Not applied: this is a proposal, not an executed edit."
-    ];
-    showResult(lines.join("\n"), false);
-    setProgress(100, "Creative direction prepared");
+    requestCoreProposal(command, plan);
     return;
   }
 
   if (!plan || plan.status !== "planned") {
+    if (plan && plan.status === "unsupported") {
+      requestCoreProposal(command, plan);
+      return;
+    }
     setProgress(100, plan && plan.status === "needs_clarification" ? "Needs clarification" : "Not supported");
     showResult(plan && plan.question ? plan.question : "OBSIDIAN could not create a safe action plan.", true);
     return;
