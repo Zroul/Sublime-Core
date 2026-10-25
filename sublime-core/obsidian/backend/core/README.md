@@ -18,7 +18,7 @@ There is no new server, dependency, or model loaded by this integration. The cur
 - Opacity must be between 0% and 100%; the host rejects out-of-range values instead of silently clamping them.
 - Existing host edit handlers retain their undo groups and read-back verification.
 - Cinematic versus bold neon Glow intent is classified for explanation, but all Glow mutations are blocked during the host crash investigation and excluded from the executable planner allowlist.
-- The 30-recipe catalog is descriptive only. Each recipe remains `PROPOSED`; it does not execute or claim a visual result.
+- The 32-recipe catalog is descriptive only. Each recipe remains `PROPOSED`; it does not execute or claim a visual result.
 - This is a first integrated vertical slice, not yet a context-aware creative editor. CORE reasoning, composition-aware effect parameter selection, and visual outcome analysis remain future work.
 
 ## Tests

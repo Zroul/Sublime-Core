@@ -17,7 +17,7 @@ The current knowledge brain is explicit JavaScript data in `frontend/knowledge.j
 - **Attention Glow:** bold, strong, punchy, dramatic, neon, pop, stand out.
 - **Motion basics:** easing, visual hierarchy, fade-ins, and text readability.
 - **Commands:** inspect project/layers, set or reduce opacity, and request a guarded fade-in. Glow requests are classified but blocked.
-- **Creative recipes:** 30 descriptive recipes across film, neon/cyberpunk, horror, energetic/anime, dreamy/nostalgic, typography, transitions, and motion design.
+- **Creative recipes:** 32 descriptive recipes across film, neon/cyberpunk, horror, energetic/anime, dreamy/nostalgic, color grading, visual storytelling, typography, transitions, and motion design.
 
 Examples to try in the panel:
 - `What is easing?` — returns a short knowledge answer; does not edit the composition.
@@ -44,6 +44,18 @@ Conflicting Glow styles prompt a question. Unsupported requests are not executed
 ## Creative recipe boundary
 
 The local recipe catalog describes intent, natural-language cues, qualitative parameters, prerequisites, ordered readiness-labeled steps, compatibility, and safe fallbacks. Each recipe is `PROPOSED`; recipe planning never runs a host edit. `IMPLEMENTED` marks an existing supported host capability, `BLOCKED` marks a disabled or unsafe operation, and `REQUIRES_INPUT` marks a decision the editor must provide. Color grading, generated atmosphere, grain, transitions, and other motion-design effects remain proposals until OBSIDIAN has tested host support and read-back verification for them.
+
+## Capability matrix
+
+| Capability | Examples | OBSIDIAN behavior |
+| --- | --- | --- |
+| **Executable — read-only** | Inspect the active composition/project; inspect selected layers, text, transforms, and effect names | Sends a typed inspection action to the host. It reads metadata and does not change the project. |
+| **Executable — guarded edits** | Set opacity to a value from 0–100%; reduce selected-layer opacity; fade selected layers in | Host validates arguments and reads back results. Set/reduce refuse existing opacity keyframes or enabled expressions. Fade-in is fixed at 0.5 seconds and refuses locked, too-short, animated, or expression-driven layers. |
+| **Proposal-only** | All 32 creative recipes, including cinematic/color grades, neon, horror, anime, narrative color arcs, typography, transitions, and movement | Returns qualitative parameters and ordered steps. Recipe plans are never sent to the host as edits, even when a step refers to an implemented inspection or guarded action. |
+| **Blocked** | Recognized requests to add, remove, or adjust Glow/bloom | Planner reports recognized Glow mutation requests as blocked; host Glow add/remove handlers also return without mutating. Glow is not in the executable allowlist. Other unrecognized phrasings remain non-executable. |
+| **Unsupported** | Arbitrary scripts, unrecognized edits, or a style request with no matching recipe | Returns an unsupported response and does not call the host. A matched recipe that needs a decision may instead ask for clarification or label a step `REQUIRES_INPUT`. |
+
+Knowledge answers are educational text, not project actions. “Executable” describes the tested code path and its guards; the Node host mock does not establish After Effects compatibility or runtime stability.
 
 ## Next model stage
 
