@@ -28,7 +28,7 @@ Examples to try in the panel:
 
 Conflicting Glow styles prompt a question. Unsupported requests are not executed by the deterministic planner. Knowledge answers are local and deterministic.
 
-**AI proposals:** OBSIDIAN can optionally ask the existing local CORE/Qwen model (through the shared Ollama provider) to interpret creative requests and return a structured proposal. Start Ollama with the configured model (default model name `core`), then run `npm run obsidian:ai` from the repository root before using the panel. Set `OLLAMA_MODEL`, `OLLAMA_BASE_URL`, or `OBSIDIAN_AI_PORT` in the local environment when needed; `.env` is git-ignored. No hosted provider or API key is used.
+**AI proposals:** OBSIDIAN can optionally ask the existing local CORE/Qwen model (through the shared Ollama provider) to interpret creative requests and return a structured proposal. Start Ollama with the configured model (default model name `core`), then from `sublime-core/` (the directory containing `package.json`) run `npm run obsidian:ai` before using the panel. Set `OLLAMA_MODEL` or `OLLAMA_BASE_URL` in the local environment when needed; `.env` is git-ignored. No hosted provider or API key is used.
 
 The model endpoint is proposal-only: it has no tools and accepts no executable action schema. OBSIDIAN bounds and validates its response, labels it `PROPOSED`, and renders it as text. The deterministic planner still handles executable actions, blocked Glow requests, and clarifications; only recognized recipe proposals and otherwise unsupported requests are sent to CORE. If the local service/model is unavailable, existing deterministic recipe proposals remain available and unsupported requests show setup guidance. Model output is never passed to the After Effects host bridge.
 
@@ -64,7 +64,7 @@ Knowledge answers are educational text, not project actions. “Executable” de
 
 ## Local proposal service
 
-Run `npm run obsidian:ai` in a terminal to start the loopback-only proposal endpoint at `http://127.0.0.1:43127/proposal`. It reuses the existing Ollama provider and its `OLLAMA_MODEL` / `OLLAMA_BASE_URL` settings. Install and start Ollama and make the local model available under the configured name (default `core`) before requesting a proposal. If the service is stopped, deterministic planning continues.
+From `sublime-core/`, run `npm run obsidian:ai` in a terminal to start the loopback-only proposal endpoint at `http://127.0.0.1:43127/proposal`. It reuses the existing Ollama provider and its `OLLAMA_MODEL` / `OLLAMA_BASE_URL` settings. Install and start Ollama and make the local model available under the configured name (default `core`) before requesting a proposal. If the service is stopped, deterministic planning continues; requests are bounded to 90 seconds and malformed or unsafe proposals are rejected.
 
 The service has no After Effects connection, tools, or credentials. Its structured proposal is presentation data only. To implement future model-suggested edits, add explicit deterministic planner/host actions with validation, verification, rollback, and tests; do not route model output directly to ExtendScript.
 

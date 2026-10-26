@@ -71,7 +71,7 @@ function showResult(message, isError) {
   result.querySelector(".result-mark").textContent = isError ? "!" : "✓";
 }
 
-function showRecipePlan(plan) {
+function showRecipePlan(plan, note) {
   const recipe = plan.recipe;
   const look = recipe.look || {};
   const lines = [
@@ -89,6 +89,7 @@ function showRecipePlan(plan) {
     "Safe fallback: " + (recipe.fallback || "Keep the project unchanged until a supported action is confirmed."),
     "Not applied: this is a proposal, not an executed edit."
   ];
+  if (note) lines.push(note);
   showResult(lines.join("\n"), false);
 }
 
@@ -108,12 +109,15 @@ function showCoreProposal(proposal) {
 
 async function requestCoreProposal(command, fallbackPlan) {
   proposalInFlight = true;
+  const controller = new AbortController();
+  const timeout = window.setTimeout(() => controller.abort(), 95_000);
   setProgress(45, "Asking local CORE for a proposal...");
   try {
     const response = await fetch("http://127.0.0.1:43127/proposal", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ request: command })
+      body: JSON.stringify({ request: command }),
+      signal: controller.signal
     });
     const data = await response.json();
     if (!response.ok || !data.proposal || data.proposal.executionReadiness !== "PROPOSED" || data.proposal.executable !== false) {
@@ -122,15 +126,18 @@ async function requestCoreProposal(command, fallbackPlan) {
     showCoreProposal(data.proposal);
     setProgress(100, "Proposal prepared; no edit applied");
   } catch (error) {
+    const detail = controller.signal.aborted
+      ? "CORE timed out while waiting for the local model. Check Ollama and the configured model."
+      : error instanceof Error ? error.message : String(error);
     if (fallbackPlan && fallbackPlan.status === "style_plan") {
-      showRecipePlan(fallbackPlan);
+      showRecipePlan(fallbackPlan, "CORE unavailable: " + detail + " Start Ollama and run `npm run obsidian:ai` if the proposal service is stopped.");
       setProgress(100, "Local proposal; CORE unavailable");
       return;
     }
     setProgress(100, "CORE unavailable; deterministic fallback");
-    const detail = error instanceof Error ? error.message : String(error);
     showResult("Local CORE is not connected. Start Ollama and run `npm run obsidian:ai` to enable AI proposals. " + detail + "\n\n" + ((fallbackPlan && fallbackPlan.question) || "No safe deterministic plan was found. No changes were made."), true);
   } finally {
+    window.clearTimeout(timeout);
     proposalInFlight = false;
   }
 }
