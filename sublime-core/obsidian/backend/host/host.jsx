@@ -356,6 +356,21 @@ function OBSIDIAN_reduceOpacity() {
     return "OK|Verified opacity reduction on " + verified + " selected layer(s).";
 }
 
+function OBSIDIAN_getScaleProperty(layer) {
+    var transform = layer ? layer.property("ADBE Transform Group") : null;
+    return transform ? transform.property("ADBE Scale") : null;
+}
+
+function OBSIDIAN_scaleValueMatches(layer, expected) {
+    var property = OBSIDIAN_getScaleProperty(layer);
+    var current = property ? property.value : null;
+    if (!current || typeof current.length !== "number" || current.length !== expected.length) return false;
+    for (var i = 0; i < expected.length; i++) {
+        if (!isFinite(Number(current[i])) || Math.abs(Number(current[i]) - expected[i]) > 0.01) return false;
+    }
+    return true;
+}
+
 function OBSIDIAN_scaleSelected(signedPercent) {
     var layers = OBSIDIAN_getSelectedLayers();
     if (!layers.length) return "ERROR|Open a composition and select at least one layer.";
@@ -372,8 +387,7 @@ function OBSIDIAN_scaleSelected(signedPercent) {
         if (layer.locked) {
             return "ERROR|Scale change cancelled: unlock '" + OBSIDIAN_cleanText(layer.name) + "'.";
         }
-        var transform = layer.property("ADBE Transform Group");
-        var scale = transform ? transform.property("ADBE Scale") : null;
+        var scale = OBSIDIAN_getScaleProperty(layer);
         if (!scale || !scale.value || typeof scale.value.length !== "number" ||
             (scale.value.length !== 2 && scale.value.length !== 3) || typeof scale.setValue !== "function") {
             return "ERROR|Scale change cancelled: a selected layer has no supported 2D or 3D Scale property.";
@@ -394,44 +408,32 @@ function OBSIDIAN_scaleSelected(signedPercent) {
             original.push(component);
             target.push(nextComponent);
         }
-        prepared.push({ layer: layer, property: scale, original: original, target: target });
+        prepared.push({ layer: layer, original: original, target: target });
     }
 
     app.beginUndoGroup("OBSIDIAN - Scale Selected Layers");
     try {
-        for (var k = 0; k < prepared.length; k++) prepared[k].property.setValue(prepared[k].target);
+        for (var k = 0; k < prepared.length; k++) {
+            var writeProperty = OBSIDIAN_getScaleProperty(prepared[k].layer);
+            if (!writeProperty || typeof writeProperty.setValue !== "function") {
+                throw new Error("Scale property became unavailable before it could be written.");
+            }
+            writeProperty.setValue(prepared[k].target);
+        }
 
         var verified = 0;
         for (var n = 0; n < prepared.length; n++) {
-            var current = prepared[n].property.value;
-            var matches = current && current.length === prepared[n].target.length;
-            if (matches) {
-                for (var p = 0; p < current.length; p++) {
-                    if (!isFinite(Number(current[p])) || Math.abs(Number(current[p]) - prepared[n].target[p]) > 0.01) {
-                        matches = false;
-                        break;
-                    }
-                }
-            }
-            if (matches) verified++;
+            if (OBSIDIAN_scaleValueMatches(prepared[n].layer, prepared[n].target)) verified++;
         }
         if (verified !== prepared.length) throw new Error("Scale read-back did not match the requested values.");
     } catch (error) {
         var restored = 0;
         for (var r = 0; r < prepared.length; r++) {
             try {
-                prepared[r].property.setValue(prepared[r].original);
-                var restoredValue = prepared[r].property.value;
-                var originalMatches = restoredValue && restoredValue.length === prepared[r].original.length;
-                if (originalMatches) {
-                    for (var s = 0; s < restoredValue.length; s++) {
-                        if (!isFinite(Number(restoredValue[s])) || Math.abs(Number(restoredValue[s]) - prepared[r].original[s]) > 0.01) {
-                            originalMatches = false;
-                            break;
-                        }
-                    }
-                }
-                if (originalMatches) restored++;
+                var restoreProperty = OBSIDIAN_getScaleProperty(prepared[r].layer);
+                if (!restoreProperty || typeof restoreProperty.setValue !== "function") continue;
+                restoreProperty.setValue(prepared[r].original);
+                if (OBSIDIAN_scaleValueMatches(prepared[r].layer, prepared[r].original)) restored++;
             } catch (restoreError) {}
         }
         app.endUndoGroup();

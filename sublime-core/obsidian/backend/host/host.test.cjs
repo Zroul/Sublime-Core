@@ -190,6 +190,47 @@ test("proportionally scales selected 2D and 3D layers and verifies the result", 
   assert.ok(Array.from(second._scale.value).every((value) => Math.abs(value - 105) < 0.01));
 });
 
+test("scale writes and verifies fresh 2D and 3D property-value snapshots", () => {
+  const { context, layer, comp } = makeContext();
+  const threeDLayer = makeTextLayer("Depth", 2, 100);
+  let live2D = [100, 100];
+  let live3D = [125, 80, 60];
+  let reads2D = 0;
+  let reads3D = 0;
+
+  function returnSnapshotForScale(targetLayer, read, write) {
+    const originalProperty = targetLayer.property;
+    targetLayer.property = function (key) {
+      if (key !== "ADBE Transform Group") return originalProperty.call(this, key);
+      return {
+        property(matchName) {
+          if (matchName !== "ADBE Scale") return null;
+          const snapshot = read();
+          return {
+            value: snapshot.value,
+            numKeys: 0,
+            expressionEnabled: false,
+            setValue(value) { write(Array.from(value)); },
+          };
+        },
+      };
+    };
+  }
+
+  const read2D = () => ({ value: live2D.slice(), count: ++reads2D });
+  const read3D = () => ({ value: live3D.slice(), count: ++reads3D });
+  returnSnapshotForScale(layer, read2D, (value) => { live2D = value; });
+  returnSnapshotForScale(threeDLayer, read3D, (value) => { live3D = value; });
+  comp.selectedLayers.push(threeDLayer);
+
+  const result = context.OBSIDIAN_executePlan("scale_selected", 10, "");
+  assert.equal(result, "OK|Verified proportional scale change on 2 selected layer(s).");
+  assert.ok(live2D.every((value, index) => Math.abs(value - [110, 110][index]) <= 0.01));
+  assert.ok(live3D.every((value, index) => Math.abs(value - [137.5, 88, 66][index]) <= 0.01));
+  assert.ok(reads2D >= 3, "2D scale should be reacquired for preflight, write, and verification");
+  assert.ok(reads3D >= 3, "3D scale should be reacquired for preflight, write, and verification");
+});
+
 test("scale preflight refuses keyframes, expressions, and locked layers without partial edits", () => {
   const { context, layer, comp } = makeContext();
   const animated = makeTextLayer("Animated", 2, 100);
