@@ -29,6 +29,8 @@ export class OllamaProvider implements LlmClient {
     system: string;
     messages: Message[];
     tools: ToolSpec[];
+    signal?: AbortSignal;
+    maxTokens?: number;
   }): Promise<{ text?: string; toolCalls?: ToolCall[] }> {
     const messages = [
       { role: "system", content: input.system },
@@ -73,6 +75,9 @@ export class OllamaProvider implements LlmClient {
 
     for (let attempt = 1; attempt <= attempts; attempt += 1) {
       try {
+        const signal = input.signal
+          ? AbortSignal.any([input.signal, AbortSignal.timeout(timeoutMs)])
+          : AbortSignal.timeout(timeoutMs);
         const response = await fetch(`${this.baseUrl}/api/chat`, {
           method: "POST",
           headers: {
@@ -82,6 +87,9 @@ export class OllamaProvider implements LlmClient {
             model: this.model,
             stream: false,
             think: false,
+            ...(Number.isSafeInteger(input.maxTokens) && input.maxTokens! > 0
+              ? { options: { num_predict: input.maxTokens } }
+              : {}),
             messages,
             tools: input.tools.map((tool) => ({
               type: "function",
@@ -92,7 +100,7 @@ export class OllamaProvider implements LlmClient {
               },
             })),
           }),
-          signal: AbortSignal.timeout(timeoutMs),
+          signal,
         });
 
         const data = (await response.json()) as OllamaResponse;
@@ -122,7 +130,7 @@ export class OllamaProvider implements LlmClient {
       } catch (error) {
         lastError = error;
 
-        if (attempt === attempts) {
+        if (attempt === attempts || input.signal?.aborted) {
           break;
         }
 
@@ -134,6 +142,10 @@ export class OllamaProvider implements LlmClient {
       lastError instanceof Error
         ? lastError.message
         : String(lastError);
+
+    if (input.signal?.aborted && input.signal.reason instanceof Error) {
+      throw input.signal.reason;
+    }
 
     throw new Error(
       `Local Ollama request failed after ${attempts} attempts: ${message}`,

@@ -10,18 +10,66 @@ test("maps selected-layer inspection", () => {
   assert.equal(planObsidianCommand("analyze selected layers").action, "inspect_selection");
 });
 
+test("plans only bounded proportional scale changes for the selected layers", () => {
+  const up = planObsidianCommand("scale selected layers up by 10%");
+  assert.equal(up.action, "scale_selected");
+  assert.deepEqual(up.args, { value: 10 });
+  assert.equal(isExecutablePlan(up), true);
+
+  const down = planObsidianCommand("reduce the scale of the selection by 12.5%");
+  assert.equal(down.action, "scale_selected");
+  assert.deepEqual(down.args, { value: -12.5 });
+  assert.equal(isExecutablePlan(down), true);
+
+  for (const request of [
+    "scale selected layers up by 0%",
+    "scale selected layers down by 100%",
+    "scale selected layers up by 101%",
+    "scale selected layers up by 10% and 20%",
+    "scale selected layers by 10%",
+    "scale selected layers up",
+    "scale selected layers up and down by 10%",
+  ]) {
+    const plan = planObsidianCommand(request);
+    assert.equal(plan.status, "needs_clarification", request);
+    assert.equal(isExecutablePlan(plan), false, request);
+  }
+});
+
 test("parses opacity values and rejects values above 100", () => {
   assert.deepEqual(planObsidianCommand("set opacity to 45%").args, { value: 45 });
   assert.equal(planObsidianCommand("set opacity to 140%").status, "needs_clarification");
 });
 
-test("maps cinematic and attention language to the matching Glow preset", () => {
-  assert.equal(planObsidianCommand("add a subtle cinematic glow").args.profile, "cinematic");
-  assert.equal(planObsidianCommand("add a bold attention-grabbing glow").args.profile, "attention");
-  assert.match(planObsidianCommand("add a subtle cinematic glow").explanation, /cinematic intent detected/i);
-  assert.match(planObsidianCommand("add a subtle cinematic glow").explanation, /basic Glow only/i);
-  assert.match(planObsidianCommand("add a bold attention-grabbing glow").explanation, /attention-grabbing intent detected/i);
-  assert.match(planObsidianCommand("add a bold attention-grabbing glow").explanation, /basic Glow only/i);
+test("validates the complete opacity value without truncating or clamping it", () => {
+  assert.equal(planObsidianCommand("set opacity to 1000%").status, "needs_clarification");
+  assert.equal(planObsidianCommand("set opacity to -5%").status, "needs_clarification");
+  assert.equal(planObsidianCommand("set opacity to 42.5%").args.value, 42.5);
+  assert.equal(planObsidianCommand("set opacity to 42.5 9%").status, "needs_clarification");
+  assert.equal(planObsidianCommand("set opacity").status, "needs_clarification");
+});
+
+test("classifies cinematic and neon Glow intent while keeping both mutations blocked", () => {
+  const cinematic = planObsidianCommand("add a subtle cinematic glow");
+  const neon = planObsidianCommand("add a bold neon bloom");
+  assert.equal(cinematic.status, "blocked");
+  assert.equal(cinematic.readiness, "BLOCKED");
+  assert.equal(cinematic.args.profile, "cinematic");
+  assert.equal(neon.status, "blocked");
+  assert.equal(neon.readiness, "BLOCKED");
+  assert.equal(neon.args.profile, "attention");
+  assert.equal(isExecutablePlan(cinematic), false);
+  assert.equal(isExecutablePlan(neon), false);
+  assert.match(cinematic.explanation, /no change was made/i);
+  assert.match(neon.explanation, /blocked/i);
+});
+
+test("Glow parameter changes remain blocked instead of becoming recipe plans", () => {
+  const plan = planObsidianCommand("set neon bloom radius to 50");
+  assert.equal(plan.status, "blocked");
+  assert.equal(plan.readiness, "BLOCKED");
+  assert.equal(plan.executable, false);
+  assert.match(plan.explanation, /Glow mutations are blocked/i);
 });
 
 test("uses knowledge cues for common visual language", () => {
@@ -44,12 +92,31 @@ test("asks when Glow style cues conflict", () => {
   assert.equal(planObsidianCommand("add subtle but flashy dramatic glow").status, "needs_clarification");
 });
 
+test("Glow removal remains blocked and outside the executable allowlist", () => {
+  const plan = planObsidianCommand("remove glow");
+  assert.equal(plan.status, "blocked");
+  assert.equal(plan.readiness, "BLOCKED");
+  assert.equal(plan.action, "remove_glow");
+  assert.equal(isExecutablePlan(plan), false);
+});
+
 test("turns a vibe request into a non-executable creative direction plan", () => {
-  const plan = planObsidianCommand("Give it neon lighting like it's in a dream city");
+  const plan = planObsidianCommand("Give this footage neon lighting like a dream city");
   assert.equal(plan.status, "style_plan");
   assert.equal(plan.recipe.id, "neon_dream_city");
   assert.equal(isExecutablePlan(plan), false);
+  assert.equal(plan.executable, false);
+  assert.equal(plan.readiness, "PROPOSED");
   assert.match(plan.explanation, /not an executed/i);
+});
+
+test("routes story-driven color requests to an input-aware non-executable plan", () => {
+  const plan = planObsidianCommand("Use color to show emotional change across the story");
+  assert.equal(plan.status, "style_plan");
+  assert.equal(plan.recipe.id, "narrative_color_arc");
+  assert.ok(plan.recipe.prerequisites.some((item) => /scene order/i.test(item)));
+  assert.equal(plan.readiness, "PROPOSED");
+  assert.equal(isExecutablePlan(plan), false);
 });
 
 test("does not treat unsupported natural language as executable", () => {
@@ -59,7 +126,10 @@ test("does not treat unsupported natural language as executable", () => {
 });
 
 test("only approved actions are executable", () => {
-  assert.equal(isExecutablePlan({ status: "planned", action: "add_glow" }), true);
+  assert.equal(isExecutablePlan({ status: "planned", action: "add_glow" }), false);
+  assert.equal(isExecutablePlan({ status: "planned", action: "remove_glow" }), false);
+  assert.equal(isExecutablePlan({ status: "planned", action: "fade_in" }), true);
+  assert.equal(isExecutablePlan({ status: "planned", action: "scale_selected" }), true);
   assert.equal(isExecutablePlan({ status: "planned", action: "run_shell" }), false);
 });
 

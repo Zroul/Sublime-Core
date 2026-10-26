@@ -64,6 +64,7 @@ function makeTextLayer(name, index, opacityValue) {
     name, index, enabled: true, threeDLayer: false, shy: false, locked: false,
     inPoint: 0, outPoint: 5,
     _opacity: opacity,
+    _scale: scale,
     property(key) {
       if (key === "ADBE Transform Group") return transform;
       if (key === "ADBE Effect Parade") return effects;
@@ -168,6 +169,173 @@ test("reduce opacity verifies the target value for each selected layer", () => {
   const result = context.OBSIDIAN_executePlan("reduce_opacity", null, "");
   assert.equal(result, "OK|Verified opacity reduction on 1 selected layer(s).");
   assert.equal(layer._opacity.value, 80);
+});
+
+test("proportionally scales selected 2D and 3D layers and verifies the result", () => {
+  const { context, layer, comp } = makeContext();
+  let result = context.OBSIDIAN_executePlan("scale_selected", 10, "");
+  assert.equal(result, "OK|Verified proportional scale change on 1 selected layer(s).");
+  assert.ok(Array.from(layer._scale.value).every((value) => Math.abs(value - 110) < 0.01));
+
+  layer._scale.value = [100, 80, 50];
+  result = context.OBSIDIAN_executePlan("scale_selected", -10, "");
+  assert.equal(result, "OK|Verified proportional scale change on 1 selected layer(s).");
+  assert.ok(Array.from(layer._scale.value).every((value, index) => Math.abs(value - [90, 72, 45][index]) < 0.01));
+
+  const second = makeTextLayer("Caption", 2, 100);
+  comp.selectedLayers.push(second);
+  result = context.OBSIDIAN_executePlan("scale_selected", 5, "");
+  assert.equal(result, "OK|Verified proportional scale change on 2 selected layer(s).");
+  assert.ok(Array.from(layer._scale.value).every((value, index) => Math.abs(value - [94.5, 75.6, 47.25][index]) < 0.01));
+  assert.ok(Array.from(second._scale.value).every((value) => Math.abs(value - 105) < 0.01));
+});
+
+test("scale writes and verifies fresh 2D and 3D property-value snapshots", () => {
+  const { context, layer, comp } = makeContext();
+  const threeDLayer = makeTextLayer("Depth", 2, 100);
+  let live2D = [100, 100];
+  let live3D = [125, 80, 60];
+  let reads2D = 0;
+  let reads3D = 0;
+
+  function returnSnapshotForScale(targetLayer, read, write) {
+    const originalProperty = targetLayer.property;
+    targetLayer.property = function (key) {
+      if (key !== "ADBE Transform Group") return originalProperty.call(this, key);
+      return {
+        property(matchName) {
+          if (matchName !== "ADBE Scale") return null;
+          const snapshot = read();
+          return {
+            value: snapshot.value,
+            numKeys: 0,
+            expressionEnabled: false,
+            setValue(value) { write(Array.from(value)); },
+          };
+        },
+      };
+    };
+  }
+
+  const read2D = () => ({ value: live2D.slice(), count: ++reads2D });
+  const read3D = () => ({ value: live3D.slice(), count: ++reads3D });
+  returnSnapshotForScale(layer, read2D, (value) => { live2D = value; });
+  returnSnapshotForScale(threeDLayer, read3D, (value) => { live3D = value; });
+  comp.selectedLayers.push(threeDLayer);
+
+  const result = context.OBSIDIAN_executePlan("scale_selected", 10, "");
+  assert.equal(result, "OK|Verified proportional scale change on 2 selected layer(s).");
+  assert.ok(live2D.every((value, index) => Math.abs(value - [110, 110][index]) <= 0.01));
+  assert.ok(live3D.every((value, index) => Math.abs(value - [137.5, 88, 66][index]) <= 0.01));
+  assert.ok(reads2D >= 3, "2D scale should be reacquired for preflight, write, and verification");
+  assert.ok(reads3D >= 3, "3D scale should be reacquired for preflight, write, and verification");
+});
+
+test("scale mismatch diagnostics compare requested, immediate, and fresh 2D/3D values before rollback", () => {
+  const { context, layer, comp } = makeContext();
+  const threeDLayer = makeTextLayer("Depth", 2, 100);
+  let live2D = [100, 100];
+  let live3D = [125, 80, 60];
+
+  function exposeSnapshotProperty(targetLayer, dimensions, readLive, writeLive, mismatchIndex) {
+    const originalProperty = targetLayer.property;
+    targetLayer.property = function (key) {
+      if (key !== "ADBE Transform Group") return originalProperty.call(this, key);
+      return {
+        property(matchName) {
+          if (matchName !== "ADBE Scale") return null;
+          let immediate = null;
+          return {
+            propertyValueType: dimensions === 2 ? "TwoD" : "ThreeD",
+            get value() { return immediate ? immediate.slice() : readLive().slice(); },
+            numKeys: 0,
+            expressionEnabled: false,
+            setValue(value) {
+              immediate = Array.from(value);
+              const committed = Array.from(value);
+              if (committed.length === dimensions && committed[0] !== 100 && committed[0] !== 125) {
+                committed[mismatchIndex] += 2;
+              }
+              writeLive(committed);
+            },
+          };
+        },
+      };
+    };
+  }
+
+  exposeSnapshotProperty(layer, 2, () => live2D, (value) => { live2D = value; }, 0);
+  exposeSnapshotProperty(threeDLayer, 3, () => live3D, (value) => { live3D = value; }, 1);
+  comp.selectedLayers.push(threeDLayer);
+
+  const result = context.OBSIDIAN_executePlan("scale_selected", 10, "");
+  assert.match(result, /failed and original Scale values were restored/);
+  assert.match(result, /requested \[110(?:\.\d+)?, 110(?:\.\d+)?\] \(dimensions=2\)/);
+  assert.match(result, /immediate \[110(?:\.\d+)?, 110(?:\.\d+)?\] \(dimensions=2, propertyValueType=TwoD\)/);
+  assert.match(result, /fresh \[112(?:\.\d+)?, 110(?:\.\d+)?\] \(dimensions=2, propertyValueType=TwoD\)/);
+  assert.match(result, /requested \[137\.5, 88, 66\] \(dimensions=3\)/);
+  assert.match(result, /fresh \[137\.5, 90, 66\] \(dimensions=3, propertyValueType=ThreeD\)/);
+  assert.deepEqual(live2D, [100, 100]);
+  assert.deepEqual(live3D, [125, 80, 60]);
+});
+
+test("scale preflight refuses keyframes, expressions, and locked layers without partial edits", () => {
+  const { context, layer, comp } = makeContext();
+  const animated = makeTextLayer("Animated", 2, 100);
+  animated._scale.numKeys = 2;
+  comp.selectedLayers.push(animated);
+  let result = context.OBSIDIAN_executePlan("scale_selected", 10, "");
+  assert.match(result, /existing scale keyframes or expression/);
+  assert.deepEqual(Array.from(layer._scale.value), [100, 100]);
+  assert.deepEqual(Array.from(animated._scale.value), [100, 100]);
+
+  comp.selectedLayers = [layer];
+  layer._scale.expressionEnabled = true;
+  layer._scale.expression = "value";
+  result = context.OBSIDIAN_executePlan("scale_selected", 10, "");
+  assert.match(result, /existing scale keyframes or expression/);
+  assert.deepEqual(Array.from(layer._scale.value), [100, 100]);
+
+  layer._scale.expressionEnabled = false;
+  layer.locked = true;
+  result = context.OBSIDIAN_executePlan("scale_selected", 10, "");
+  assert.match(result, /unlock 'Headline'/);
+  assert.deepEqual(Array.from(layer._scale.value), [100, 100]);
+});
+
+test("scale rejects invalid percentages and unsupported vector shapes", () => {
+  const { context, layer } = makeContext();
+  for (const value of [0, -100, 100.01, NaN, Infinity]) {
+    const result = context.OBSIDIAN_executePlan("scale_selected", value, "");
+    assert.match(result, /Scale change must be/);
+    assert.deepEqual(Array.from(layer._scale.value), [100, 100]);
+  }
+  layer._scale.value = [100];
+  const unsupported = context.OBSIDIAN_executePlan("scale_selected", 10, "");
+  assert.match(unsupported, /no supported 2D or 3D Scale property/);
+  assert.deepEqual(Array.from(layer._scale.value), [100]);
+
+  layer._scale.value = [900, 900];
+  const excessive = context.OBSIDIAN_executePlan("scale_selected", 20, "");
+  assert.match(excessive, /resulting Scale value is outside the supported range/);
+  assert.deepEqual(Array.from(layer._scale.value), [900, 900]);
+});
+
+test("scale read-back failure restores the original Scale values", () => {
+  const { context, layer } = makeContext();
+  const originalSetValue = layer._scale.setValue;
+  let corruptFirstWrite = true;
+  layer._scale.setValue = function (value) {
+    if (corruptFirstWrite) {
+      corruptFirstWrite = false;
+      this.value = [value[0] + 1, value[1]];
+      return;
+    }
+    originalSetValue.call(this, value);
+  };
+  const result = context.OBSIDIAN_executePlan("scale_selected", 10, "");
+  assert.match(result, /failed and original Scale values were restored/);
+  assert.deepEqual(Array.from(layer._scale.value), [100, 100]);
 });
 
 test("set opacity preserves existing opacity keyframes", () => {

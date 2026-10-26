@@ -13,8 +13,7 @@
     inspect_selection: true,
     set_opacity: true,
     reduce_opacity: true,
-    add_glow: true,
-    remove_glow: true,
+    scale_selected: true,
     fade_in: true
   };
 
@@ -24,7 +23,9 @@
     return String(text === undefined || text === null ? "" : text)
       .trim()
       .toLowerCase()
-      .replace(/[^a-z0-9%\s-]/g, " ")
+      .replace(/(\d)\.(\d)/g, "$1~$2")
+      .replace(/[^a-z0-9%\s~-]/g, " ")
+      .replace(/~/g, ".")
       .replace(/\s+/g, " ");
   }
 
@@ -87,13 +88,47 @@
       return result("inspect_selection", {}, "Read the selected layers and their current properties.");
     }
 
-    var opacity = command.match(/\b(?:set|change)\s+(?:the\s+)?opacity\s+(?:to\s+)?(\d{1,3})\s*%?/);
+    var scaleIntent = /\b(scale|resize)\b/.test(command) &&
+      (/\bselected layers?\b/.test(command) || /\bselection\b/.test(command));
+    if (scaleIntent) {
+      var scaleUp = /\b(up|increase|grow|bigger|larger)\b/.test(command);
+      var scaleDown = /\b(down|decrease|reduce|lower|shrink|smaller)\b/.test(command);
+      var scaleAmounts = command.match(/-?\d+(?:\.\d+)?\s*%/g) || [];
+      var scaleMatch = command.match(/\bby\s+(-?\d+(?:\.\d+)?)\s*%/);
+      if (scaleUp === scaleDown || scaleAmounts.length !== 1 || !scaleMatch) {
+        return {
+          status: "needs_clarification",
+          question: "Specify whether to scale the selected layers up or down, and by one percentage from 1% to 100%. Downward changes must be less than 100%."
+        };
+      }
+      var scalePercent = Number(scaleMatch[1]);
+      if (!isFinite(scalePercent) || scalePercent < 1 || scalePercent > 100 ||
+          (scaleDown && scalePercent >= 100)) {
+        return {
+          status: "needs_clarification",
+          question: "Scale change must be 1% to 100% up, or 1% to less than 100% down."
+        };
+      }
+      var signedScalePercent = scaleUp ? scalePercent : -scalePercent;
+      return result(
+        "scale_selected",
+        { value: signedScalePercent },
+        "Scale every selected layer proportionally by " + scalePercent + "% " + (scaleUp ? "up" : "down") + ". Existing scale keyframes and expressions are preserved by refusing the edit."
+      );
+    }
+
+    var opacityIntent = /\b(?:set|change)\s+(?:the\s+)?opacity\b/.test(command);
+    var opacity = command.match(/\b(?:set|change)\s+(?:the\s+)?opacity\s+(?:to\s+)?(-?\d+(?:\.\d+)?)(?:\s*%)?(?=\s|$)/);
     if (opacity) {
       var value = Number(opacity[1]);
-      if (value > 100) {
+      var opacityRemainder = command.slice(opacity.index + opacity[0].length);
+      if (/^\s+\d/.test(opacityRemainder) || !isFinite(value) || value < 0 || value > 100) {
         return { status: "needs_clarification", question: "Opacity must be between 0% and 100%." };
       }
       return result("set_opacity", { value: value }, "Set selected-layer opacity to " + value + "%.");
+    }
+    if (opacityIntent) {
+      return { status: "needs_clarification", question: "Enter one opacity value between 0% and 100%." };
     }
 
     if (/\b(reduce|lower|decrease)\s+(?:the\s+)?opacity\b/.test(command)) {
@@ -101,14 +136,20 @@
     }
 
     if (/\b(remove|delete)\s+(?:the\s+)?glow\b/.test(command)) {
-      return result("remove_glow", {}, "Remove Glow from selected layers and verify the result.");
+      return {
+        status: "blocked",
+        readiness: "BLOCKED",
+        action: "remove_glow",
+        executable: false,
+        explanation: "Glow mutations are disabled during the After Effects crash investigation. No changes were made."
+      };
     }
 
     var cinematic = concept("cinematic_glow");
     var attention = concept("attention_glow");
     var cinematicCue = cinematic && hasCue(cinematic.cues, command);
     var attentionCue = attention && hasCue(attention.cues, command);
-    var glowVerb = /\b(add|apply|use|put|give|create|make)\b/.test(command);
+    var glowVerb = /\b(add|apply|use|put|give|create|make|set|change|adjust|tune|increase|decrease|reduce|tweak)\b|\bturn\s+(up|down)\b/.test(command);
     var glowMention = /\bglow\b|\bbloom\b/.test(command);
     var titlePopIntent = /\b(make|give|help)\b/.test(command) &&
       /\b(title|text|subject|this)\b/.test(command) &&
@@ -119,7 +160,8 @@
       if (cinematicCue && attentionCue) {
         return {
           status: "needs_clarification",
-          question: "Do you want a restrained cinematic Glow or a bold attention-grabbing Glow?"
+          question: "Do you want a restrained cinematic Glow or a bold neon/attention bloom?",
+          options: ["cinematic", "attention"]
         };
       }
       var profile = cinematicCue ? "cinematic" : attentionCue ? "attention" : "unspecified";
@@ -127,16 +169,19 @@
         ? cinematic.note
         : profile === "attention" && attention.note
           ? attention.note
-          : "Use the basic Glow effect without assuming a specific visual treatment.";
+          : "The desired Glow treatment is unspecified.";
       return {
-        status: "planned",
+        status: "blocked",
         action: "add_glow",
+        readiness: "BLOCKED",
+        executable: false,
         args: { profile: profile },
         explanation: (profile === "cinematic"
-          ? "Cinematic intent detected. This is a proposal—not a claim of calibrated execution; calibrated Glow settings are not implemented, and the host currently adds basic Glow only. "
+          ? "Restrained cinematic Glow intent detected. "
           : profile === "attention"
-            ? "Attention-grabbing intent detected. This is a proposal—not a claim of calibrated execution; calibrated Glow settings are not implemented, and the host currently adds basic Glow only. "
-            : "Add basic Glow. The request does not specify a visual treatment. ") + note,
+            ? "Bold neon/attention bloom intent detected. "
+            : "Glow intent detected without a visual profile. ") +
+          "Glow mutations are blocked during the crash investigation; no change was made. " + note,
         confidence: profile === "unspecified" ? 0.65 : 0.85
       };
     }
@@ -168,7 +213,9 @@
         return {
           status: "style_plan",
           recipe: stylePlan.recipe,
-          explanation: stylePlan.note,
+          readiness: stylePlan.readiness,
+          executable: false,
+          explanation: "A creative direction plan, not an executed or visually verified edit.",
           confidence: 0.75
         };
       }

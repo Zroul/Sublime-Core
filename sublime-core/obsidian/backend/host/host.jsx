@@ -356,6 +356,139 @@ function OBSIDIAN_reduceOpacity() {
     return "OK|Verified opacity reduction on " + verified + " selected layer(s).";
 }
 
+function OBSIDIAN_getScaleProperty(layer) {
+    var transform = layer ? layer.property("ADBE Transform Group") : null;
+    return transform ? transform.property("ADBE Scale") : null;
+}
+
+function OBSIDIAN_scaleSnapshot(property) {
+    var snapshot = { dimensions: "unavailable", propertyValueType: "unknown", values: null };
+    if (!property) return snapshot;
+    try {
+        var typeValue = property.propertyValueType;
+        if (typeValue !== undefined) {
+            snapshot.propertyValueType = String(typeValue);
+            if (typeof PropertyValueType !== "undefined") {
+                if (typeValue === PropertyValueType.TwoD) snapshot.propertyValueType = "TwoD";
+                else if (typeValue === PropertyValueType.ThreeD) snapshot.propertyValueType = "ThreeD";
+            }
+        }
+    } catch (ignored) {}
+    try {
+        var current = property.value;
+        if (current && typeof current.length === "number") {
+            snapshot.dimensions = current.length;
+            snapshot.values = [];
+            for (var i = 0; i < current.length; i++) snapshot.values.push(current[i]);
+        }
+    } catch (ignored2) {}
+    return snapshot;
+}
+
+function OBSIDIAN_scaleSnapshotText(snapshot) {
+    var valueText = snapshot.values === null ? "unavailable" : "[" + snapshot.values.join(", ") + "]";
+    return valueText + " (dimensions=" + snapshot.dimensions + ", propertyValueType=" + snapshot.propertyValueType + ")";
+}
+
+function OBSIDIAN_scaleSnapshotMatches(snapshot, expected) {
+    var current = snapshot ? snapshot.values : null;
+    if (!current || current.length !== expected.length) return false;
+    for (var i = 0; i < expected.length; i++) {
+        if (!isFinite(Number(current[i])) || Math.abs(Number(current[i]) - expected[i]) > 0.01) return false;
+    }
+    return true;
+}
+
+function OBSIDIAN_scaleSelected(signedPercent) {
+    var layers = OBSIDIAN_getSelectedLayers();
+    if (!layers.length) return "ERROR|Open a composition and select at least one layer.";
+
+    signedPercent = Number(signedPercent);
+    if (!isFinite(signedPercent) || signedPercent === 0 || signedPercent > 100 || signedPercent <= -100) {
+        return "ERROR|Scale change must be 1% to 100% up, or 1% to less than 100% down.";
+    }
+
+    var prepared = [];
+    var factor = 1 + signedPercent / 100;
+    for (var i = 0; i < layers.length; i++) {
+        var layer = layers[i];
+        if (layer.locked) {
+            return "ERROR|Scale change cancelled: unlock '" + OBSIDIAN_cleanText(layer.name) + "'.";
+        }
+        var scale = OBSIDIAN_getScaleProperty(layer);
+        if (!scale || !scale.value || typeof scale.value.length !== "number" ||
+            (scale.value.length !== 2 && scale.value.length !== 3) || typeof scale.setValue !== "function") {
+            return "ERROR|Scale change cancelled: a selected layer has no supported 2D or 3D Scale property.";
+        }
+        if (Number(scale.numKeys) > 0 || scale.expressionEnabled) {
+            return "ERROR|Scale change cancelled: existing scale keyframes or expression on '" +
+                OBSIDIAN_cleanText(layer.name) + "' were preserved.";
+        }
+
+        var original = [];
+        var target = [];
+        for (var j = 0; j < scale.value.length; j++) {
+            var component = Number(scale.value[j]);
+            var nextComponent = component * factor;
+            if (!isFinite(component) || !isFinite(nextComponent) || Math.abs(nextComponent) > 1000) {
+                return "ERROR|Scale change cancelled: the resulting Scale value is outside the supported range.";
+            }
+            original.push(component);
+            target.push(nextComponent);
+        }
+        prepared.push({ layer: layer, original: original, target: target });
+    }
+
+    app.beginUndoGroup("OBSIDIAN - Scale Selected Layers");
+    try {
+        for (var k = 0; k < prepared.length; k++) {
+            var writeProperty = OBSIDIAN_getScaleProperty(prepared[k].layer);
+            if (!writeProperty || typeof writeProperty.setValue !== "function") {
+                throw new Error("Scale property became unavailable before it could be written.");
+            }
+            writeProperty.setValue(prepared[k].target);
+            prepared[k].immediate = OBSIDIAN_scaleSnapshot(writeProperty);
+        }
+
+        var verified = 0;
+        var mismatchDetails = [];
+        for (var n = 0; n < prepared.length; n++) {
+            var freshProperty = OBSIDIAN_getScaleProperty(prepared[n].layer);
+            var freshSnapshot = OBSIDIAN_scaleSnapshot(freshProperty);
+            if (OBSIDIAN_scaleSnapshotMatches(freshSnapshot, prepared[n].target)) {
+                verified++;
+            } else {
+                mismatchDetails.push(
+                    "'" + OBSIDIAN_cleanText(prepared[n].layer.name) + "': requested [" + prepared[n].target.join(", ") +
+                    "] (dimensions=" + prepared[n].target.length + "); immediate " + OBSIDIAN_scaleSnapshotText(prepared[n].immediate) +
+                    "; fresh " + OBSIDIAN_scaleSnapshotText(freshSnapshot)
+                );
+            }
+        }
+        if (verified !== prepared.length) {
+            throw new Error("Scale read-back did not match the requested values. Diagnostics: " + mismatchDetails.join(" | "));
+        }
+    } catch (error) {
+        var restored = 0;
+        for (var r = 0; r < prepared.length; r++) {
+            try {
+                var restoreProperty = OBSIDIAN_getScaleProperty(prepared[r].layer);
+                if (!restoreProperty || typeof restoreProperty.setValue !== "function") continue;
+                restoreProperty.setValue(prepared[r].original);
+                var restoredSnapshot = OBSIDIAN_scaleSnapshot(OBSIDIAN_getScaleProperty(prepared[r].layer));
+                if (OBSIDIAN_scaleSnapshotMatches(restoredSnapshot, prepared[r].original)) restored++;
+            } catch (restoreError) {}
+        }
+        app.endUndoGroup();
+        if (restored === prepared.length) {
+            return "ERROR|Scale change failed and original Scale values were restored. " + error.toString();
+        }
+        return "ERROR|Scale change failed; restoration could not be verified for every layer. Use After Effects Undo and inspect the selected layers. " + error.toString();
+    }
+    app.endUndoGroup();
+    return "OK|Verified proportional scale change on " + prepared.length + " selected layer(s).";
+}
+
 function OBSIDIAN_fadeIn() {
     var layers = OBSIDIAN_getSelectedLayers();
     if (!layers.length) return "ERROR|Open a composition and select at least one layer.";
@@ -420,6 +553,17 @@ function OBSIDIAN_executePlan(action, value, profile) {
     }
 
     if (action === "reduce_opacity") return OBSIDIAN_reduceOpacity();
+
+    if (action === "scale_selected") {
+        if (value === null || value === undefined || value === "") {
+            return "ERROR|Scale change must be 1% to 100% up, or 1% to less than 100% down.";
+        }
+        value = Number(value);
+        if (!isFinite(value) || value === 0 || value > 100 || value <= -100) {
+            return "ERROR|Scale change must be 1% to 100% up, or 1% to less than 100% down.";
+        }
+        return OBSIDIAN_scaleSelected(value);
+    }
 
     if (action === "add_glow") {
         profile = String(profile || "unspecified");
