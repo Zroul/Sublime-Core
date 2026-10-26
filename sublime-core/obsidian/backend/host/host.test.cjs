@@ -231,6 +231,54 @@ test("scale writes and verifies fresh 2D and 3D property-value snapshots", () =>
   assert.ok(reads3D >= 3, "3D scale should be reacquired for preflight, write, and verification");
 });
 
+test("scale mismatch diagnostics compare requested, immediate, and fresh 2D/3D values before rollback", () => {
+  const { context, layer, comp } = makeContext();
+  const threeDLayer = makeTextLayer("Depth", 2, 100);
+  let live2D = [100, 100];
+  let live3D = [125, 80, 60];
+
+  function exposeSnapshotProperty(targetLayer, dimensions, readLive, writeLive, mismatchIndex) {
+    const originalProperty = targetLayer.property;
+    targetLayer.property = function (key) {
+      if (key !== "ADBE Transform Group") return originalProperty.call(this, key);
+      return {
+        property(matchName) {
+          if (matchName !== "ADBE Scale") return null;
+          let immediate = null;
+          return {
+            propertyValueType: dimensions === 2 ? "TwoD" : "ThreeD",
+            get value() { return immediate ? immediate.slice() : readLive().slice(); },
+            numKeys: 0,
+            expressionEnabled: false,
+            setValue(value) {
+              immediate = Array.from(value);
+              const committed = Array.from(value);
+              if (committed.length === dimensions && committed[0] !== 100 && committed[0] !== 125) {
+                committed[mismatchIndex] += 2;
+              }
+              writeLive(committed);
+            },
+          };
+        },
+      };
+    };
+  }
+
+  exposeSnapshotProperty(layer, 2, () => live2D, (value) => { live2D = value; }, 0);
+  exposeSnapshotProperty(threeDLayer, 3, () => live3D, (value) => { live3D = value; }, 1);
+  comp.selectedLayers.push(threeDLayer);
+
+  const result = context.OBSIDIAN_executePlan("scale_selected", 10, "");
+  assert.match(result, /failed and original Scale values were restored/);
+  assert.match(result, /requested \[110(?:\.\d+)?, 110(?:\.\d+)?\] \(dimensions=2\)/);
+  assert.match(result, /immediate \[110(?:\.\d+)?, 110(?:\.\d+)?\] \(dimensions=2, propertyValueType=TwoD\)/);
+  assert.match(result, /fresh \[112(?:\.\d+)?, 110(?:\.\d+)?\] \(dimensions=2, propertyValueType=TwoD\)/);
+  assert.match(result, /requested \[137\.5, 88, 66\] \(dimensions=3\)/);
+  assert.match(result, /fresh \[137\.5, 90, 66\] \(dimensions=3, propertyValueType=ThreeD\)/);
+  assert.deepEqual(live2D, [100, 100]);
+  assert.deepEqual(live3D, [125, 80, 60]);
+});
+
 test("scale preflight refuses keyframes, expressions, and locked layers without partial edits", () => {
   const { context, layer, comp } = makeContext();
   const animated = makeTextLayer("Animated", 2, 100);
