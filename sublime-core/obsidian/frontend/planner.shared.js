@@ -173,9 +173,9 @@
           options: ["cinematic", "attention"]
         };
       }
-      var note = profile === "cinematic" && cinematic.note
-        ? cinematic.note
-        : attention.note;
+      var note = profile === "cinematic"
+        ? (cinematic.note || "Use the restrained cinematic Glow preset.")
+        : (attention.note || "Use the bold neon/attention Glow preset.");
       // Profile presets are the only Glow additions exposed as executable plans.
       // Requests for individual parameter tuning are not silently converted to presets.
       if (/\b(radius|threshold|intensity|strength|amount|spread)\b/.test(command)) {
@@ -238,7 +238,12 @@
   }
 
   function isExecutablePlan(plan) {
-    return Boolean(plan && plan.status === "planned" && SUPPORTED_ACTIONS[plan.action] === true);
+    if (!plan || plan.status !== "planned" || SUPPORTED_ACTIONS[plan.action] !== true) return false;
+    if (plan.action === "add_glow") {
+      return Boolean(plan.args &&
+        (plan.args.profile === "cinematic" || plan.args.profile === "attention"));
+    }
+    return true;
   }
 
   root.OBSIDIANPlanner = {
