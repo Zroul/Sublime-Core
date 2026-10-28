@@ -14,7 +14,9 @@
     set_opacity: true,
     reduce_opacity: true,
     scale_selected: true,
-    fade_in: true
+    fade_in: true,
+    add_glow: true,
+    remove_glow: true
   };
 
   var KNOWLEDGE = root.OBSIDIANKnowledge || { concepts: [], answers: [], guardrails: [] };
@@ -136,13 +138,12 @@
     }
 
     if (/\b(remove|delete)\s+(?:the\s+)?glow\b/.test(command)) {
-      return {
-        status: "blocked",
-        readiness: "BLOCKED",
-        action: "remove_glow",
-        executable: false,
-        explanation: "Glow mutations are disabled during the After Effects crash investigation. No changes were made."
-      };
+      return result(
+        "remove_glow",
+        {},
+        "Remove Glow from the selected layer(s); the host must verify the result.",
+        0.85
+      );
     }
 
     var cinematic = concept("cinematic_glow");
@@ -165,25 +166,33 @@
         };
       }
       var profile = cinematicCue ? "cinematic" : attentionCue ? "attention" : "unspecified";
+      if (profile === "unspecified") {
+        return {
+          status: "needs_clarification",
+          question: "Which Glow treatment do you want: restrained cinematic Glow or bold neon/attention Glow?",
+          options: ["cinematic", "attention"]
+        };
+      }
       var note = profile === "cinematic" && cinematic.note
         ? cinematic.note
-        : profile === "attention" && attention.note
-          ? attention.note
-          : "The desired Glow treatment is unspecified.";
-      return {
-        status: "blocked",
-        action: "add_glow",
-        readiness: "BLOCKED",
-        executable: false,
-        args: { profile: profile },
-        explanation: (profile === "cinematic"
-          ? "Restrained cinematic Glow intent detected. "
-          : profile === "attention"
-            ? "Bold neon/attention bloom intent detected. "
-            : "Glow intent detected without a visual profile. ") +
-          "Glow mutations are blocked during the crash investigation; no change was made. " + note,
-        confidence: profile === "unspecified" ? 0.65 : 0.85
-      };
+        : attention.note;
+      // Profile presets are the only Glow additions exposed as executable plans.
+      // Requests for individual parameter tuning are not silently converted to presets.
+      if (/\b(radius|threshold|intensity|strength|amount|spread)\b/.test(command)) {
+        return {
+          status: "needs_clarification",
+          question: "I can apply the cinematic or attention Glow preset, but custom Glow parameter tuning is not supported yet."
+        };
+      }
+      return result(
+        "add_glow",
+        { profile: profile },
+        (profile === "cinematic"
+          ? "Apply the recognized restrained cinematic Glow preset. "
+          : "Apply the recognized bold neon/attention Glow preset. ") +
+          "The host must verify the applied effect and parameter values. " + note,
+        0.85
+      );
     }
 
     var fade = concept("fade_in");
