@@ -172,9 +172,9 @@ test("Glow presets apply and verify the requested parameter values", () => {
   const cinematic = context.OBSIDIAN_executePlan("add_glow", null, "cinematic");
   assert.match(cinematic, /Applied and verified cinematic preset on 1 layer/);
   let glow = effects.property(1);
-  assert.equal(glow.property(2).value, 68);
-  assert.equal(glow.property(3).value, 38);
-  assert.equal(glow.property(4).value, 0.65);
+  assert.equal(glow.property(2).value, 76);
+  assert.equal(glow.property(3).value, 24);
+  assert.equal(glow.property(4).value, 0.25);
 
   const attention = context.OBSIDIAN_executePlan("add_glow", null, "attention");
   assert.match(attention, /Applied and verified attention preset on 1 layer/);
