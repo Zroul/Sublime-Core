@@ -146,6 +146,25 @@
       );
     }
 
+    // Resolve the user's direct answer to the Glow-style clarification.
+    // Exact one-word choices are intentional; broader vibe requests remain proposals.
+    if (command === "cinematic") {
+      return result(
+        "add_glow",
+        { profile: "cinematic" },
+        "Apply the restrained cinematic Glow preset; the host must verify the applied settings.",
+        0.9
+      );
+    }
+    if (command === "neon" || command === "attention") {
+      return result(
+        "add_glow",
+        { profile: "attention" },
+        "Apply the bold neon/attention Glow preset; the host must verify the applied settings.",
+        0.9
+      );
+    }
+
     var cinematic = concept("cinematic_glow");
     var attention = concept("attention_glow");
     var cinematicCue = cinematic && hasCue(cinematic.cues, command);
