@@ -147,9 +147,10 @@ function OBSIDIAN_inspectSelection() {
 }
 
 function OBSIDIAN_applyGlowProfile(effect, profile) {
-    var threshold = profile === "cinematic" ? 68 : 52;
-    var radius = profile === "cinematic" ? 38 : 78;
-    var intensity = profile === "cinematic" ? 0.65 : 1.35;
+    // Keep cinematic bloom restrained; attention is intentionally broader/brighter.
+    var threshold = profile === "cinematic" ? 76 : 52;
+    var radius = profile === "cinematic" ? 24 : 78;
+    var intensity = profile === "cinematic" ? 0.25 : 1.35;
     var thresholdProp = effect.property(2);
     var radiusProp = effect.property(3);
     var intensityProp = effect.property(4);
