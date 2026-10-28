@@ -30,9 +30,19 @@ function propertyGroup(children) {
     },
     addProperty(matchName) {
       const group = this;
+      const parameters = [
+        scalarProperty(0),
+        scalarProperty(50),
+        scalarProperty(50),
+        scalarProperty(1),
+      ];
       const effect = {
         name: "Glow",
         matchName,
+        property(key) {
+          if (typeof key === "number") return parameters[key - 1] || null;
+          return null;
+        },
         remove() {
           const index = group._children.indexOf(effect);
           if (index >= 0) group._children.splice(index, 1);
@@ -143,26 +153,45 @@ test("unsupported commands are rejected instead of silently claiming success", (
   assert.match(result, /^ERROR\|Unsupported planned action: run_shell/);
 });
 
-test("Glow mutations are blocked during investigation of the After Effects render crash", () => {
+test("Glow can be added and removed with host verification", () => {
   const { context, layer } = makeContext();
-  const added = context.OBSIDIAN_executePlan("add_glow", null, "unspecified");
-  assert.match(added, /^ERROR\|Glow edits are temporarily disabled while investigating/);
-  assert.equal(layer.property("ADBE Effect Parade").numProperties, 0);
+  const effects = layer.property("ADBE Effect Parade");
 
-  layer.property("ADBE Effect Parade").addProperty("ADBE Glo2");
+  const added = context.OBSIDIAN_executePlan("add_glow", null, "unspecified");
+  assert.equal(added, "OK|Verified Glow on 1 selected layer(s); added 1 new effect(s).");
+  assert.equal(effects.numProperties, 1);
+
   const removed = context.OBSIDIAN_executePlan("remove_glow", null, "");
-  assert.match(removed, /^ERROR\|Glow edits are temporarily disabled while investigating/);
-  assert.equal(layer.property("ADBE Effect Parade").numProperties, 1);
+  assert.equal(removed, "OK|Verified Glow removed from selected layers. Removed 1 effect instance(s).");
+  assert.equal(effects.numProperties, 0);
 });
-test("Glow removal is blocked without changing existing Glow instances during crash investigation", () => {
+test("Glow presets apply and verify the requested parameter values", () => {
+  const { context, layer } = makeContext();
+  const effects = layer.property("ADBE Effect Parade");
+
+  const cinematic = context.OBSIDIAN_executePlan("add_glow", null, "cinematic");
+  assert.match(cinematic, /Applied and verified cinematic preset on 1 layer/);
+  let glow = effects.property(1);
+  assert.equal(glow.property(2).value, 68);
+  assert.equal(glow.property(3).value, 38);
+  assert.equal(glow.property(4).value, 0.65);
+
+  const attention = context.OBSIDIAN_executePlan("add_glow", null, "attention");
+  assert.match(attention, /Applied and verified attention preset on 1 layer/);
+  glow = effects.property(1);
+  assert.equal(glow.property(2).value, 52);
+  assert.equal(glow.property(3).value, 78);
+  assert.equal(glow.property(4).value, 1.35);
+});
+test("Glow removal removes every existing Glow instance and verifies the result", () => {
   const { context, layer } = makeContext();
   const effects = layer.property("ADBE Effect Parade");
   effects.addProperty("ADBE Glo2");
   effects.addProperty("ADBE Glo2");
 
   const result = context.OBSIDIAN_executePlan("remove_glow", null, "");
-  assert.match(result, /^ERROR\|Glow edits are temporarily disabled while investigating/);
-  assert.equal(effects.numProperties, 2);
+  assert.equal(result, "OK|Verified Glow removed from selected layers. Removed 2 effect instance(s).");
+  assert.equal(effects.numProperties, 0);
 });
 test("reduce opacity verifies the target value for each selected layer", () => {
   const { context, layer } = makeContext();
