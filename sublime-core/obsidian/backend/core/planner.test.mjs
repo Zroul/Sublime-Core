@@ -129,7 +129,9 @@ test("does not treat unsupported natural language as executable", () => {
 });
 
 test("only approved actions are executable", () => {
-  assert.equal(isExecutablePlan({ status: "planned", action: "add_glow" }), true);
+  assert.equal(isExecutablePlan({ status: "planned", action: "add_glow" }), false);
+  assert.equal(isExecutablePlan({ status: "planned", action: "add_glow", args: { profile: "cinematic" } }), true);
+  assert.equal(isExecutablePlan({ status: "planned", action: "add_glow", args: { profile: "unspecified" } }), false);
   assert.equal(isExecutablePlan({ status: "planned", action: "remove_glow" }), true);
   assert.equal(isExecutablePlan({ status: "planned", action: "fade_in" }), true);
   assert.equal(isExecutablePlan({ status: "planned", action: "scale_selected" }), true);
