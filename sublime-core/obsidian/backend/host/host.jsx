@@ -167,8 +167,6 @@ function OBSIDIAN_applyGlowProfile(effect, profile) {
 }
 
 function OBSIDIAN_addGlow(profile) {
-    return "ERROR|Glow edits are temporarily disabled while investigating the After Effects RenderTaskManager crash involving ADBE Glo2. No changes were made.";
-
     var layers = OBSIDIAN_getSelectedLayers();
     if (!layers.length) return "ERROR|Open a composition and select at least one layer.";
     profile = String(profile || "unspecified");
@@ -236,8 +234,6 @@ function OBSIDIAN_addGlow(profile) {
 }
 
 function OBSIDIAN_removeGlow() {
-    return "ERROR|Glow edits are temporarily disabled while investigating the After Effects RenderTaskManager crash involving ADBE Glo2. No changes were made.";
-
     var layers = OBSIDIAN_getSelectedLayers();
     if (!layers.length) return "ERROR|Open a composition and select at least one layer.";
 
@@ -571,10 +567,6 @@ function OBSIDIAN_executePlan(action, value, profile) {
             return "ERROR|Unsupported Glow profile.";
         }
         var glowResult = OBSIDIAN_addGlow(profile);
-        if (glowResult.indexOf("OK|") === 0) {
-            return glowResult + " Requested profile: " + profile +
-                ". Profile is intent-only; calibrated Glow settings were not applied.";
-        }
         return glowResult;
     }
 
