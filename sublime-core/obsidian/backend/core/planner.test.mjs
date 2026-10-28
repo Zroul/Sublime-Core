@@ -49,27 +49,31 @@ test("validates the complete opacity value without truncating or clamping it", (
   assert.equal(planObsidianCommand("set opacity").status, "needs_clarification");
 });
 
-test("classifies cinematic and neon Glow intent while keeping both mutations blocked", () => {
+test("recognized cinematic and neon Glow presets become executable plans", () => {
   const cinematic = planObsidianCommand("add a subtle cinematic glow");
   const neon = planObsidianCommand("add a bold neon bloom");
-  assert.equal(cinematic.status, "blocked");
-  assert.equal(cinematic.readiness, "BLOCKED");
-  assert.equal(cinematic.args.profile, "cinematic");
-  assert.equal(neon.status, "blocked");
-  assert.equal(neon.readiness, "BLOCKED");
-  assert.equal(neon.args.profile, "attention");
-  assert.equal(isExecutablePlan(cinematic), false);
-  assert.equal(isExecutablePlan(neon), false);
-  assert.match(cinematic.explanation, /no change was made/i);
-  assert.match(neon.explanation, /blocked/i);
+  assert.equal(cinematic.status, "planned");
+  assert.equal(cinematic.action, "add_glow");
+  assert.deepEqual(cinematic.args, { profile: "cinematic" });
+  assert.equal(neon.status, "planned");
+  assert.equal(neon.action, "add_glow");
+  assert.deepEqual(neon.args, { profile: "attention" });
+  assert.equal(isExecutablePlan(cinematic), true);
+  assert.equal(isExecutablePlan(neon), true);
 });
 
-test("Glow parameter changes remain blocked instead of becoming recipe plans", () => {
+test("unspecified Glow requests ask for a profile and do not execute", () => {
+  const plan = planObsidianCommand("add glow");
+  assert.equal(plan.status, "needs_clarification");
+  assert.deepEqual(plan.options, ["cinematic", "attention"]);
+  assert.equal(isExecutablePlan(plan), false);
+});
+
+test("custom Glow parameter changes are not silently converted to presets", () => {
   const plan = planObsidianCommand("set neon bloom radius to 50");
-  assert.equal(plan.status, "blocked");
-  assert.equal(plan.readiness, "BLOCKED");
-  assert.equal(plan.executable, false);
-  assert.match(plan.explanation, /Glow mutations are blocked/i);
+  assert.equal(plan.status, "needs_clarification");
+  assert.equal(isExecutablePlan(plan), false);
+  assert.match(plan.question, /custom Glow parameter tuning is not supported/i);
 });
 
 test("uses knowledge cues for common visual language", () => {
@@ -92,12 +96,11 @@ test("asks when Glow style cues conflict", () => {
   assert.equal(planObsidianCommand("add subtle but flashy dramatic glow").status, "needs_clarification");
 });
 
-test("Glow removal remains blocked and outside the executable allowlist", () => {
+test("explicit Glow removal becomes an executable host-verified plan", () => {
   const plan = planObsidianCommand("remove glow");
-  assert.equal(plan.status, "blocked");
-  assert.equal(plan.readiness, "BLOCKED");
+  assert.equal(plan.status, "planned");
   assert.equal(plan.action, "remove_glow");
-  assert.equal(isExecutablePlan(plan), false);
+  assert.equal(isExecutablePlan(plan), true);
 });
 
 test("turns a vibe request into a non-executable creative direction plan", () => {
@@ -126,8 +129,8 @@ test("does not treat unsupported natural language as executable", () => {
 });
 
 test("only approved actions are executable", () => {
-  assert.equal(isExecutablePlan({ status: "planned", action: "add_glow" }), false);
-  assert.equal(isExecutablePlan({ status: "planned", action: "remove_glow" }), false);
+  assert.equal(isExecutablePlan({ status: "planned", action: "add_glow" }), true);
+  assert.equal(isExecutablePlan({ status: "planned", action: "remove_glow" }), true);
   assert.equal(isExecutablePlan({ status: "planned", action: "fade_in" }), true);
   assert.equal(isExecutablePlan({ status: "planned", action: "scale_selected" }), true);
   assert.equal(isExecutablePlan({ status: "planned", action: "run_shell" }), false);
@@ -145,6 +148,6 @@ test("does not pretend to judge text readability from pixels", () => {
 });
 
 test("style cues require whole words rather than matching inside unrelated words", () => {
-  assert.equal(planObsidianCommand("add a popular glow").args.profile, "unspecified");
-  assert.equal(planObsidianCommand("add a software glow").args.profile, "unspecified");
+  assert.equal(planObsidianCommand("add a popular glow").status, "needs_clarification");
+  assert.equal(planObsidianCommand("add a software glow").status, "needs_clarification");
 });
