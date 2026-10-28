@@ -62,6 +62,20 @@ test("recognized cinematic and neon Glow presets become executable plans", () =>
   assert.equal(isExecutablePlan(neon), true);
 });
 
+test("one-word answers to the Glow profile prompt become executable preset actions", () => {
+  const cinematic = planObsidianCommand("cinematic");
+  assert.equal(cinematic.status, "planned");
+  assert.equal(cinematic.action, "add_glow");
+  assert.deepEqual(cinematic.args, { profile: "cinematic" });
+  assert.equal(isExecutablePlan(cinematic), true);
+
+  const neon = planObsidianCommand("neon");
+  assert.equal(neon.status, "planned");
+  assert.equal(neon.action, "add_glow");
+  assert.deepEqual(neon.args, { profile: "attention" });
+  assert.equal(isExecutablePlan(neon), true);
+});
+
 test("unspecified Glow requests ask for a profile and do not execute", () => {
   const plan = planObsidianCommand("add glow");
   assert.equal(plan.status, "needs_clarification");
