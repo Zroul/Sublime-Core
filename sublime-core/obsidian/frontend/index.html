@@ -59,5 +59,30 @@
   <script src="style-recipes.js"></script>
   <script src="planner.shared.js"></script>
   <script src="app.js"></script>
+  <script>
+  (() => {
+    const themes = ["violet", "ice", "ember", "rose", "mint"];
+    let current = Math.max(0, themes.indexOf(document.documentElement.dataset.auraTheme || "violet"));
+    document.documentElement.dataset.auraTheme = themes[current];
+    const attach = () => {
+      const menu = document.getElementById("menu");
+      if (!menu || document.getElementById("aura-theme-toggle")) return;
+      const btn = document.createElement("button");
+      btn.id = "aura-theme-toggle";
+      btn.type = "button";
+      btn.title = "Change AURA accent theme";
+      btn.setAttribute("aria-label", "Change AURA accent theme");
+      btn.textContent = "◉ THEME";
+      btn.addEventListener("click", () => {
+        current = (current + 1) % themes.length;
+        document.documentElement.dataset.auraTheme = themes[current];
+        btn.textContent = "◉ " + themes[current].toUpperCase();
+      });
+      menu.insertAdjacentElement("beforebegin", btn);
+    };
+    if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", attach);
+    else attach();
+  })();
+  </script>
 </body>
 </html>
