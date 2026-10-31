@@ -1,5 +1,7 @@
 param(
-    [string]$ExtensionPath = (Join-Path $env:APPDATA "Adobe\CEP\extensions\obsidian")
+    [string]$ExtensionPath = (Join-Path $env:APPDATA "Adobe\CEP\extensions\obsidian"),
+    [string]$ExtensionBundleId = "",
+    [string]$ExtensionMenu = ""
 )
 
 $ErrorActionPreference = "Stop"
@@ -48,6 +50,9 @@ $scriptPath = [string]$manifest.SelectSingleNode("//*[local-name()='ScriptPath']
 if ([string]::IsNullOrWhiteSpace($mainPath) -or [string]::IsNullOrWhiteSpace($scriptPath)) {
     throw "Manifest must define both MainPath and ScriptPath."
 }
+if ($ExtensionBundleId -and $ExtensionBundleId -notmatch '^[A-Za-z0-9_-]+(?:\.[A-Za-z0-9_-]+)*$') {
+    throw "ExtensionBundleId must contain only letters, digits, dots, underscores, and hyphens."
+}
 
 function Resolve-ManifestPath([string]$root, [string]$relativePath) {
     $relativePath = $relativePath -replace '/', '\'
@@ -78,6 +83,23 @@ Get-ChildItem -LiteralPath $obsidianRoot -Force | Copy-Item -Destination $stagin
 
 $stagedManifest = Join-Path $stagingPath "CSXS\manifest.xml"
 [xml]$stagedXml = Get-Content -LiteralPath $stagedManifest -Raw
+if ($ExtensionBundleId) {
+    $stagedXml.DocumentElement.SetAttribute("ExtensionBundleId", $ExtensionBundleId)
+    $isolatedExtensionId = "$ExtensionBundleId.panel"
+    foreach ($extensionNode in $stagedXml.SelectNodes("//*[local-name()='Extension'][@Id]")) {
+        $extensionNode.SetAttribute("Id", $isolatedExtensionId)
+    }
+}
+if ($ExtensionMenu) {
+    $menuNode = $stagedXml.SelectSingleNode("//*[local-name()='Menu']")
+    if (-not $menuNode) {
+        throw "Staging verification failed: manifest menu node is missing."
+    }
+    $menuNode.InnerText = $ExtensionMenu
+}
+if ($ExtensionBundleId -or $ExtensionMenu) {
+    $stagedXml.Save($stagedManifest)
+}
 $stagedMain = Resolve-ManifestPath $stagingPath ([string]$stagedXml.SelectSingleNode("//*[local-name()='MainPath']").InnerText)
 $stagedHost = Resolve-ManifestPath $stagingPath ([string]$stagedXml.SelectSingleNode("//*[local-name()='ScriptPath']").InnerText)
 Assert-PathUnderRoot $stagingPath $stagedMain "Staged manifest MainPath"
@@ -93,10 +115,16 @@ if (-not (Test-Path -LiteralPath $stagedHost -PathType Leaf)) {
 }
 
 $hostHash = (Get-FileHash -LiteralPath $sourceHost -Algorithm SHA256).Hash
+$mainHash = (Get-FileHash -LiteralPath $sourceMain -Algorithm SHA256).Hash
 $stagedHostHash = (Get-FileHash -LiteralPath $stagedHost -Algorithm SHA256).Hash
+$stagedMainHash = (Get-FileHash -LiteralPath $stagedMain -Algorithm SHA256).Hash
 if ($hostHash -ne $stagedHostHash) {
     Remove-Item -LiteralPath $stagingPath -Recurse -Force
     throw "Staging verification failed: source and staged host scripts differ."
+}
+if ($mainHash -ne $stagedMainHash) {
+    Remove-Item -LiteralPath $stagingPath -Recurse -Force
+    throw "Staging verification failed: source and staged MainPath files differ."
 }
 
 $hadExistingInstall = Test-Path -LiteralPath $ExtensionPath
@@ -127,10 +155,29 @@ try {
     if (-not (Test-Path -LiteralPath $installedHost -PathType Leaf)) {
         throw "Install verification failed: active ScriptPath is missing: $installedHost"
     }
+    if ($ExtensionBundleId) {
+        $installedBundleId = [string]$installedXml.DocumentElement.GetAttribute("ExtensionBundleId")
+        $installedExtensionIds = @($installedXml.SelectNodes("//*[local-name()='Extension'][@Id]") | ForEach-Object { [string]$_.GetAttribute("Id") })
+        if ($installedBundleId -ne $ExtensionBundleId -or
+            $installedExtensionIds.Count -eq 0 -or
+            @($installedExtensionIds | Where-Object { $_ -ne "$ExtensionBundleId.panel" }).Count -gt 0) {
+            throw "Install verification failed: isolated extension identifiers do not match the requested bundle ID."
+        }
+    }
+    if ($ExtensionMenu) {
+        $installedMenu = [string]$installedXml.SelectSingleNode("//*[local-name()='Menu']").InnerText
+        if ($installedMenu -ne $ExtensionMenu) {
+            throw "Install verification failed: isolated extension menu label does not match the requested value."
+        }
+    }
 
     $installedHostHash = (Get-FileHash -LiteralPath $installedHost -Algorithm SHA256).Hash
+    $installedMainHash = (Get-FileHash -LiteralPath $installedMain -Algorithm SHA256).Hash
     if ($hostHash -ne $installedHostHash) {
         throw "Install verification failed: source and installed host scripts differ."
+    }
+    if ($mainHash -ne $installedMainHash) {
+        throw "Install verification failed: source and installed MainPath files differ."
     }
 } catch {
     $installFailure = $_.Exception.Message
@@ -148,5 +195,8 @@ try {
 Write-Output "OBSIDIAN CEP files installed and verified."
 Write-Output "Manifest MainPath: $mainPath"
 Write-Output "Manifest ScriptPath: $scriptPath"
+if ($ExtensionBundleId) {
+    Write-Output "Installed isolated extension ID: $ExtensionBundleId.panel"
+}
 Write-Output "Installed host SHA256: $installedHostHash"
-Write-Output "Glow edits remain disabled in the host while the crash is investigated."
+Write-Output "Supported Glow presets and removal are available; validate them in After Effects before production use."

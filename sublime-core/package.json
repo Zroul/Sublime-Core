@@ -11,7 +11,7 @@
     "obsidian:ai": "tsx obsidian/backend/core/ai-server.ts",
     "nova": "tsx core/nova/run.ts",
     "nova:test": "node core/nova/test-runner.mjs",
-    "obsidian:test": "node --test obsidian/backend/host/host.test.cjs obsidian/backend/core/planner.test.mjs obsidian/backend/core/knowledge.test.mjs obsidian/backend/core/style-recipes.test.mjs"
+    "obsidian:test": "node --test obsidian/backend/host/host.test.cjs obsidian/backend/core/planner.test.mjs obsidian/backend/core/knowledge.test.mjs obsidian/backend/core/creative-retrieval.test.mjs obsidian/backend/core/ollama-status.test.mjs obsidian/backend/core/style-recipes.test.mjs obsidian/backend/core/host-bridge.test.cjs obsidian/backend/core/creative-recipes.test.cjs obsidian/backend/core/captions.test.mjs obsidian/backend/core/caption-progress.test.cjs obsidian/backend/core/transcription.test.mjs"
   },
   "devDependencies": {
     "@types/node": "^26.4.1",

@@ -9,6 +9,7 @@ test("knowledge library has a version, concepts, answers, and safety guardrails"
   assert.match(knowledge.version, /^\d+\.\d+\.\d+$/);
   assert.ok(knowledge.concepts.length >= 8);
   assert.ok(knowledge.answers.length >= 10);
+  assert.ok(knowledge.creativeGuides.length >= 6);
   assert.ok(knowledge.guardrails.length >= 4);
 
   for (const answer of knowledge.answers) {
@@ -23,6 +24,8 @@ test("knowledge answer IDs and concept IDs are unique", () => {
   const conceptIds = knowledge.concepts.map((item) => item.id);
   assert.equal(new Set(answerIds).size, answerIds.length);
   assert.equal(new Set(conceptIds).size, conceptIds.length);
+  const guideIds = knowledge.creativeGuides.map((item) => item.id);
+  assert.equal(new Set(guideIds).size, guideIds.length);
 });
 
 const questions = [

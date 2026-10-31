@@ -36,6 +36,22 @@ test("plans only bounded proportional scale changes for the selected layers", ()
   }
 });
 
+test("keeps absolute Scale targets distinct from relative scale changes", () => {
+  const absolute = planObsidianCommand("scale selected layers to 10%");
+  const absoluteShort = planObsidianCommand("scale to 10%");
+  const relative = planObsidianCommand("scale selected layers up by 10%");
+  assert.equal(absolute.action, "set_scale");
+  assert.equal(absoluteShort.action, "set_scale");
+  assert.deepEqual(absolute.args, { value: 10 });
+  assert.deepEqual(absoluteShort.args, { value: 10 });
+  assert.equal(relative.action, "scale_selected");
+  assert.deepEqual(relative.args, { value: 10 });
+  assert.equal(isExecutablePlan(absolute), true);
+  assert.equal(isExecutablePlan({ ...absolute, args: { value: 1001 } }), false);
+  assert.equal(planObsidianCommand("scale selected layers to 1001%").status, "needs_clarification");
+  assert.equal(planObsidianCommand("scale selected layers to 10% or 20%").status, "needs_clarification");
+});
+
 test("parses opacity values and rejects values above 100", () => {
   assert.deepEqual(planObsidianCommand("set opacity to 45%").args, { value: 45 });
   assert.equal(planObsidianCommand("set opacity to 140%").status, "needs_clarification");
@@ -155,6 +171,73 @@ test("only approved actions are executable", () => {
 test("plans a guarded fade-in from natural language", () => {
   assert.equal(planObsidianCommand("apply a fade up").action, "fade_in");
   assert.match(planObsidianCommand("apply a fade up").explanation, /existing opacity animation/i);
+});
+
+test("plans a guarded fade-out from natural language", () => {
+  const plan = planObsidianCommand("fade the selected layer out");
+  assert.equal(plan.action, "fade_out");
+  assert.equal(isExecutablePlan(plan), true);
+  assert.match(plan.explanation, /existing opacity animation/i);
+});
+
+test("plans only the supported scale-in, slide-up, and crossfade animations", () => {
+  const scaleIn = planObsidianCommand("animate selected layers with a gentle scale-in");
+  const slideUp = planObsidianCommand("slide the selected layers up");
+  const crossfade = planObsidianCommand("cross-fade selected clips");
+  assert.equal(scaleIn.action, "scale_in");
+  assert.equal(slideUp.action, "slide_up");
+  assert.equal(crossfade.action, "crossfade");
+  assert.equal(isExecutablePlan(scaleIn), true);
+  assert.equal(isExecutablePlan(slideUp), true);
+  assert.equal(isExecutablePlan(crossfade), true);
+});
+
+test("plans the fixed gentle-entrance recipe and rejects arbitrary recipe IDs", () => {
+  const plan = planObsidianCommand("make a gentle title entrance");
+  assert.equal(plan.action, "apply_recipe");
+  assert.deepEqual(plan.args, { recipeId: "gentle_entrance" });
+  assert.equal(isExecutablePlan(plan), true);
+  assert.equal(isExecutablePlan({
+    status: "planned",
+    action: "apply_recipe",
+    args: { recipeId: "run_shell" },
+  }), false);
+});
+
+test("plans only the validated cinematic, dark dramatic, and high-contrast looks", () => {
+  const cinematic = planObsidianCommand("apply a cinematic glow look");
+  const dark = planObsidianCommand("give the footage a dark and dramatic look");
+  const contrast = planObsidianCommand("make it high contrast");
+  assert.deepEqual(
+    [cinematic.action, cinematic.args.recipeId, dark.action, dark.args.recipeId, contrast.action, contrast.args.recipeId],
+    ["apply_recipe", "cinematic_glow", "apply_recipe", "dark_dramatic", "apply_recipe", "high_contrast"]
+  );
+  assert.ok([cinematic, dark, contrast].every(isExecutablePlan));
+
+  for (const request of [
+    "make this a vintage film look",
+    "give this a horror look",
+    "make this anime-inspired",
+    "create a complete neon treatment",
+    "make it dreamy",
+  ]) {
+    const plan = planObsidianCommand(request);
+    assert.notEqual(plan.action, "apply_recipe", request);
+    assert.equal(isExecutablePlan(plan), false, request);
+  }
+});
+
+test("plans bounded explicit Brightness and Contrast adjustments", () => {
+  const both = planObsidianCommand("set brightness to -10 and contrast to 15");
+  const one = planObsidianCommand("increase contrast by 12");
+  assert.equal(both.action, "set_brightness_contrast");
+  assert.deepEqual(both.args, { brightness: -10, contrast: 15 });
+  assert.equal(one.args.brightness, 0);
+  assert.equal(one.args.contrast, 12);
+  assert.equal(isExecutablePlan(both), true);
+  assert.equal(isExecutablePlan({ ...both, args: { brightness: 40, contrast: 0 } }), false);
+  assert.equal(planObsidianCommand("set brightness to 50").status, "needs_clarification");
+  assert.equal(planObsidianCommand("decrease contrast by -10").status, "needs_clarification");
 });
 
 test("does not pretend to judge text readability from pixels", () => {
