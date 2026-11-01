@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { mkdtemp, readFile, rm, symlink } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
@@ -40,5 +40,23 @@ test("creates a new file inside nested directories", async () => {
     );
   } finally {
     await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("rejects a symlink that points outside OBSIDIAN", async (t) => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "linex-symlink-root-"));
+  const outside = await mkdtemp(path.join(os.tmpdir(), "linex-symlink-outside-"));
+  try {
+    const link = path.join(root, "outside-link");
+    try {
+      await symlink(outside, link, process.platform === "win32" ? "junction" : "dir");
+    } catch {
+      t.skip("The current environment does not permit creating directory symlinks.");
+      return;
+    }
+    await assert.rejects(resolveObsidianPath(root, "outside-link/secret.txt", true));
+  } finally {
+    await rm(root, { recursive: true, force: true });
+    await rm(outside, { recursive: true, force: true });
   }
 });
