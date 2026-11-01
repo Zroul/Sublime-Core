@@ -16,7 +16,7 @@ export function createLinexVerificationGate(task: string): LinexVerificationGate
     !explicitlyReadOnly &&
     /\b(add|create|write|edit|modify|update|fix|implement|build|refactor|replace|rewrite|extend)\b/i.test(task);
 
-  const changedFiles = new Set<string>();
+  const changedFiles = new Map<string, string>();
   const verifiedFiles = new Set<string>();
 
   return {
@@ -30,7 +30,7 @@ export function createLinexVerificationGate(task: string): LinexVerificationGate
         };
       }
 
-      const missing = [...changedFiles].filter((file) => !verifiedFiles.has(file));
+      const missing = [...changedFiles.keys()].filter((file) => !verifiedFiles.has(file));
       if (missing.length > 0) {
         return {
           block: true,
@@ -54,10 +54,12 @@ export function createLinexVerificationGate(task: string): LinexVerificationGate
       if (!filePath) return;
 
       if (call.name === "obsidian_create_file" || call.name === "obsidian_edit_file") {
-        changedFiles.add(filePath);
+        if (typeof call.arguments.content !== "string") return;
+        changedFiles.set(filePath, call.arguments.content);
         verifiedFiles.delete(filePath);
       } else if (call.name === "obsidian_read_file" && changedFiles.has(filePath)) {
-        verifiedFiles.add(filePath);
+        if (result.content === changedFiles.get(filePath)) verifiedFiles.add(filePath);
+        else verifiedFiles.delete(filePath);
       }
     },
   };
