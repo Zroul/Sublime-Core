@@ -12,9 +12,9 @@ You are LINEX, a restricted coding agent using the user's existing local CORE mo
 Your job is to help develop OBSIDIAN, not to start unrelated projects.
 Think carefully, then use tools to inspect the repository and verify any claimed changes.
 Only operate within the OBSIDIAN project using the provided tools.
-Never claim a file was changed unless a tool confirms it. Never claim tests passed unless the test tool ran successfully.
+Never claim a file was changed unless a tool confirms it. Never claim tests passed unless a test command actually ran successfully.
 Prefer the smallest change that directly advances the user's task. Read relevant files before editing.
-After editing, run the provided host tests when relevant. If a test fails, diagnose from its actual output and make at most two repair attempts.
+After editing, re-read every changed file and compare it with the intended result. If relevant project tests exist, run them; if they do not exist or cannot run, say so clearly. Do not invent a test command.
 Do not request or expose secrets. Do not attempt arbitrary shell execution, package installation, external publication, Git commits, pushes, merges, or deletion.
 If a task asks for something outside the available tools, explain the limitation rather than inventing a result.
 When finished, call task_done with a concise evidence-based summary, including files changed and test status.
@@ -32,6 +32,10 @@ export async function runLinexTask(task: string): Promise<void> {
 
   const provider = new OllamaProvider();
   const messages: Message[] = [{ role: "user", content: task }];
+  const explicitlyReadOnly = /\b(?:do not|don\x27t|without|no)\s+(?:make\s+)?(?:edits?|changes?|modifications?|writes?|creations?)\b/i.test(task);
+  const requiresChanges = !explicitlyReadOnly && /\b(create|write|edit|modify|update|fix|implement|build|refactor)\b/i.test(task);
+  const changedFiles = new Set<string>();
+  const verifiedFiles = new Set<string>();
   console.log(`LINEX online. CORE model: ${process.env.OLLAMA_MODEL ?? "core"}`);
   console.log(`Scope: ${projectRoot}`);
   console.log(`Task budget: ${MAX_TURNS} turns\n`);
@@ -44,10 +48,32 @@ export async function runLinexTask(task: string): Promise<void> {
     maxTurns: MAX_TURNS,
     hooks: {
       beforeToolCall(call) {
+        if (call.name === "task_done") {
+          if (requiresChanges && changedFiles.size === 0) {
+            return { block: true, reason: "Completion blocked: this task requests a change, but no file write has succeeded yet." };
+          }
+          const missing = [...changedFiles].filter((file) => !verifiedFiles.has(file));
+          if (missing.length > 0) {
+            return { block: true, reason: "Completion blocked: re-read every changed file before finishing: " + missing.join(", ") };
+          }
+        }
         console.log(`[TOOL] ${call.name}`);
         return { block: false };
       },
-      onToolResult(result) {
+      onToolResult(result, state) {
+        const assistant = [...state.messages].reverse().find((message) => message.role === "assistant");
+        const call = assistant?.toolCalls?.find((item) => item.id === result.toolCallId);
+        if (!result.isError && call) {
+          const filePath = typeof call.arguments.path === "string"
+            ? call.arguments.path.replace(/\\/g, "/").replace(/^\.\//, "")
+            : "";
+          if (filePath && (call.name === "obsidian_create_file" || call.name === "obsidian_edit_file")) {
+            changedFiles.add(filePath);
+            verifiedFiles.delete(filePath);
+          } else if (filePath && call.name === "obsidian_read_file" && changedFiles.has(filePath)) {
+            verifiedFiles.add(filePath);
+          }
+        }
         const preview = result.content.replace(/\s+/g, " ").slice(0, 220);
         console.log(`[${result.isError ? "ERROR" : "OBSERVE"}] ${preview}`);
       },
