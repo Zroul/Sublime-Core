@@ -5,6 +5,7 @@ import { OllamaProvider } from "../core/ai/providers/ollama.js";
 import { runReActLoop } from "../core/ai/reasoning/loop.js";
 import type { Message } from "../core/ai/reasoning/types.js";
 import { createLinexTools } from "./agent.js";
+import { createLinexVerificationGate } from "./verification.js";
 
 const MAX_TURNS = 8;
 const SYSTEM_PROMPT = `
@@ -35,10 +36,7 @@ export async function runLinexTask(task: string): Promise<void> {
 
   const provider = new OllamaProvider();
   const messages: Message[] = [{ role: "user", content: task }];
-  const explicitlyReadOnly = /\b(?:do not|don\x27t|without|no)\s+(?:make\s+)?(?:edits?|changes?|modifications?|writes?|creations?)\b/i.test(task);
-  const requiresChanges = !explicitlyReadOnly && /\b(create|write|edit|modify|update|fix|implement|build|refactor)\b/i.test(task);
-  const changedFiles = new Set<string>();
-  const verifiedFiles = new Set<string>();
+  const verificationGate = createLinexVerificationGate(task);
   console.log(`LINEX online. CORE model: ${process.env.OLLAMA_MODEL ?? "core"}`);
   console.log(`Scope: ${projectRoot}`);
   console.log(`Task budget: ${MAX_TURNS} turns\n`);
@@ -51,32 +49,13 @@ export async function runLinexTask(task: string): Promise<void> {
     maxTurns: MAX_TURNS,
     hooks: {
       beforeToolCall(call) {
-        if (call.name === "task_done") {
-          if (requiresChanges && changedFiles.size === 0) {
-            return { block: true, reason: "Completion blocked: this task requests a change, but no file write has succeeded yet." };
-          }
-          const missing = [...changedFiles].filter((file) => !verifiedFiles.has(file));
-          if (missing.length > 0) {
-            return { block: true, reason: "Completion blocked: re-read every changed file before finishing: " + missing.join(", ") };
-          }
-        }
+        const decision = verificationGate.beforeToolCall(call);
+        if (decision.block) return decision;
         console.log(`[TOOL] ${call.name}`);
         return { block: false };
       },
       onToolResult(result, state) {
-        const assistant = [...state.messages].reverse().find((message) => message.role === "assistant");
-        const call = assistant?.toolCalls?.find((item) => item.id === result.toolCallId);
-        if (!result.isError && call) {
-          const filePath = typeof call.arguments.path === "string"
-            ? call.arguments.path.replace(/\\/g, "/").replace(/^\.\//, "")
-            : "";
-          if (filePath && (call.name === "obsidian_create_file" || call.name === "obsidian_edit_file")) {
-            changedFiles.add(filePath);
-            verifiedFiles.delete(filePath);
-          } else if (filePath && call.name === "obsidian_read_file" && changedFiles.has(filePath)) {
-            verifiedFiles.add(filePath);
-          }
-        }
+        verificationGate.recordToolResult(result, state.messages);
         const preview = result.content.replace(/\s+/g, " ").slice(0, 220);
         console.log(`[${result.isError ? "ERROR" : "OBSERVE"}] ${preview}`);
       },
