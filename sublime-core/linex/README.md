@@ -1,34 +1,44 @@
 # LINEX — local coding agent (v1)
 
-LINEX is a tool runtime for the existing local CORE model. It does not include or install another model.
-
-## What v1 does
-
-- Uses the existing `OllamaProvider` and `runReActLoop` from CORE's AI infrastructure.
-- Limits file tools to the `obsidian/` project directory under the current working directory.
-- Lists and reads project files, creates new files, and edits existing files.
-- Saves pre-edit copies to the operating system's temporary directory before replacing an existing file.
-- Runs only the fixed OBSIDIAN host test command: `node --test obsidian/backend/host/host.test.cjs`.
-- Limits each task to a small number of model turns and logs tool observations to the terminal.
+LINEX is a restricted coding agent for the OBSIDIAN project. It reuses CORE's existing local Ollama model and the shared ReAct tool loop; it does not install or host another LLM.
 
 ## Run locally
 
-From the `sublime-core` repository directory:
+From the `sublime-core` directory:
 
 ```powershell
-npm run linex -- "Inspect the OBSIDIAN host tests and report the most important next improvement. Do not edit files."
+npm install
+npm run linex -- "Inspect the OBSIDIAN project and report the most important next improvement. Do not edit files."
 ```
 
-For a task that changes code, state the requested scope clearly. LINEX cannot run arbitrary shell commands, install packages, modify files outside OBSIDIAN, or push to GitHub.
+For a bounded code task:
+
+```powershell
+npm run linex -- "Inspect the relevant files, fix one specific bug, then re-read every changed file and report test status."
+```
+
+Run LINEX's own path-safety and nested-file-creation tests:
+
+```powershell
+npm run linex:test
+```
+
+## Tools and boundaries
+
+- Lists and reads files under `obsidian/` only.
+- Creates new files and edits existing text files under `obsidian/` only.
+- Rejects absolute paths, parent traversal, protected directories, and symlink escapes.
+- Saves a copy of an existing file to the operating system's temporary directory before replacing it.
+- Has no arbitrary shell command, package installation, Git commit/push/merge, or delete tool.
+- A completion gate requires every file LINEX changed to be read again before it can call `task_done`.
+- Each run is limited to 8 model turns.
+
+## Testing honesty
+
+The repository does not currently contain the OBSIDIAN host test file referenced by the original prototype. LINEX therefore does not advertise or invoke that nonexistent test command. `npm run linex:test` tests LINEX's own path handling; it is not a substitute for an OBSIDIAN application test suite.
+
+When changing OBSIDIAN code, LINEX must run relevant tests only if a real test suite is present and available. Otherwise it must re-read the changed files and clearly report that application tests were not run.
 
 ## Current limitations
 
-This is a first local prototype, not an unrestricted overnight worker. The fixed test path must exist locally. Internet research, direct GitHub writes, persistent task queues, and unattended scheduling are intentionally not enabled in v1. Add these only after the local read/edit/test loop is verified.
-
-## Safety model
-
-- Project root is resolved at startup and must be an existing directory.
-- Paths must be relative and remain inside OBSIDIAN, including through symlinks.
-- Secret/config files, dependency folders, Git metadata, and LINEX backup folders are blocked.
-- Existing files are copied to a timestamped backup before edits.
-- No automatic commit, push, merge, or delete operation is provided.
+This is a first local prototype, not an unattended worker. It has no RAG index, web research, direct GitHub access, persistent job queue, resume support, scheduling, or automatic commits. Add capabilities only after the local read/edit/verify loop is tested.
