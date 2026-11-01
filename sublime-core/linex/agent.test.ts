@@ -11,6 +11,9 @@ test("rejects traversal and protected paths", async () => {
     await assert.rejects(resolveObsidianPath(root, "../outside.txt"));
     await assert.rejects(resolveObsidianPath(root, ".git/config"));
     await assert.rejects(resolveObsidianPath(root, "node_modules/pkg/index.js"));
+    await assert.rejects(resolveObsidianPath(root, ".env.local"));
+    await assert.rejects(resolveObsidianPath(root, "credentials.json"));
+    await assert.rejects(resolveObsidianPath(root, "certs/private.pem"));
     await assert.rejects(resolveObsidianPath(root, path.join(root, "absolute.txt")));
   } finally {
     await rm(root, { recursive: true, force: true });
