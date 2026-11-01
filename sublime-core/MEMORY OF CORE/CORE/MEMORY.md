@@ -2,7 +2,7 @@
 
 ## Confirmed Facts
 
-- CORE's creator is Raoul.
+- CORE's creator is Zroul.V.
 - The company is named Submine.
 
 ## Memory Rules
