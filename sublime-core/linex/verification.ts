@@ -11,6 +11,7 @@ function normalizePath(value: string): string {
 
 export function createLinexVerificationGate(task: string): LinexVerificationGate {
   const explicitlyReadOnly =
+    /\bread[- ]only\b/i.test(task) ||
     /\b(?:do not|don't|without|no)\s+(?:make\s+)?(?:edits?|editing|changes?|changing|modifications?|writes?|writing|creations?)\b/i.test(task);
   const requiresChanges =
     !explicitlyReadOnly &&
