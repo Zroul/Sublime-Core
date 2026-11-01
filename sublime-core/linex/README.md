@@ -23,6 +23,8 @@ Run LINEX's own path-safety and nested-file-creation tests:
 npm run linex:test
 ```
 
+See [LEARNING_GUIDE.md](./LEARNING_GUIDE.md) for the intern's explanations of LLMs, HTTP APIs, tool calling, ReAct, RAG, testing, and Git.
+
 ## Tools and boundaries
 
 - Lists and reads files under `obsidian/` only.
