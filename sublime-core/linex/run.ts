@@ -22,9 +22,12 @@ When finished, call task_done with a concise evidence-based summary, including f
 
 export async function runLinexTask(task: string): Promise<void> {
   const repositoryRoot = process.cwd();
-  const projectRoot = path.join(repositoryRoot, "obsidian");
+  const projectPath = path.join(repositoryRoot, "obsidian");
+  let projectRoot = projectPath;
   try {
-    const stat = await import("node:fs/promises").then((fs) => fs.stat(projectRoot));
+    const fs = await import("node:fs/promises");
+    projectRoot = await fs.realpath(projectPath);
+    const stat = await fs.stat(projectRoot);
     if (!stat.isDirectory()) throw new Error("not a directory");
   } catch {
     throw new Error(`OBSIDIAN directory not found at ${projectRoot}. Run LINEX from the sublime-core repository root.`);
