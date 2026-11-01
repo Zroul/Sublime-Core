@@ -104,7 +104,7 @@ export function createLinexTools(projectRoot: string): Tool[] {
           if (depth > 8 || found.length >= 500) return;
           const entries = await fs.readdir(current, { withFileTypes: true });
           for (const entry of entries) {
-            if (BLOCKED_SEGMENTS.has(entry.name.toLowerCase())) continue;
+            if (isBlockedSegment(entry.name)) continue;
             const full = path.join(current, entry.name);
             if (entry.isSymbolicLink()) continue;
             if (entry.isDirectory()) await walk(full, depth + 1);
