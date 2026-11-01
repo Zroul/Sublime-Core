@@ -40,22 +40,39 @@ function validateRelativePath(input: unknown): string {
 
 export async function resolveObsidianPath(root: string, input: unknown, allowMissing = false): Promise<string> {
   const relative = validateRelativePath(input);
-  const candidate = path.resolve(root, relative);
-  if (!isInside(root, candidate) || candidate === root) {
+  const realRoot = await fs.realpath(root);
+  const candidate = path.resolve(realRoot, relative);
+  if (!isInside(realRoot, candidate) || candidate === realRoot) {
     throw new Error("Path rejected: operation must stay inside the OBSIDIAN project.");
   }
 
   try {
     const realCandidate = await fs.realpath(candidate);
-    if (!isInside(root, realCandidate) || realCandidate === root) {
+    if (!isInside(realRoot, realCandidate) || realCandidate === realRoot) {
       throw new Error("Path rejected: symlinks may not escape the OBSIDIAN project.");
     }
     return realCandidate;
   } catch (error) {
     if (!allowMissing || (error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
-    const parent = await fs.realpath(path.dirname(candidate));
-    if (!isInside(root, parent)) {
-      throw new Error("Path rejected: parent directory escapes OBSIDIAN.");
+
+    // A new file may be several directories deep. Walk upward to the nearest
+    // existing ancestor and verify its real path before allowing creation.
+    let ancestor = path.dirname(candidate);
+    while (true) {
+      try {
+        const realAncestor = await fs.realpath(ancestor);
+        if (!isInside(realRoot, realAncestor)) {
+          throw new Error("Path rejected: parent directory escapes OBSIDIAN.");
+        }
+        break;
+      } catch (ancestorError) {
+        if ((ancestorError as NodeJS.ErrnoException).code !== "ENOENT") throw ancestorError;
+        const parent = path.dirname(ancestor);
+        if (parent === ancestor) {
+          throw new Error("Path rejected: no existing parent inside OBSIDIAN was found.");
+        }
+        ancestor = parent;
+      }
     }
     return candidate;
   }
@@ -142,10 +159,11 @@ export function createLinexTools(projectRoot: string): Tool[] {
         if (Buffer.byteLength(content, "utf8") > MAX_WRITE_BYTES) throw new Error("File content exceeds the 300 KB limit.");
         const target = await resolveObsidianPath(root, args.path, true);
         await fs.mkdir(path.dirname(target), { recursive: true });
+        const realRoot = await fs.realpath(root);
         const parent = await fs.realpath(path.dirname(target));
-        if (!isInside(root, parent)) throw new Error("Parent directory escapes OBSIDIAN.");
+        if (!isInside(realRoot, parent)) throw new Error("Parent directory escapes OBSIDIAN.");
         await fs.writeFile(target, content, { encoding: "utf8", flag: "wx" });
-        return `Created ${path.relative(root, target)}.`;
+        return `Created ${path.relative(realRoot, target)}.`;
       } catch (error) {
         return { toolCallId: "", content: error instanceof Error ? error.message : String(error), isError: true };
       }
