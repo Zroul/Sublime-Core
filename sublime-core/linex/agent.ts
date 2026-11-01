@@ -1,11 +1,8 @@
 import { promises as fs } from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { execFile } from "node:child_process";
-import { promisify } from "node:util";
 import type { Tool } from "../core/ai/reasoning/types.js";
 
-const execFileAsync = promisify(execFile);
 const BLOCKED_SEGMENTS = new Set([
   ".git",
   "node_modules",
@@ -22,6 +19,11 @@ function isInside(root: string, target: string): boolean {
   return relative === "" || (!relative.startsWith("..") && !path.isAbsolute(relative));
 }
 
+function isBlockedSegment(part: string): boolean {
+  const name = part.toLowerCase();
+  return BLOCKED_SEGMENTS.has(name) || /^\\.env(?:$|\\.)/.test(name) || /\\.(?:pem|key|p12|pfx)$/i.test(name) || /^(?:id_rsa|id_ed25519|credentials(?:\\..*)?|secrets(?:\\..*)?)$/.test(name) || name === ".npmrc";
+}
+
 function validateRelativePath(input: unknown): string {
   if (typeof input !== "string" || !input.trim()) {
     throw new Error("A non-empty relative project path is required.");
@@ -31,7 +33,7 @@ function validateRelativePath(input: unknown): string {
     path.isAbsolute(input) ||
     normalizedInput.startsWith("/") ||
     /^[a-zA-Z]:/.test(normalizedInput) ||
-    normalizedInput.split("/").some((part) => part === ".." || BLOCKED_SEGMENTS.has(part.toLowerCase()))
+    normalizedInput.split("/").some((part) => part === ".." || isBlockedSegment(part))
   ) {
     throw new Error("Path rejected: use a relative path inside OBSIDIAN and avoid protected locations.");
   }
