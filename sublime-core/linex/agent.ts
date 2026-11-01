@@ -21,7 +21,7 @@ function isInside(root: string, target: string): boolean {
 
 function isBlockedSegment(part: string): boolean {
   const name = part.toLowerCase();
-  return BLOCKED_SEGMENTS.has(name) || /^\\.env(?:$|\\.)/.test(name) || /\\.(?:pem|key|p12|pfx)$/i.test(name) || /^(?:id_rsa|id_ed25519|credentials(?:\\..*)?|secrets(?:\\..*)?)$/.test(name) || name === ".npmrc";
+  return BLOCKED_SEGMENTS.has(name) || /^\.env(?:$|\.)/.test(name) || /\.(?:pem|key|p12|pfx)$/i.test(name) || /^(?:id_rsa|id_ed25519|credentials(?:\..*)?|secrets(?:\..*)?)$/.test(name) || name === ".npmrc";
 }
 
 function validateRelativePath(input: unknown): string {
