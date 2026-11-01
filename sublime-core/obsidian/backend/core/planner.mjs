@@ -6,6 +6,7 @@ import "../../frontend/knowledge.js";
 import "../../frontend/style-recipes.js";
 import "../../frontend/creative-recipes.js";
 import "../../frontend/captions.js";
+import "../../frontend/caption-style-studio.js";
 import "../../frontend/planner.shared.js";
 
 const planner = globalThis.OBSIDIANPlanner;
@@ -13,3 +14,4 @@ const planner = globalThis.OBSIDIANPlanner;
 export const planObsidianCommand = planner.planObsidianCommand;
 export const isExecutablePlan = planner.isExecutablePlan;
 export const planCaptionCreation = planner.planCaptionCreation;
+export const planCaptionStyleInspection = planner.planCaptionStyleInspection;

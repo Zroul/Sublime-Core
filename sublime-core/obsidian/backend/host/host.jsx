@@ -40,6 +40,117 @@ function OBSIDIAN_escapeCaptionField(value) {
     return escape(String(value === undefined || value === null ? "" : value));
 }
 
+function OBSIDIAN_captionColorIsValid(color) {
+    return color && Object.prototype.toString.call(color) === "[object Array]" && color.length === 3 &&
+        isFinite(Number(color[0])) && Number(color[0]) >= 0 && Number(color[0]) <= 1 &&
+        isFinite(Number(color[1])) && Number(color[1]) >= 0 && Number(color[1]) <= 1 &&
+        isFinite(Number(color[2])) && Number(color[2]) >= 0 && Number(color[2]) <= 1;
+}
+
+function OBSIDIAN_styleProperty(layer, matchName) {
+    try {
+        var transform = layer.property("ADBE Transform Group");
+        return transform ? transform.property(matchName) : null;
+    } catch (ignored) { return null; }
+}
+
+function OBSIDIAN_captionKeyframeSummary(property) {
+    if (!property) return "unavailable";
+    try {
+        var count = Number(property.numKeys) || 0;
+        if (!count) return "static";
+        var entries = [];
+        var limit = Math.min(count, 12);
+        for (var i = 1; i <= limit; i++) {
+            var value = property.keyValue(i);
+            var encodedValue = Object.prototype.toString.call(value) === "[object Array]" ? value.join(",") : String(value);
+            var interpolation = "unknown";
+            try { interpolation = String(property.keyInInterpolationType(i)) + "/" + String(property.keyOutInterpolationType(i)); } catch (ignoredInterpolation) {}
+            var influence = "";
+            try {
+                var ease = property.keyInTemporalEase(i);
+                if (ease && ease.length) influence = ":ease " + Number(ease[0].influence);
+            } catch (ignoredEase) {}
+            entries.push(Number(property.keyTime(i)).toFixed(3) + "s=" + encodedValue + " [" + interpolation + influence + "]");
+        }
+        return count + " key(s): " + entries.join("; ") + (count > limit ? "; …" : "");
+    } catch (error) { return "keyframe details unavailable: " + OBSIDIAN_cleanText(error); }
+}
+
+function OBSIDIAN_captionEffectSummary(layer) {
+    var results = [];
+    try {
+        var effects = layer.property("ADBE Effect Parade");
+        if (!effects) return "No effects detected.";
+        for (var i = 1; i <= Number(effects.numProperties); i++) {
+            var effect = effects.property(i);
+            if (!effect) continue;
+            var text = String(effect.name || effect.matchName || "Effect");
+            try { text += effect.enabled === false ? " (disabled)" : " (enabled)"; } catch (ignoredEnabled) {}
+            var values = [];
+            for (var j = 1; j <= Math.min(Number(effect.numProperties) || 0, 24); j++) {
+                var prop = effect.property(j);
+                if (!prop) continue;
+                try {
+                    var value = prop.value;
+                    if (typeof value === "number" || typeof value === "string" || Object.prototype.toString.call(value) === "[object Array]") {
+                        values.push(String(prop.name || prop.matchName || "Property") + "=" +
+                            (Object.prototype.toString.call(value) === "[object Array]" ? value.join(",") : String(value)));
+                    }
+                } catch (ignoredValue) {}
+            }
+            if (values.length) text += ": " + values.join(", ");
+            results.push(text);
+        }
+    } catch (ignoredEffects) {}
+    return results.length ? results.join("; ") : "No effects detected.";
+}
+
+/* Read-only import of typography, transform, effects, and keyed property metadata. */
+function OBSIDIAN_inspectCaptionStyle() {
+    var comp = OBSIDIAN_getActiveComp();
+    if (!comp) return "REJECTED|Open a composition and select one text layer to import its caption style.";
+    var layers = OBSIDIAN_getSelectedLayers();
+    if (layers.length !== 1 || !(layers[0] instanceof TextLayer)) {
+        return "REJECTED|Select exactly one After Effects text layer to import a caption style.";
+    }
+    var layer = layers[0];
+    try {
+        var textGroup = layer.property("ADBE Text Properties");
+        var textProperty = textGroup ? textGroup.property("ADBE Text Document") : null;
+        var document = textProperty ? textProperty.value : null;
+        var position = OBSIDIAN_styleProperty(layer, "ADBE Position");
+        var anchor = OBSIDIAN_styleProperty(layer, "ADBE Anchor Point");
+        if (!document || !position || !document.font || !isFinite(Number(document.fontSize))) {
+            return "REJECTED|The selected text layer does not expose readable typography and transform values.";
+        }
+        var positionValue = position.value;
+        var anchorValue = anchor ? anchor.value : [0, 0];
+        var fillValue = document.applyFill ? document.fillColor : [1, 1, 1];
+        var strokeValue = document.applyStroke ? document.strokeColor : [0, 0, 0];
+        var alignment = "center";
+        try {
+            if (document.justification === ParagraphJustification.LEFT_JUSTIFY) alignment = "left";
+            else if (document.justification === ParagraphJustification.RIGHT_JUSTIFY) alignment = "right";
+        } catch (ignoredAlignment) {}
+        var effects = OBSIDIAN_captionEffectSummary(layer);
+        return "OK|CAPTION_STYLE|" +
+            OBSIDIAN_escapeCaptionField(layer.name) + "|" + OBSIDIAN_escapeCaptionField(document.font) + "|" +
+            OBSIDIAN_escapeCaptionField(document.fontStyle === undefined ? "font style not exposed" : document.fontStyle) + "|" + Number(document.fontSize) + "|" +
+            (document.applyFill ? "1" : "0") + "|" + Number(fillValue[0]) + "|" + Number(fillValue[1]) + "|" + Number(fillValue[2]) + "|" +
+            (document.applyStroke ? "1" : "0") + "|" + Number(strokeValue[0]) + "|" + Number(strokeValue[1]) + "|" + Number(strokeValue[2]) + "|" +
+            Number(document.strokeWidth) + "|" + alignment + "|" + Number(positionValue[0]) / Number(comp.width) + "|" +
+            Number(positionValue[1]) / Number(comp.height) + "|" + Number(anchorValue[0] || 0) + "|" + Number(anchorValue[1] || 0) + "|" +
+            OBSIDIAN_escapeCaptionField(String(document.text || "").substring(0, 140)) + "|" + OBSIDIAN_escapeCaptionField(effects) + "|" +
+            OBSIDIAN_escapeCaptionField("Opacity: " + OBSIDIAN_captionKeyframeSummary(OBSIDIAN_styleProperty(layer, "ADBE Opacity")) +
+                " | Scale: " + OBSIDIAN_captionKeyframeSummary(OBSIDIAN_styleProperty(layer, "ADBE Scale")) +
+                " | Position: " + OBSIDIAN_captionKeyframeSummary(position) +
+                " | Layer duration: " + (Number(layer.outPoint) - Number(layer.inPoint)).toFixed(3) + "s");
+    } catch (error) {
+        return "REJECTED|Could not inspect the selected text layer style: " + OBSIDIAN_cleanText(error);
+    }
+}
+
 /* Read-only media handoff: only one selected, local footage layer is accepted. */
 function OBSIDIAN_inspectCaptionSource() {
     var comp = OBSIDIAN_getActiveComp();
@@ -73,23 +184,62 @@ function OBSIDIAN_inspectCaptionSource() {
         OBSIDIAN_escapeCaptionField(comp.name);
 }
 
-function OBSIDIAN_captionStyle(style, comp) {
-    var normalized = String(style || "");
-    if (normalized !== "clean" && normalized !== "bold" && normalized !== "yellow") return null;
-    var fill = normalized === "yellow" ? [1, 0.86, 0.08] : [1, 1, 1];
+function OBSIDIAN_captionStyle(style, comp, segments) {
+    if (typeof style === "string") {
+        var normalized = String(style || "");
+        if (normalized !== "clean" && normalized !== "bold" && normalized !== "yellow") return null;
+        var fill = normalized === "yellow" ? [1, 0.86, 0.08] : [1, 1, 1];
+        return {
+            name: normalized,
+            font: normalized === "bold" ? "Arial-BoldMT" : "ArialMT",
+            fontSize: Math.max(24, Math.min(100, Math.round(Number(comp.height) * (normalized === "bold" ? 0.052 : 0.046)))),
+            fillColor: fill,
+            fillEnabled: true,
+            strokeEnabled: true,
+            strokeColor: [0, 0, 0],
+            strokeWidth: Math.max(2, Math.round(Number(comp.height) * 0.003)),
+            alignment: "center",
+            x: Number(comp.width) / 2,
+            y: Number(comp.height) * 0.86,
+            animation: "none",
+            animationDuration: 0.4
+        };
+    }
+    if (!style || typeof style !== "object" || Number(style.version) !== 1 ||
+        typeof style.font !== "string" || !style.font || style.font.length > 128 ||
+        !isFinite(Number(style.fontSize)) || Number(style.fontSize) < 10 || Number(style.fontSize) > 180 ||
+        !isFinite(Number(style.minFontSize)) || Number(style.minFontSize) < 10 || Number(style.minFontSize) > Number(style.fontSize) ||
+        !OBSIDIAN_captionColorIsValid(style.fillColor) || !OBSIDIAN_captionColorIsValid(style.strokeColor) ||
+        typeof style.fillEnabled !== "boolean" || typeof style.strokeEnabled !== "boolean" || !isFinite(Number(style.strokeWidth)) || Number(style.strokeWidth) < 0 || Number(style.strokeWidth) > 20 ||
+        !/^(left|center|right)$/.test(String(style.alignment || "")) ||
+        !isFinite(Number(style.positionX)) || Number(style.positionX) < 0.02 || Number(style.positionX) > 0.98 ||
+        !isFinite(Number(style.positionY)) || Number(style.positionY) < 0.02 || Number(style.positionY) > 0.98 ||
+        !/^(none|fade|pop|smooth_scale|slide|typewriter|word_emphasis)$/.test(String(style.animation || "")) ||
+        !isFinite(Number(style.animationDuration)) || Number(style.animationDuration) < 0.08 || Number(style.animationDuration) > 2 ||
+        !segments || Object.prototype.toString.call(segments) !== "[object Array]") return null;
+    var longest = 0;
+    for (var i = 0; i < segments.length; i++) longest = Math.max(longest, String(segments[i].text || "").length);
+    if (!longest) return null;
+    var fitted = Math.min(Number(style.fontSize), (Number(comp.width) * 0.9) / (longest * 0.56));
+    if (fitted < Number(style.minFontSize)) return null;
     return {
-        name: normalized,
-        font: normalized === "bold" ? "Arial-BoldMT" : "ArialMT",
-        fontSize: Math.max(24, Math.min(100, Math.round(Number(comp.height) * (normalized === "bold" ? 0.052 : 0.046)))),
-        fillColor: fill,
-        strokeColor: [0, 0, 0],
-        strokeWidth: Math.max(2, Math.round(Number(comp.height) * 0.003)),
-        x: Number(comp.width) / 2,
-        y: Number(comp.height) * 0.86
+        name: "Caption Style Studio",
+        font: String(style.font),
+        fontSize: Math.round(fitted * 10) / 10,
+        fillColor: [Number(style.fillColor[0]), Number(style.fillColor[1]), Number(style.fillColor[2])],
+        fillEnabled: style.fillEnabled,
+        strokeEnabled: style.strokeEnabled,
+        strokeColor: [Number(style.strokeColor[0]), Number(style.strokeColor[1]), Number(style.strokeColor[2])],
+        strokeWidth: Number(style.strokeWidth),
+        alignment: String(style.alignment),
+        x: Number(comp.width) * Number(style.positionX),
+        y: Number(comp.height) * Number(style.positionY),
+        animation: String(style.animation),
+        animationDuration: Number(style.animationDuration)
     };
 }
 
-function OBSIDIAN_applyCaptionStyle(layer, caption, style, comp) {
+function OBSIDIAN_applyCaptionStyle(layer, caption, styleValues) {
     var textProperties = layer.property("ADBE Text Properties");
     var textProperty = textProperties ? textProperties.property("ADBE Text Document") : null;
     var transform = layer.property("ADBE Transform Group");
@@ -97,22 +247,282 @@ function OBSIDIAN_applyCaptionStyle(layer, caption, style, comp) {
     if (!textProperty || !position || typeof textProperty.setValue !== "function" || typeof position.setValue !== "function") {
         throw new Error("Text layer styling properties were unavailable.");
     }
-    var styleValues = OBSIDIAN_captionStyle(style, comp);
-    if (!styleValues) throw new Error("Unsupported caption style.");
     var document = textProperty.value;
     document.text = caption.text;
     document.font = styleValues.font;
     document.fontSize = styleValues.fontSize;
-    document.applyFill = true;
+    document.applyFill = styleValues.fillEnabled;
     document.fillColor = styleValues.fillColor;
-    document.applyStroke = true;
+    document.applyStroke = styleValues.strokeEnabled;
     document.strokeColor = styleValues.strokeColor;
     document.strokeWidth = styleValues.strokeWidth;
     document.strokeOverFill = true;
-    document.justification = ParagraphJustification.CENTER_JUSTIFY;
+    document.justification = styleValues.alignment === "left" ? ParagraphJustification.LEFT_JUSTIFY :
+        styleValues.alignment === "right" ? ParagraphJustification.RIGHT_JUSTIFY : ParagraphJustification.CENTER_JUSTIFY;
     textProperty.setValue(document);
     position.setValue([styleValues.x, styleValues.y]);
     return { textProperty: textProperty, position: position, style: styleValues };
+}
+
+function OBSIDIAN_captionInterpolationName(type) {
+    if (typeof KeyframeInterpolationType !== "undefined") {
+        if (type === KeyframeInterpolationType.HOLD) return "KeyframeInterpolationType.HOLD";
+        if (type === KeyframeInterpolationType.BEZIER) return "KeyframeInterpolationType.BEZIER";
+        if (type === KeyframeInterpolationType.LINEAR) return "KeyframeInterpolationType.LINEAR";
+    }
+    return "unknown interpolation enum (" + String(type) + ")";
+}
+
+function OBSIDIAN_captionPropertyName(property) {
+    return String(property && (property.matchName || property.name) || "unknown property");
+}
+
+function OBSIDIAN_setCaptionTemporalInterpolation(property, keyIndex, type, animation) {
+    try {
+        property.setInterpolationTypeAtKey(keyIndex, type, type);
+    } catch (error) {
+        throw new Error("Caption animation '" + animation + "' failed during temporal interpolation assignment on property '" +
+            OBSIDIAN_captionPropertyName(property) + "' at key " + keyIndex + " using " +
+            OBSIDIAN_captionInterpolationName(type) + ": " + error.toString());
+    }
+}
+
+function OBSIDIAN_setCaptionAnimationKeys(property, keyframes, interpolation, hold, animation) {
+    if (!property || typeof property.setValueAtTime !== "function") throw new Error("This After Effects property cannot receive the approved caption animation.");
+    for (var i = 0; i < keyframes.length; i++) property.setValueAtTime(keyframes[i].time, keyframes[i].value);
+    if (typeof property.setInterpolationTypeAtKey === "function" && typeof KeyframeInterpolationType !== "undefined") {
+        var type = hold ? KeyframeInterpolationType.HOLD :
+            interpolation === "linear" ? KeyframeInterpolationType.LINEAR : KeyframeInterpolationType.BEZIER;
+        var isSourceText = hold && property.matchName === "ADBE Text Document";
+        for (var j = 1; j <= keyframes.length; j++) {
+            if (isSourceText && typeof property.keyInInterpolationType === "function" &&
+                typeof property.keyOutInterpolationType === "function" &&
+                property.keyInInterpolationType(j) === type && property.keyOutInterpolationType(j) === type) {
+                // Source Text keys are discrete. AE creates them as Hold keys; retain that native
+                // interpolation and avoid reassigning an enum the property may reject.
+                continue;
+            }
+            if (isSourceText && typeof property.isInterpolationTypeValid === "function" &&
+                !property.isInterpolationTypeValid(type)) {
+                throw new Error("Caption animation '" + animation + "' requires temporal " +
+                    OBSIDIAN_captionInterpolationName(type) + " on property '" +
+                    OBSIDIAN_captionPropertyName(property) + "', but After Effects reports that interpolation as unsupported and the created keys are not already Hold.");
+            }
+            OBSIDIAN_setCaptionTemporalInterpolation(property, j, type, animation);
+        }
+    } else if (hold) {
+        throw new Error("After Effects could not set discrete text-reveal keyframes.");
+    }
+    if (!hold && typeof property.setTemporalEaseAtKey === "function" && typeof KeyframeEase !== "undefined" && interpolation !== "linear") {
+        var dimensions = Object.prototype.toString.call(property.value) === "[object Array]" ? property.value.length : 1;
+        if (dimensions < 1 || dimensions > 3) dimensions = 1;
+        for (var k = 1; k <= keyframes.length; k++) {
+            var easeIn = [];
+            var easeOut = [];
+            for (var easeIndex = 0; easeIndex < dimensions; easeIndex++) {
+                easeIn.push(new KeyframeEase(0, 65));
+                easeOut.push(new KeyframeEase(0, 65));
+            }
+        try {
+            property.setTemporalEaseAtKey(k, easeIn, easeOut);
+        } catch (easeError) {
+            throw new Error("Caption animation '" + animation + "' failed during temporal ease assignment on property '" +
+                OBSIDIAN_captionPropertyName(property) + "' at key " + k + ": " + easeError.toString());
+        }
+        }
+    }
+}
+
+function OBSIDIAN_captionDiagnosticValue(value) {
+    if (value === undefined) return "<undefined>";
+    if (value === null) return "<null>";
+    if (Object.prototype.toString.call(value) === "[object Array]") {
+        var parts = [];
+        for (var i = 0; i < value.length; i++) parts.push(OBSIDIAN_captionDiagnosticValue(value[i]));
+        return "[" + parts.join(", ") + "]";
+    }
+    var text = String(value).replace(/[\r\n\t]+/g, " ").replace(/\\/g, "\\\\").replace(/"/g, "\\\"");
+    return "\"" + text + "\"";
+}
+
+function OBSIDIAN_captionPropertyIsThreeD(property) {
+    if (!property) return false;
+    var valueType = property.propertyValueType;
+    if (typeof PropertyValueType !== "undefined" && valueType === PropertyValueType.ThreeD) return true;
+    return String(valueType) === "ThreeD";
+}
+
+function OBSIDIAN_captionAnimationMismatchDetails(animation) {
+    var mismatches = [];
+    var property = animation && animation.property;
+    if (!property) {
+        if (Number(animation && animation.expectedKeys) !== 0) {
+            mismatches.push("animation.keyCount requested " + OBSIDIAN_captionDiagnosticValue(animation.expectedKeys) + ", actual 0 (no animated property)");
+        }
+        return mismatches;
+    }
+    var actualCount = Number(property.numKeys);
+    if (actualCount !== Number(animation.expectedKeys)) {
+        mismatches.push("animation.keyCount requested " + OBSIDIAN_captionDiagnosticValue(animation.expectedKeys) + ", actual " + OBSIDIAN_captionDiagnosticValue(actualCount));
+    }
+    for (var i = 0; i < animation.keyframes.length; i++) {
+        var actualTime = Number(property.keyTime(i + 1));
+        var expectedTime = Number(animation.keyframes[i].time);
+        var actualValue = property.keyValue(i + 1);
+        var expectedValue = animation.keyframes[i].value;
+        if (!isFinite(actualTime) || Math.abs(actualTime - expectedTime) > 0.001) {
+            mismatches.push("animation.key[" + (i + 1) + "].time requested " + OBSIDIAN_captionDiagnosticValue(expectedTime) + ", actual " + OBSIDIAN_captionDiagnosticValue(actualTime));
+        }
+        if (expectedValue && typeof expectedValue === "object" && typeof expectedValue.text === "string") {
+            if (!actualValue || actualValue.text !== expectedValue.text) {
+                mismatches.push("animation.key[" + (i + 1) + "].text requested " + OBSIDIAN_captionDiagnosticValue(expectedValue.text) + ", actual " + OBSIDIAN_captionDiagnosticValue(actualValue && actualValue.text));
+            }
+        } else if (Object.prototype.toString.call(expectedValue) === "[object Array]") {
+            var isScaleVector = property.matchName === "ADBE Scale" && expectedValue.length === 2;
+            var hasExtraScaleZ = isScaleVector && actualValue && actualValue.length === 3;
+            if (!actualValue || (actualValue.length !== expectedValue.length && !hasExtraScaleZ)) {
+                mismatches.push("animation.key[" + (i + 1) + "].value requested " + OBSIDIAN_captionDiagnosticValue(expectedValue) + ", actual " + OBSIDIAN_captionDiagnosticValue(actualValue));
+            } else {
+                for (var j = 0; j < expectedValue.length; j++) {
+                    if (!isFinite(Number(actualValue[j])) || !isFinite(Number(expectedValue[j])) ||
+                        Math.abs(Number(actualValue[j]) - Number(expectedValue[j])) > 0.01) {
+                        mismatches.push("animation.key[" + (i + 1) + "].value[" + j + "] requested " + OBSIDIAN_captionDiagnosticValue(expectedValue[j]) + ", actual " + OBSIDIAN_captionDiagnosticValue(actualValue[j]));
+                    }
+                }
+                if (hasExtraScaleZ && animation.scaleIsThreeD) {
+                    if (animation.preservedScaleZ === null || animation.preservedScaleZ === undefined ||
+                        !isFinite(Number(animation.preservedScaleZ)) ||
+                        Math.abs(Number(actualValue[2]) - Number(animation.preservedScaleZ)) > 0.01) {
+                        mismatches.push("animation.key[" + (i + 1) + "].value[2] requested preserved Z " +
+                            OBSIDIAN_captionDiagnosticValue(animation.preservedScaleZ) + ", actual " +
+                            OBSIDIAN_captionDiagnosticValue(actualValue[2]));
+                    }
+                } else if (isScaleVector && animation.scaleIsThreeD && actualValue.length !== 3) {
+                    mismatches.push("animation.key[" + (i + 1) + "].value[2] requested preserved Z " +
+                        OBSIDIAN_captionDiagnosticValue(animation.preservedScaleZ) + ", actual <missing>");
+                }
+            }
+        } else if (Math.abs(Number(actualValue) - Number(expectedValue)) > 0.01) {
+            mismatches.push("animation.key[" + (i + 1) + "].value requested " + OBSIDIAN_captionDiagnosticValue(expectedValue) + ", actual " + OBSIDIAN_captionDiagnosticValue(actualValue));
+        }
+    }
+    return mismatches;
+}
+
+function OBSIDIAN_captionReadBackMismatches(verifyIndex, created, prepared, createdProperties, textValue, positionValue) {
+    var mismatches = [];
+    function add(field, condition, requested, actual) {
+        if (condition) mismatches.push(field + " requested " + OBSIDIAN_captionDiagnosticValue(requested) + ", actual " + OBSIDIAN_captionDiagnosticValue(actual));
+    }
+    var layer = created[verifyIndex];
+    var priorLayer = verifyIndex > 0 ? created[verifyIndex - 1] : null;
+    var caption = prepared[verifyIndex];
+    var props = createdProperties[verifyIndex];
+    var expectedJustification = props.style.alignment === "left" ? ParagraphJustification.LEFT_JUSTIFY :
+        props.style.alignment === "right" ? ParagraphJustification.RIGHT_JUSTIFY : ParagraphJustification.CENTER_JUSTIFY;
+
+    if (priorLayer && Number(layer.index) <= Number(priorLayer.index)) {
+        add("layer order", true, "index > " + Number(priorLayer.index), Number(layer.index));
+    }
+    add("text", !textValue || textValue.text !== caption.text, caption.text, textValue && textValue.text);
+    add("inPoint", Math.abs(Number(layer.inPoint) - caption.start) > 0.001, caption.start, Number(layer.inPoint));
+    add("outPoint", Math.abs(Number(layer.outPoint) - caption.end) > 0.001, caption.end, Number(layer.outPoint));
+    if (!positionValue) {
+        add("position", true, [props.style.x, props.style.y], "<missing>");
+    } else {
+        add("position.x", Math.abs(Number(positionValue[0]) - props.style.x) > 0.01, props.style.x, Number(positionValue[0]));
+        add("position.y", Math.abs(Number(positionValue[1]) - props.style.y) > 0.01, props.style.y, Number(positionValue[1]));
+    }
+    add("font", String(textValue && textValue.font) !== props.style.font, props.style.font, textValue && textValue.font);
+    add("fontSize", Math.abs(Number(textValue && textValue.fontSize) - props.style.fontSize) > 0.01, props.style.fontSize, Number(textValue && textValue.fontSize));
+    add("applyFill", Boolean(textValue && textValue.applyFill) !== Boolean(props.style.fillEnabled), Boolean(props.style.fillEnabled), Boolean(textValue && textValue.applyFill));
+    add("applyStroke", Boolean(textValue && textValue.applyStroke) !== Boolean(props.style.strokeEnabled), Boolean(props.style.strokeEnabled), Boolean(textValue && textValue.applyStroke));
+    for (var colorIndex = 0; colorIndex < 3; colorIndex++) {
+        var fillActual = textValue && textValue.fillColor ? textValue.fillColor[colorIndex] : undefined;
+        var strokeActual = textValue && textValue.strokeColor ? textValue.strokeColor[colorIndex] : undefined;
+        add("fillColor[" + colorIndex + "]", !textValue || !textValue.fillColor || Math.abs(Number(fillActual) - props.style.fillColor[colorIndex]) > 0.001,
+            props.style.fillColor[colorIndex], fillActual);
+        add("strokeColor[" + colorIndex + "]", !textValue || !textValue.strokeColor || Math.abs(Number(strokeActual) - props.style.strokeColor[colorIndex]) > 0.001,
+            props.style.strokeColor[colorIndex], strokeActual);
+    }
+    add("strokeWidth", Math.abs(Number(textValue && textValue.strokeWidth) - props.style.strokeWidth) > 0.01, props.style.strokeWidth, Number(textValue && textValue.strokeWidth));
+    add("justification", !textValue || textValue.justification !== expectedJustification, expectedJustification, textValue && textValue.justification);
+    var animationMismatches = OBSIDIAN_captionAnimationMismatchDetails(props.animation);
+    for (var animationIndex = 0; animationIndex < animationMismatches.length; animationIndex++) mismatches.push(animationMismatches[animationIndex]);
+    return mismatches;
+}
+
+function OBSIDIAN_applyCaptionAnimation(layer, props, caption, styleValues, comp) {
+    var animation = styleValues.animation;
+    if (animation === "none") return { type: animation, property: null, expectedKeys: 0, keyframes: [] };
+    var start = Number(caption.start);
+    var duration = Math.min(Number(styleValues.animationDuration), Number(caption.end) - start);
+    if (duration < 1 / 240) throw new Error("Caption duration is too short for the selected animation.");
+    var end = start + duration;
+    var transform = layer.property("ADBE Transform Group");
+    var opacity = transform ? transform.property("ADBE Opacity") : null;
+    var scale = transform ? transform.property("ADBE Scale") : null;
+    var keys;
+    var property;
+    var scaleIsThreeD = false;
+    var preservedScaleZ = null;
+    if (animation === "fade") {
+        property = opacity;
+        keys = [{ time: start, value: 0 }, { time: end, value: 100 }];
+        OBSIDIAN_setCaptionAnimationKeys(property, keys, "bezier", false, animation);
+    } else if (animation === "pop" || animation === "smooth_scale" || animation === "word_emphasis") {
+        property = scale;
+        scaleIsThreeD = Boolean(layer.threeDLayer);
+        if (scaleIsThreeD) {
+            if (!OBSIDIAN_captionPropertyIsThreeD(property)) {
+                throw new Error("A 3D caption layer did not expose a 3D Scale property; its Z animation cannot be verified safely.");
+            }
+            var originalScale = property.value;
+            if (Object.prototype.toString.call(originalScale) !== "[object Array]" || originalScale.length !== 3 ||
+                !isFinite(Number(originalScale[2]))) {
+                throw new Error("A 3D caption layer did not expose a readable Scale Z value; its animation cannot be verified safely.");
+            }
+            preservedScaleZ = Number(originalScale[2]);
+        }
+        if (animation === "pop") {
+            keys = [{ time: start, value: [78, 78] }, { time: start + duration * 0.68, value: [108, 108] }, { time: end, value: [100, 100] }];
+        } else if (animation === "word_emphasis") {
+            keys = [{ time: start, value: [100, 100] }, { time: start + duration * 0.32, value: [116, 116] }, { time: end, value: [100, 100] }];
+        } else {
+            keys = [{ time: start, value: [92, 92] }, { time: end, value: [100, 100] }];
+        }
+        OBSIDIAN_setCaptionAnimationKeys(property, keys, "bezier", false, animation);
+    } else if (animation === "slide") {
+        property = props.position;
+        keys = [
+            { time: start, value: [styleValues.x, styleValues.y + Number(comp.height) * 0.07] },
+            { time: end, value: [styleValues.x, styleValues.y] }
+        ];
+        OBSIDIAN_setCaptionAnimationKeys(property, keys, "bezier", false, animation);
+    } else if (animation === "typewriter") {
+        property = props.textProperty;
+        var length = caption.text.length;
+        var steps = Math.min(12, length);
+        keys = [];
+        for (var i = 1; i <= steps; i++) {
+            var visible = Math.max(1, Math.floor(length * i / steps));
+            var document = property.value;
+            document.text = caption.text.substring(0, visible);
+            keys.push({ time: start + duration * (i - 1) / Math.max(1, steps - 1), value: document });
+        }
+        OBSIDIAN_setCaptionAnimationKeys(property, keys, "hold", true, animation);
+        return { type: animation, property: property, expectedKeys: keys.length, keyframes: keys, finalText: caption.text };
+    } else {
+        throw new Error("Unsupported caption animation preset.");
+    }
+    return {
+        type: animation,
+        property: property,
+        expectedKeys: keys.length,
+        keyframes: keys,
+        scaleIsThreeD: scaleIsThreeD,
+        preservedScaleZ: preservedScaleZ
+    };
 }
 
 function OBSIDIAN_restoreCreatedCaptionLayers(layers) {
@@ -131,7 +541,7 @@ function OBSIDIAN_createCaptionLayers(payload) {
         return "REJECTED|Caption data must be received as a structured object.";
     }
     if (!payload.source || typeof payload.source !== "object" || Object.prototype.toString.call(payload.source) === "[object Array]" || !payload.source.path ||
-        !/^(clean|bold|yellow)$/.test(String(payload.style || "")) ||
+        !(typeof payload.style === "string" ? /^(clean|bold|yellow)$/.test(payload.style) : payload.style && typeof payload.style === "object" && Number(payload.style.version) === 1) ||
         !payload.segments || Object.prototype.toString.call(payload.segments) !== "[object Array]" ||
         payload.segments.length < 1 || payload.segments.length > 400) {
         return "REJECTED|Caption data must contain a supported style, one source, and 1 to 400 timed captions.";
@@ -169,11 +579,6 @@ function OBSIDIAN_createCaptionLayers(payload) {
         return "REJECTED|The active composition changed after transcription.";
     }
 
-    var styleValues = OBSIDIAN_captionStyle(payload.style, comp);
-    if (!styleValues || !comp.layers || typeof comp.layers.addText !== "function") {
-        return "REJECTED|After Effects text-layer creation is unavailable.";
-    }
-
     var prepared = [];
     var previousEnd = Number(sourceLayer.inPoint);
     for (var i = 0; i < payload.segments.length; i++) {
@@ -191,6 +596,15 @@ function OBSIDIAN_createCaptionLayers(payload) {
         previousEnd = end;
     }
 
+    var styleValues = OBSIDIAN_captionStyle(payload.style, comp, prepared);
+    if (!styleValues) return "REJECTED|The approved caption style is invalid or cannot fit the longest caption at its minimum size.";
+    if (!comp.layers || typeof comp.layers.addText !== "function") return "REJECTED|After Effects text-layer creation is unavailable.";
+    if (styleValues.animation === "typewriter") {
+        var typewriterKeyCount = 0;
+        for (var typewriterIndex = 0; typewriterIndex < prepared.length; typewriterIndex++) typewriterKeyCount += Math.min(12, prepared[typewriterIndex].text.length);
+        if (typewriterKeyCount > 5000) return "REJECTED|Typewriter would require more than 5,000 text keyframes. Use another animation preset or fewer captions.";
+    }
+
     var created = [];
     var createdProperties = [];
     var editError = null;
@@ -202,28 +616,37 @@ function OBSIDIAN_createCaptionLayers(payload) {
             if (!textLayer) throw new Error("After Effects did not create caption layer " + (j + 1) + ".");
             created.push(textLayer);
             textLayer.name = "OBSIDIAN Caption " + (j + 1);
-            var props = OBSIDIAN_applyCaptionStyle(textLayer, caption, payload.style, comp);
+            var props = OBSIDIAN_applyCaptionStyle(textLayer, caption, styleValues);
             textLayer.inPoint = caption.start;
             textLayer.outPoint = caption.end;
             textLayer.enabled = true;
             textLayer.shy = false;
             textLayer.locked = false;
+            props.animation = OBSIDIAN_applyCaptionAnimation(textLayer, props, caption, styleValues, comp);
             createdProperties.push(props);
+        }
+
+        /* addText inserts at the top; reverse-stack the batch so its timeline order is chronological. */
+        for (var orderIndex = created.length - 1; orderIndex >= 0; orderIndex--) {
+            if (typeof created[orderIndex].moveToBeginning !== "function") throw new Error("After Effects could not order the generated caption layers.");
+            created[orderIndex].moveToBeginning();
         }
 
         for (var verifyIndex = 0; verifyIndex < prepared.length; verifyIndex++) {
             var checkLayer = created[verifyIndex];
             var check = prepared[verifyIndex];
             var checkProps = createdProperties[verifyIndex];
-            var textValue = checkProps.textProperty.value;
-            var positionValue = checkProps.position.value;
-            if (!textValue || textValue.text !== check.text ||
-                Math.abs(Number(checkLayer.inPoint) - check.start) > 0.001 ||
-                Math.abs(Number(checkLayer.outPoint) - check.end) > 0.001 ||
-                !positionValue || Math.abs(Number(positionValue[0]) - checkProps.style.x) > 0.01 ||
-                Math.abs(Number(positionValue[1]) - checkProps.style.y) > 0.01 ||
-                Math.abs(Number(textValue.fontSize) - checkProps.style.fontSize) > 0.01) {
-                throw new Error("Caption " + (verifyIndex + 1) + " did not match the requested text, timing, or style on read-back.");
+            var textValue = checkProps.animation.type === "typewriter"
+                ? checkProps.textProperty.valueAtTime(check.end, false) : checkProps.textProperty.value;
+            var positionValue = checkProps.animation.type === "slide"
+                ? checkProps.position.valueAtTime(check.end, false) : checkProps.position.value;
+            var readBackMismatches = OBSIDIAN_captionReadBackMismatches(verifyIndex, created, prepared, createdProperties, textValue, positionValue);
+            if (readBackMismatches.length) {
+                throw new Error("Caption " + (verifyIndex + 1) + " read-back mismatch: " + readBackMismatches.join("; ") + ".");
+            }
+            if (checkProps.animation.type === "typewriter" && Number(textValue.text.length) !== check.text.length) {
+                throw new Error("Caption " + (verifyIndex + 1) + " read-back mismatch: typewriter final text length requested " +
+                    OBSIDIAN_captionDiagnosticValue(check.text.length) + ", actual " + OBSIDIAN_captionDiagnosticValue(Number(textValue.text.length)) + ".");
             }
         }
     } catch (error) {
@@ -240,7 +663,9 @@ function OBSIDIAN_createCaptionLayers(payload) {
     }
 
     app.endUndoGroup();
-    return "OK|Verified " + created.length + " timed caption layer(s) using the " + payload.style + " style.";
+    return typeof payload.style === "string"
+        ? "OK|Verified " + created.length + " timed caption layer(s) using the " + styleValues.name + " style."
+        : "OK|Verified " + created.length + " timed caption layer(s) using Caption Style Studio with " + styleValues.animation + " animation.";
 }
 
 function OBSIDIAN_getOpacity(layer) {
@@ -1164,6 +1589,7 @@ function OBSIDIAN_executePlan(action, value, profile, secondaryValue) {
     if (action === "inspect_project") return OBSIDIAN_inspectProject();
     if (action === "inspect_selection") return OBSIDIAN_inspectSelection();
     if (action === "inspect_caption_source") return OBSIDIAN_inspectCaptionSource();
+    if (action === "inspect_caption_style") return OBSIDIAN_inspectCaptionStyle();
     if (action === "create_captions") return OBSIDIAN_createCaptionLayers(value);
 
     if (action === "set_opacity") {

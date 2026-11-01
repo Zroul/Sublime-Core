@@ -10,13 +10,44 @@ class ShapeLayer {}
 class AVLayer {}
 class SolidSource {}
 class FootageItem {}
-const ParagraphJustification = { CENTER_JUSTIFY: "center" };
+const ParagraphJustification = { LEFT_JUSTIFY: "left", CENTER_JUSTIFY: "center", RIGHT_JUSTIFY: "right" };
+const KeyframeInterpolationType = { LINEAR: "linear", BEZIER: "bezier", HOLD: "hold" };
+class KeyframeEase { constructor(speed, influence) { this.speed = speed; this.influence = influence; } }
 
 function scalarProperty(value) {
   return {
     value,
     setValue(next) { this.value = next; },
   };
+}
+
+function keyedProperty(value) {
+  const property = scalarProperty(value);
+  const keys = [];
+  Object.defineProperty(property, "numKeys", { configurable: true, get() { return keys.length; } });
+  property._keys = keys;
+  property.setValueAtTime = function (time, next) {
+    const found = keys.find((entry) => Math.abs(entry.time - time) < 1e-8);
+    if (found) found.value = next;
+    else keys.push({ time, value: next, interpolation: null });
+    keys.sort((a, b) => a.time - b.time);
+    this.value = keys[keys.length - 1].value;
+  };
+  property.setInterpolationTypeAtKey = (index, incoming, outgoing) => {
+    if (keys[index - 1]) keys[index - 1].interpolation = { incoming, outgoing };
+  };
+  property.setTemporalEaseAtKey = () => {};
+  property.keyTime = (index) => keys[index - 1] && keys[index - 1].time;
+  property.keyValue = (index) => keys[index - 1] && keys[index - 1].value;
+  property.keyInInterpolationType = (index) => keys[index - 1] && keys[index - 1].interpolation && keys[index - 1].interpolation.incoming;
+  property.keyOutInterpolationType = (index) => keys[index - 1] && keys[index - 1].interpolation && keys[index - 1].interpolation.outgoing;
+  property.keyInTemporalEase = () => [{ influence: 65 }];
+  property.valueAtTime = (time) => {
+    let result = value;
+    for (const key of keys) if (key.time <= time) result = key.value;
+    return result;
+  };
+  return property;
 }
 
 function propertyGroup(children) {
@@ -60,8 +91,10 @@ function makeTextLayer(name, index, opacityValue) {
   const opacity = scalarProperty(opacityValue);
   const position = scalarProperty([960, 540]);
   const scale = scalarProperty([100, 100]);
+  const anchor = scalarProperty([0, 0]);
   const rotation = scalarProperty(0);
-  const textDocument = scalarProperty({ text: "Launch faster", font: "ArialMT", fontSize: 64 });
+  const textDocument = scalarProperty({ text: "Launch faster", font: "ArialMT", fontStyle: "Regular", fontSize: 64,
+    applyFill: true, fillColor: [1, 1, 1], applyStroke: false, strokeColor: [0, 0, 0], strokeWidth: 0, justification: "center" });
   const transform = propertyGroup([
     Object.assign(opacity, { name: "Opacity", matchName: "ADBE Opacity" }),
     Object.assign(position, { name: "Position", matchName: "ADBE Position" }),
@@ -70,6 +103,7 @@ function makeTextLayer(name, index, opacityValue) {
       matchName: "ADBE Scale",
       propertyValueType: scale.value && scale.value.length === 3 ? "ThreeD" : "TwoD",
     }),
+    Object.assign(anchor, { name: "Anchor Point", matchName: "ADBE Anchor Point" }),
     Object.assign(rotation, { name: "Rotation", matchName: "ADBE Rotation" }),
   ]);
   const textProperties = propertyGroup([
@@ -115,6 +149,7 @@ function makeContext() {
       endUndoGroup() {},
     },
     PropertyValueType: { TwoD: 2, ThreeD: 3 },
+    KeyframeInterpolationType, KeyframeEase,
     CompItem, TextLayer, ShapeLayer, AVLayer, SolidSource, FootageItem, ParagraphJustification,
   };
   vm.createContext(context);
@@ -144,13 +179,24 @@ function makeCaptionContext() {
   };
   Object.setPrototypeOf(sourceLayer, AVLayer.prototype);
   comp.selectedLayers = [sourceLayer];
+  const timelineOrder = [sourceLayer];
+  function updateTimelineIndexes() { timelineOrder.forEach((layer, index) => { layer.index = index + 1; }); }
   const generated = [];
   comp.layers = {
     addText(text) {
       const group = propertyGroup([]);
-      const position = scalarProperty([0, 0]);
-      const transform = propertyGroup([Object.assign(position, { name: "Position", matchName: "ADBE Position" })]);
-      const textDoc = scalarProperty({ text, font: "ArialMT", fontSize: 48 });
+      const position = keyedProperty([0, 0]);
+      const opacity = keyedProperty(100);
+      const scale = keyedProperty([100, 100]);
+      const anchor = scalarProperty([0, 0]);
+      const transform = propertyGroup([
+        Object.assign(position, { name: "Position", matchName: "ADBE Position" }),
+        Object.assign(opacity, { name: "Opacity", matchName: "ADBE Opacity" }),
+        Object.assign(scale, { name: "Scale", matchName: "ADBE Scale" }),
+        Object.assign(anchor, { name: "Anchor Point", matchName: "ADBE Anchor Point" }),
+      ]);
+      const textDoc = keyedProperty({ text, font: "ArialMT", fontSize: 48, applyFill: true, fillColor: [1, 1, 1],
+        applyStroke: false, strokeColor: [0, 0, 0], strokeWidth: 0, justification: "center" });
       const textProperties = propertyGroup([Object.assign(textDoc, {
         name: "Text Document",
         matchName: "ADBE Text Document",
@@ -158,13 +204,19 @@ function makeCaptionContext() {
       })]);
       const layer = {
         name: "",
-        index: generated.length + 2,
+        index: 1,
         inPoint: 0,
         outPoint: comp.duration,
         enabled: true,
         shy: false,
         locked: false,
         removed: false,
+        moveToBeginning() {
+          const index = timelineOrder.indexOf(this);
+          if (index >= 0) timelineOrder.splice(index, 1);
+          timelineOrder.unshift(this);
+          updateTimelineIndexes();
+        },
         property(key) {
           if (key === "ADBE Text Properties") return textProperties;
           if (key === "ADBE Transform Group") return transform;
@@ -174,6 +226,8 @@ function makeCaptionContext() {
       };
       Object.setPrototypeOf(layer, TextLayer.prototype);
       generated.push(layer);
+      timelineOrder.unshift(layer);
+      updateTimelineIndexes();
       return layer;
     },
   };
@@ -888,6 +942,46 @@ function captionPayload(overrides) {
   }, overrides || {});
 }
 
+function simulateAeThreeComponentScaleReadBack(comp, options) {
+  const { layer3D = false, z = 100, corruptKey = 0, corruptComponent = 2, corruptDelta = -1 } = options || {};
+  const addText = comp.layers.addText.bind(comp.layers);
+  comp.layers.addText = (text) => {
+    const layer = addText(text);
+    layer.threeDLayer = layer3D;
+    const scale = layer.property("ADBE Transform Group").property("ADBE Scale");
+    scale.propertyValueType = "ThreeD";
+    scale.value = [100, 100, z];
+    const setValueAtTime = scale.setValueAtTime;
+    let writeIndex = 0;
+    scale.setValueAtTime = function (time, value) {
+      writeIndex++;
+      const actualValue = [Number(value[0]), Number(value[1]), z];
+      if (writeIndex === corruptKey) actualValue[corruptComponent] += corruptDelta;
+      return setValueAtTime.call(this, time, actualValue);
+    };
+    return layer;
+  };
+}
+
+function studioStyle(overrides) {
+  return Object.assign({
+    version: 1,
+    font: "Montserrat-Bold",
+    fontSize: 64,
+    minFontSize: 20,
+    fillColor: [0.38, 0.9, 0.96],
+    fillEnabled: true,
+    strokeEnabled: true,
+    strokeColor: [0.02, 0.03, 0.08],
+    strokeWidth: 3,
+    alignment: "center",
+    positionX: 0.46,
+    positionY: 0.82,
+    animation: "smooth_scale",
+    animationDuration: 0.4,
+  }, overrides || {});
+}
+
 test("caption source inspection returns local footage and timing without editing the project", () => {
   const { context, generated } = makeCaptionContext();
   const result = context.OBSIDIAN_executePlan("inspect_caption_source", null, "");
@@ -912,6 +1006,25 @@ test("caption source inspection rejects multiple selections and offline footage"
   offline.file.exists = false;
   assert.match(offline.context.OBSIDIAN_executePlan("inspect_caption_source", null, ""), /offline/);
   assert.equal(offline.generated.length, 0);
+});
+
+test("caption style inspection reads text typography, layout, effects, and animation without edits", () => {
+  const { context, layer } = makeContext();
+  const result = context.OBSIDIAN_executePlan("inspect_caption_style", { readOnly: true }, "");
+  const fields = result.split("|");
+  assert.equal(fields.length, 23);
+  assert.equal(fields[0], "OK");
+  assert.equal(fields[1], "CAPTION_STYLE");
+  assert.equal(unescape(fields[2]), "Headline");
+  assert.equal(unescape(fields[3]), "ArialMT");
+  assert.equal(unescape(fields[4]), "Regular");
+  assert.equal(fields[15], "center");
+  assert.match(unescape(fields[21]), /No effects detected/);
+  assert.match(unescape(fields[22]), /Opacity: static/);
+  assert.equal(layer._opacity.value, 100);
+
+  const footage = makeCaptionContext();
+  assert.match(footage.context.OBSIDIAN_executePlan("inspect_caption_style", null, ""), /Select exactly one After Effects text layer/);
 });
 
 test("caption creation adds and verifies only styled, timed text layers", () => {
@@ -993,6 +1106,158 @@ test("caption creation removes only its generated layers when read-back fails", 
   };
   const result = context.OBSIDIAN_executePlan("create_captions", captionPayload(), "");
   assert.match(result, /failed and 2 generated caption layer\(s\) were removed/);
+  assert.match(result, /text requested "A local caption\.", actual "read-back mismatch"/);
   assert.equal(generated.length, 2);
   assert.ok(generated.every((layer) => layer.removed));
+});
+
+test("Caption Style Studio applies one fitted style consistently and preserves reviewed text and timing", () => {
+  const { context, generated } = makeCaptionContext();
+  const segments = [
+    { text: "Brief caption", start: 0.2, end: 1.1 },
+    { text: "A deliberately longer caption that determines the one shared font size", start: 1.1, end: 2.4 },
+    { text: "Final line", start: 2.4, end: 3.1 },
+  ];
+  const payload = captionPayload({ style: studioStyle({ animation: "none" }), segments });
+  const result = context.OBSIDIAN_executePlan("create_captions", payload, "");
+  assert.match(result, /Verified 3 timed caption layer\(s\) using Caption Style Studio/);
+  assert.equal(generated.length, segments.length);
+  const documents = generated.map((layer) => layer.property("ADBE Text Properties").property("ADBE Text Document").value);
+  const positions = generated.map((layer) => layer.property("ADBE Transform Group").property("ADBE Position").value);
+  assert.deepEqual(documents.map((document) => document.text), segments.map((segment) => segment.text));
+  assert.ok(documents.every((document) => document.font === "Montserrat-Bold"));
+  assert.ok(documents.every((document) => document.fontSize === documents[0].fontSize));
+  assert.ok(documents.every((document) => document.fillColor.join(",") === "0.38,0.9,0.96"));
+  assert.ok(positions.every((position) => position.join(",") === positions[0].join(",")));
+  assert.deepEqual(generated.map((layer) => [layer.inPoint, layer.outPoint]), segments.map(({ start, end }) => [start, end]));
+  assert.deepEqual(generated.map((layer) => layer.index), [1, 2, 3]);
+});
+
+test("Caption Style Studio applies and verifies each deterministic animation preset", () => {
+  const expected = { none: 0, fade: 2, pop: 3, smooth_scale: 2, slide: 2, typewriter: 9, word_emphasis: 3 };
+  for (const [animation, keyCount] of Object.entries(expected)) {
+    const { context, generated } = makeCaptionContext();
+    const payload = captionPayload({
+      style: studioStyle({ animation }),
+      segments: [{ text: "Type test", start: 0.2, end: 1.1 }],
+    });
+    const result = context.OBSIDIAN_executePlan("create_captions", payload, "");
+    assert.match(result, /^OK\|Verified 1 timed caption layer/ , animation);
+    const layer = generated[0];
+    const transform = layer.property("ADBE Transform Group");
+    const property = animation === "fade" ? transform.property("ADBE Opacity")
+      : animation === "slide" ? transform.property("ADBE Position")
+        : animation === "typewriter" ? layer.property("ADBE Text Properties").property("ADBE Text Document")
+          : transform.property("ADBE Scale");
+    assert.equal(Number(property.numKeys) || 0, keyCount, animation);
+    if (animation === "typewriter") {
+      assert.equal(property.valueAtTime(1.1, false).text, "Type test");
+      assert.ok(property._keys.every((key) => key.interpolation.incoming === "hold"));
+    }
+  }
+});
+
+test("Typewriter preserves Source Text native Hold interpolation instead of reassigning an unsupported enum", () => {
+  const { context, comp, generated } = makeCaptionContext();
+  const addText = comp.layers.addText.bind(comp.layers);
+  comp.layers.addText = (text) => {
+    const layer = addText(text);
+    const sourceText = layer.property("ADBE Text Properties").property("ADBE Text Document");
+    const setValueAtTime = sourceText.setValueAtTime;
+    let interpolationAssignments = 0;
+    sourceText.setValueAtTime = function (time, value) {
+      setValueAtTime.call(this, time, value);
+      const key = this._keys.find((entry) => Math.abs(entry.time - time) < 1e-8);
+      key.interpolation = {
+        incoming: context.KeyframeInterpolationType.HOLD,
+        outgoing: context.KeyframeInterpolationType.HOLD,
+      };
+    };
+    sourceText.isInterpolationTypeValid = (type) => type !== context.KeyframeInterpolationType.HOLD;
+    sourceText.setInterpolationTypeAtKey = () => {
+      interpolationAssignments++;
+      throw new Error("Invalid interpolation type for this property.");
+    };
+    layer._interpolationAssignments = () => interpolationAssignments;
+    return layer;
+  };
+
+  const result = context.OBSIDIAN_executePlan("create_captions", captionPayload({
+    style: studioStyle({ animation: "typewriter" }),
+    segments: [{ text: "Stepped text", start: 0.2, end: 1.1 }],
+  }), "");
+
+  assert.match(result, /^OK\|Verified 1 timed caption layer/);
+  const sourceText = generated[0].property("ADBE Text Properties").property("ADBE Text Document");
+  assert.equal(generated[0]._interpolationAssignments(), 0);
+  assert.ok(sourceText._keys.every((key) =>
+    key.interpolation.incoming === context.KeyframeInterpolationType.HOLD &&
+    key.interpolation.outgoing === context.KeyframeInterpolationType.HOLD));
+  assert.equal(sourceText.valueAtTime(1.1, false).text, "Stepped text");
+});
+
+test("Caption Scale animation verifies X/Y when AE returns an extra hidden Z component for a 2D layer", () => {
+  const { context, comp, generated } = makeCaptionContext();
+  simulateAeThreeComponentScaleReadBack(comp, { layer3D: false, z: 100 });
+  const result = context.OBSIDIAN_executePlan("create_captions", captionPayload({
+    style: studioStyle({ animation: "pop" }),
+    segments: [{ text: "2D scale", start: 0.2, end: 1.1 }],
+  }), "");
+
+  assert.match(result, /^OK\|Verified 1 timed caption layer/);
+  const scale = generated[0].property("ADBE Transform Group").property("ADBE Scale");
+  assert.deepEqual(scale._keys.map(({ value }) => Array.from(value)), [
+    [78, 78, 100], [108, 108, 100], [100, 100, 100],
+  ]);
+});
+
+test("Caption Scale animation verifies X/Y and preserved Z independently on a genuine 3D layer", () => {
+  const { context, comp, generated } = makeCaptionContext();
+  simulateAeThreeComponentScaleReadBack(comp, { layer3D: true, z: 63 });
+  const result = context.OBSIDIAN_executePlan("create_captions", captionPayload({
+    style: studioStyle({ animation: "pop" }),
+    segments: [{ text: "3D scale", start: 0.2, end: 1.1 }],
+  }), "");
+
+  assert.match(result, /^OK\|Verified 1 timed caption layer/);
+  const scale = generated[0].property("ADBE Transform Group").property("ADBE Scale");
+  assert.deepEqual(scale._keys.map(({ value }) => Array.from(value)), [
+    [78, 78, 63], [108, 108, 63], [100, 100, 63],
+  ]);
+});
+
+test("Caption Scale animation rejects a changed 3D Z read-back and rolls back generated captions", () => {
+  const { context, comp, generated } = makeCaptionContext();
+  simulateAeThreeComponentScaleReadBack(comp, { layer3D: true, z: 63, corruptKey: 2 });
+  const result = context.OBSIDIAN_executePlan("create_captions", captionPayload({
+    style: studioStyle({ animation: "pop" }),
+    segments: [{ text: "3D scale", start: 0.2, end: 1.1 }],
+  }), "");
+
+  assert.match(result, /failed and 1 generated caption layer\(s\) were removed/);
+  assert.match(result, /animation\.key\[2\]\.value\[2\] requested preserved Z "63", actual "62"/);
+  assert.equal(generated.length, 1);
+  assert.equal(generated[0].removed, true);
+});
+
+test("Caption Scale animation still rejects an X/Y mismatch after normalizing the extra Z component", () => {
+  const { context, comp, generated } = makeCaptionContext();
+  simulateAeThreeComponentScaleReadBack(comp, { layer3D: false, z: 100, corruptKey: 2, corruptComponent: 0, corruptDelta: 1 });
+  const result = context.OBSIDIAN_executePlan("create_captions", captionPayload({
+    style: studioStyle({ animation: "pop" }),
+    segments: [{ text: "2D scale", start: 0.2, end: 1.1 }],
+  }), "");
+
+  assert.match(result, /failed and 1 generated caption layer\(s\) were removed/);
+  assert.match(result, /animation\.key\[2\]\.value\[0\] requested "108", actual "109"/);
+  assert.equal(generated[0].removed, true);
+});
+
+test("Caption Style Studio rejects unsupported styling before creating layers", () => {
+  const { context, generated } = makeCaptionContext();
+  const result = context.OBSIDIAN_executePlan("create_captions", captionPayload({
+    style: studioStyle({ animation: "raw_jsx" }),
+  }), "");
+  assert.match(result, /approved caption style is invalid/);
+  assert.equal(generated.length, 0);
 });

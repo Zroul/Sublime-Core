@@ -61,7 +61,7 @@ function streamingResponseCapture() {
   };
 }
 
-test("local transcription bounds media duration and microphone upload size", () => {
+test("local transcription bounds selected audio duration and microphone upload size", () => {
   assert.equal(MAX_MEDIA_SECONDS, 1800);
   assert.equal(MAX_VOICE_AUDIO_BYTES, 10 * 1024 * 1024);
 });
@@ -87,14 +87,20 @@ test("Whisper output is normalized and invalid timestamps are discarded", () => 
 test("transcription request returns local results from the injected local engine", async () => {
   const response = responseCapture();
   let pathValue;
+  let rangeValue;
   await handleTranscriptionRequest(
-    request("/transcribe", JSON.stringify({ path: "C:/local/clip.mp4" })),
+    request("/transcribe", JSON.stringify({ path: "C:/local/clip.mp4", range: {
+      sourceStartSeconds: 12,
+      sourceDurationSeconds: 45,
+      timelineDurationSeconds: 45,
+    } })),
     response,
     {
       send: response.send.bind(response),
       transcriber: {
-        async transcribeVideoPath(value) {
+        async transcribeVideoPath(value, options) {
           pathValue = value;
+          rangeValue = options.range;
           return { segments: [{ text: "Local speech.", start: 0, end: 1, words: [] }], duration: 1 };
         },
       },
@@ -104,12 +110,17 @@ test("transcription request returns local results from the injected local engine
   assert.equal(response.body.processing, "local");
   assert.equal(response.body.transcript.segments[0].text, "Local speech.");
   assert.equal(pathValue, "C:/local/clip.mp4");
+  assert.deepEqual(rangeValue, { sourceStartSeconds: 12, sourceDurationSeconds: 45, timelineDurationSeconds: 45 });
 });
 
 test("video transcription streams ordered stage starts/completions and its local transcript as NDJSON", async () => {
   const response = streamingResponseCapture();
   await handleTranscriptionRequest(
-    request("/transcribe", JSON.stringify({ path: "C:/local/clip.mp4" }), {
+    request("/transcribe", JSON.stringify({ path: "C:/local/clip.mp4", range: {
+      sourceStartSeconds: 10,
+      sourceDurationSeconds: 45,
+      timelineDurationSeconds: 45,
+    } }), {
       origin: "file://",
       extensionId: "com.zroul.obsidian.smoketest.5611c73bb73c4b11bf3128ca8e64519e.panel",
     }),
@@ -165,7 +176,7 @@ test("Python worker progress lines are parsed and forwarded with the final trans
     child.kill = () => {};
     let stdout = "";
     if (args[0] === "-version") stdout = `${binary} version test`;
-    else if (binary === "ffprobe-test") stdout = JSON.stringify({ format: { duration: "1" }, streams: [{ codec_type: "audio" }] });
+    else if (binary === "ffprobe-test") stdout = JSON.stringify({ format: { duration: "9900" }, streams: [{ codec_type: "audio" }] });
     else if (binary === "python-test" && args[0] === "-c") stdout = "";
     else if (binary === "python-test" && args[1] === "--check") stdout = JSON.stringify({ verified: true });
     else if (binary === "ffmpeg-test") writeFileSync(args[args.length - 1], "wav fixture");
@@ -197,12 +208,70 @@ test("Python worker progress lines are parsed and forwarded with the final trans
       spawnProcess,
     });
     const events = [];
-    const result = await transcriber.transcribeVideoPath(mediaPath, { onProgress: (event) => events.push(event) });
+    const range = { sourceStartSeconds: 5400, sourceDurationSeconds: 45, timelineDurationSeconds: 45 };
+    const result = await transcriber.transcribeVideoPath(mediaPath, { range, onProgress: (event) => events.push(event) });
     assert.equal(result.segments[0].text, "Local speech.");
+    assert.equal(result.duration, 45);
     assert.deepEqual(events.filter((event) => event.type === "progress"), [
       { type: "progress", stage: "transcribing", current: 37, total: 100 },
     ]);
     assert.ok(calls.some(({ binary, args }) => binary === "python-test" && args[1] === "--progress"));
+    const extraction = calls.find(({ binary, args }) => binary === "ffmpeg-test" && args.includes("-i"));
+    assert.ok(extraction);
+    assert.equal(extraction.args[extraction.args.indexOf("-ss") + 1], "5400");
+    assert.equal(extraction.args[extraction.args.indexOf("-t") + 1], "45");
+    assert.equal(extraction.args[extraction.args.indexOf("-i") + 1], mediaPath);
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+test("video transcription rejects a selected segment over 30 minutes before FFmpeg or Whisper", async () => {
+  const directory = await mkdtemp(join(tmpdir(), "obsidian-range-limit-test-"));
+  const mediaPath = join(directory, "clip.mp4");
+  await writeFile(mediaPath, "disposable media fixture");
+  const calls = [];
+  const spawnProcess = (binary, args) => {
+    calls.push({ binary, args });
+    const child = new EventEmitter();
+    child.stdout = new PassThrough();
+    child.stderr = new PassThrough();
+    child.kill = () => {};
+    const stdout = args[0] === "-version"
+      ? `${binary} version test`
+      : binary === "ffprobe-test"
+        ? JSON.stringify({ format: { duration: "9900" }, streams: [{ codec_type: "audio" }] })
+        : "";
+    process.nextTick(() => {
+      child.stdout.end(stdout);
+      child.stderr.end();
+      setImmediate(() => child.emit("close", 0));
+    });
+    return child;
+  };
+  try {
+    const transcriber = createLocalTranscriber({
+      env: { OBSIDIAN_FFMPEG_PATH: "ffmpeg-test", OBSIDIAN_FFPROBE_PATH: "ffprobe-test" },
+      spawnProcess,
+    });
+    const missingRangeResponse = responseCapture();
+    await handleTranscriptionRequest(
+      request("/transcribe", JSON.stringify({ path: mediaPath })),
+      missingRangeResponse,
+      { send: missingRangeResponse.send.bind(missingRangeResponse), transcriber },
+    );
+    assert.equal(missingRangeResponse.status, 400);
+    assert.deepEqual(missingRangeResponse.body, {
+      error: "The selected timeline range is missing. Reselect the footage in After Effects and try again.",
+    });
+    await assert.rejects(
+      transcriber.transcribeVideoPath(mediaPath, {
+        range: { sourceStartSeconds: 0, sourceDurationSeconds: 1801, timelineDurationSeconds: 1801 },
+      }),
+      /selected timeline segment exceeds the 30-minute local captioning limit/i
+    );
+    assert.equal(calls.some(({ binary, args }) => binary === "ffmpeg-test" && args.includes("-i")), false);
+    assert.equal(calls.some(({ binary }) => binary === "python-test"), false);
   } finally {
     await rm(directory, { recursive: true, force: true });
   }

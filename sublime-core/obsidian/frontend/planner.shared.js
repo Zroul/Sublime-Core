@@ -12,6 +12,7 @@
     inspect_project: true,
     inspect_selection: true,
     inspect_caption_source: true,
+    inspect_caption_style: true,
     create_captions: true,
     set_opacity: true,
     reduce_opacity: true,
@@ -383,6 +384,10 @@
 
   function planCaptionCreation(segments, source, style) {
     var captions = root.OBSIDIANCaptions;
+    var studio = root.OBSIDIANCaptionStyleStudio;
+    var normalizedStyle = typeof style === "string"
+      ? (captions && captions.isStyle(style) ? style : null)
+      : (studio && studio.normalizeStyle(style));
     if (!captions || !source || typeof source !== "object" ||
         typeof source.path !== "string" || !source.path || source.path.length > 4096 ||
         typeof source.compName !== "string" || !source.compName || source.compName.length > 256 ||
@@ -391,11 +396,16 @@
         !isFinite(Number(source.startTime)) || !isFinite(Number(source.stretch)) || Number(source.stretch) <= 0 ||
         !isFinite(Number(source.frameRate)) || Number(source.frameRate) <= 0 ||
         !isFinite(Number(source.compDuration)) || !isFinite(Number(source.compWidth)) ||
-        !isFinite(Number(source.compHeight)) || !captions.isStyle(style)) {
+        !isFinite(Number(source.compHeight)) || !normalizedStyle) {
       return { status: "needs_clarification", question: "The selected footage information or caption style is invalid. Inspect the source again before creating captions." };
     }
     var checked = captions.validateSegments(segments, Number(source.outPoint));
     if (!checked.ok) return { status: "needs_clarification", question: checked.error };
+    if (typeof normalizedStyle !== "string") {
+    var fittedStyle = studio.fitStyle(normalizedStyle, checked.segments, Number(source.compWidth));
+      if (!fittedStyle.ok) return { status: "needs_clarification", question: fittedStyle.error };
+      normalizedStyle = fittedStyle.style;
+    }
     for (var i = 0; i < checked.segments.length; i++) {
       if (checked.segments[i].start < Number(source.inPoint) - 0.001 ||
           checked.segments[i].end > Number(source.outPoint) + 0.001 ||
@@ -422,7 +432,7 @@
           compHeight: Number(source.compHeight)
         },
         segments: checked.segments,
-        style: style
+        style: normalizedStyle
       },
       "Create " + checked.segments.length + " new timed caption text layer(s) in one undoable operation. The host rechecks the selected footage, validates every time range, applies the chosen fixed style, and reads each layer back."
     );
@@ -438,10 +448,18 @@
         !isFinite(Number(args.source.startTime)) || !isFinite(Number(args.source.stretch)) || Number(args.source.stretch) <= 0 ||
         !isFinite(Number(args.source.frameRate)) || !isFinite(Number(args.source.compDuration)) ||
         !isFinite(Number(args.source.compWidth)) || !isFinite(Number(args.source.compHeight)) ||
-        !root.OBSIDIANCaptions || !root.OBSIDIANCaptions.isStyle(args.style)) return false;
+        !root.OBSIDIANCaptions ||
+        !(root.OBSIDIANCaptions.isStyle(args.style) ||
+          (root.OBSIDIANCaptionStyleStudio && root.OBSIDIANCaptionStyleStudio.normalizeStyle(args.style)))) return false;
     var checked = root.OBSIDIANCaptions.validateSegments(args.segments, Number(args.source.outPoint));
     if (!checked.ok) return false;
-    return checked.segments.every(function (segment) {
+    var styleValid = root.OBSIDIANCaptions.isStyle(args.style);
+    if (!styleValid) {
+      var style = root.OBSIDIANCaptionStyleStudio.normalizeStyle(args.style);
+      var fit = style && root.OBSIDIANCaptionStyleStudio.fitStyle(style, checked.segments, Number(args.source.compWidth));
+      styleValid = Boolean(fit && fit.ok && Math.abs(fit.style.fontSize - style.fontSize) < 0.05);
+    }
+    return styleValid && checked.segments.every(function (segment) {
       return segment.start >= Number(args.source.inPoint) - 0.001 &&
         segment.end <= Number(args.source.outPoint) + 0.001 &&
         segment.end <= Number(args.source.compDuration) + 0.001;
@@ -464,6 +482,7 @@
         isFinite(plan.args.value) && plan.args.value >= 0 && plan.args.value <= 1000);
     }
     if (plan.action === "create_captions") return isValidCaptionPlan(plan);
+    if (plan.action === "inspect_caption_style") return Boolean(plan.args && plan.args.readOnly === true);
     if (plan.action === "add_glow") {
       return Boolean(plan.args &&
         (plan.args.profile === "cinematic" || plan.args.profile === "attention"));
@@ -474,6 +493,9 @@
   root.OBSIDIANPlanner = {
     planObsidianCommand: planObsidianCommand,
     isExecutablePlan: isExecutablePlan,
-    planCaptionCreation: planCaptionCreation
+    planCaptionCreation: planCaptionCreation,
+    planCaptionStyleInspection: function () {
+      return result("inspect_caption_style", { readOnly: true }, "Read the selected After Effects text layer's style and animation metadata. This inspection does not edit the project.");
+    }
   };
 }(typeof globalThis !== "undefined" ? globalThis : this));

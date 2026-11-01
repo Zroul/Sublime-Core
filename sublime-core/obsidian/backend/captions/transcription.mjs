@@ -258,7 +258,7 @@ export function createLocalTranscriber({ env = process.env, spawnProcess = spawn
   }
 
   async function assertAudioTrack(inputPath, { signal, onProgress } = {}) {
-    reportStage(onProgress, "start", "validating", "Checking media accessibility, audio track, and duration limits.");
+    reportStage(onProgress, "start", "validating", "Checking media accessibility, audio track, and source duration.");
     const ffprobe = await getFfprobe();
     const probe = await runProcess(ffprobe, [
       "-v", "error", "-show_entries", "format=duration:stream=codec_type", "-of", "json", inputPath,
@@ -272,19 +272,47 @@ export function createLocalTranscriber({ env = process.env, spawnProcess = spawn
     }
     const duration = Number(details.format?.duration);
     if (!Number.isFinite(duration) || duration <= 0) throw new TranscriptionError(415, "The selected media has no usable duration.");
-    if (duration > MAX_MEDIA_SECONDS) throw new TranscriptionError(413, "Local captioning currently supports media up to 30 minutes.");
     return duration;
   }
 
-  async function transcribeAudioFile(inputPath, inputDuration = null, { signal, onProgress } = {}) {
+  function validateVideoRange(range, sourceDuration) {
+    if (!range || typeof range !== "object" || Array.isArray(range)) {
+      throw new TranscriptionError(400, "The selected timeline range is missing. Reselect the footage in After Effects and try again.");
+    }
+    const sourceStartSeconds = range.sourceStartSeconds;
+    const sourceDurationSeconds = range.sourceDurationSeconds;
+    const timelineDurationSeconds = range.timelineDurationSeconds;
+    if (typeof sourceStartSeconds !== "number" || !Number.isFinite(sourceStartSeconds) || sourceStartSeconds < 0 ||
+        typeof sourceDurationSeconds !== "number" || !Number.isFinite(sourceDurationSeconds) || sourceDurationSeconds <= 0 ||
+        typeof timelineDurationSeconds !== "number" || !Number.isFinite(timelineDurationSeconds) || timelineDurationSeconds <= 0) {
+      throw new TranscriptionError(400, "The selected timeline range has invalid source or composition timing.");
+    }
+    if (timelineDurationSeconds > MAX_MEDIA_SECONDS || sourceDurationSeconds > MAX_MEDIA_SECONDS) {
+      throw new TranscriptionError(413, "The selected timeline segment exceeds the 30-minute local captioning limit.");
+    }
+    if (sourceStartSeconds + sourceDurationSeconds > sourceDuration + 0.001) {
+      throw new TranscriptionError(422, "The selected timeline range extends beyond the source media duration; trim the layer to available footage.");
+    }
+    return { sourceStartSeconds, sourceDurationSeconds, timelineDurationSeconds };
+  }
+
+  async function transcribeAudioFile(inputPath, inputDuration = null, { signal, onProgress, range } = {}) {
     const duration = inputDuration ?? await assertAudioTrack(inputPath, { signal, onProgress });
+    const selectedRange = range || { sourceStartSeconds: 0, sourceDurationSeconds: duration };
+    if (selectedRange.sourceDurationSeconds > MAX_MEDIA_SECONDS) {
+      throw new TranscriptionError(413, "Local captioning currently supports selected audio up to 30 minutes.");
+    }
     await assertLocalWhisperReady({ signal, onProgress });
     const directory = await mkdtemp(join(tmpdir(), "obsidian-captions-"));
     const wavPath = join(directory, "audio-16khz-mono.wav");
     try {
       reportStage(onProgress, "start", "extracting_audio", "Extracting mono 16 kHz audio locally with FFmpeg.");
       const ffmpeg = await getFfmpeg();
-      await runProcess(ffmpeg, ["-nostdin", "-v", "error", "-i", inputPath, "-vn", "-ac", "1", "-ar", "16000", "-f", "wav", wavPath], {
+      await runProcess(ffmpeg, [
+        "-nostdin", "-v", "error", "-ss", String(selectedRange.sourceStartSeconds),
+        "-i", inputPath, "-t", String(selectedRange.sourceDurationSeconds),
+        "-vn", "-ac", "1", "-ar", "16000", "-f", "wav", wavPath,
+      ], {
         timeoutMs: 3 * 60 * 1000,
         outputLimit: 32_000,
         spawnProcess,
@@ -309,7 +337,7 @@ export function createLocalTranscriber({ env = process.env, spawnProcess = spawn
       reportStage(onProgress, "start", "validating_captions", "Validating transcript text, phrase timing, and word timestamps.");
       const transcript = validateWhisperOutput(parsed);
       reportStage(onProgress, "complete", "validating_captions");
-      return { ...transcript, duration };
+      return { ...transcript, duration: selectedRange.sourceDurationSeconds };
     } finally {
       await rm(directory, { recursive: true, force: true });
     }
@@ -338,7 +366,7 @@ export function createLocalTranscriber({ env = process.env, spawnProcess = spawn
       catch (error) { status.ffprobe.error = error.message; }
       return status;
     },
-    async transcribeVideoPath(pathValue, { signal, onProgress } = {}) {
+    async transcribeVideoPath(pathValue, { range, signal, onProgress } = {}) {
       return withTranscriptionLock(signal, async () => {
         reportStage(onProgress, "start", "validating", "Validating the selected local media path and request limits.");
         if (typeof pathValue !== "string" || !pathValue.trim() || pathValue.length > 4_096) {
@@ -354,9 +382,10 @@ export function createLocalTranscriber({ env = process.env, spawnProcess = spawn
         } catch {
           throw new TranscriptionError(404, "The selected footage file is unavailable on this computer.");
         }
-        const duration = await assertAudioTrack(sourcePath, { signal, onProgress });
+        const sourceDuration = await assertAudioTrack(sourcePath, { signal, onProgress });
+        const selectedRange = validateVideoRange(range, sourceDuration);
         reportStage(onProgress, "complete", "validating");
-        return transcribeAudioFile(sourcePath, duration, { signal, onProgress });
+        return transcribeAudioFile(sourcePath, sourceDuration, { range: selectedRange, signal, onProgress });
       });
     },
 
@@ -376,6 +405,9 @@ export function createLocalTranscriber({ env = process.env, spawnProcess = spawn
         try {
           await writeFile(audioPath, bytes, { flag: "wx" });
           const duration = await assertAudioTrack(audioPath, { signal, onProgress });
+          if (duration > MAX_MEDIA_SECONDS) {
+            throw new TranscriptionError(413, "Local captioning currently supports recordings up to 30 minutes.");
+          }
           reportStage(onProgress, "complete", "validating");
           return await transcribeAudioFile(audioPath, duration, { signal, onProgress });
         } finally {
@@ -459,7 +491,7 @@ export async function handleTranscriptionRequest(request, response, { send, tran
       const options = { signal: controller.signal, onProgress: streaming ? writeEvent : undefined };
       const transcript = voice
         ? await transcriber.transcribeVoiceBase64(input?.mimeType, input?.audioBase64, options)
-        : await transcriber.transcribeVideoPath(input?.path, options);
+        : await transcriber.transcribeVideoPath(input?.path, { ...options, range: input?.range });
       if (streaming) {
         writeEvent({ type: "result", transcript, processing: "local" });
         if (!response.destroyed && !response.writableEnded) response.end();

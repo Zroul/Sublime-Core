@@ -3,6 +3,7 @@
   "use strict";
 
   var MAX_CAPTIONS = 400;
+  var MAX_TRANSCRIPTION_SECONDS = 30 * 60;
   var STYLES = ["clean", "bold", "yellow"];
 
   function timestamp(seconds) {
@@ -83,12 +84,45 @@
   }
 
   function mapTime(seconds, source, frameRate) {
-    var compTime = Number(source.startTime) + Number(seconds) * Number(source.stretch) / 100;
+    var compTime = Number(source.inPoint) + Number(seconds) * Number(source.stretch) / 100;
     var start = Math.max(Number(source.inPoint), compTime);
     var endLimit = Number(source.outPoint);
     if (start >= endLimit) return null;
     var frame = 1 / frameRate;
     return Math.round(start / frame) * frame;
+  }
+
+  function getTranscriptionRange(source) {
+    if (!source || typeof source !== "object") {
+      return { ok: false, error: "After Effects did not provide selected footage timing." };
+    }
+    var inPoint = Number(source.inPoint);
+    var outPoint = Number(source.outPoint);
+    var startTime = Number(source.startTime);
+    var stretch = Number(source.stretch);
+    if (![inPoint, outPoint, startTime, stretch].every(isFinite) || outPoint <= inPoint || stretch <= 0) {
+      return { ok: false, error: "The selected footage has unsupported or invalid timing." };
+    }
+    var timelineDurationSeconds = outPoint - inPoint;
+    var sourceStartSeconds = (inPoint - startTime) * 100 / stretch;
+    var sourceDurationSeconds = timelineDurationSeconds * 100 / stretch;
+    if (!isFinite(sourceStartSeconds) || !isFinite(sourceDurationSeconds) || sourceStartSeconds < -0.001 || sourceDurationSeconds <= 0) {
+      return { ok: false, error: "The selected timeline segment maps outside the source media or has unsupported timing." };
+    }
+    if (timelineDurationSeconds > MAX_TRANSCRIPTION_SECONDS) {
+      return { ok: false, error: "The selected timeline segment exceeds the 30-minute local captioning limit." };
+    }
+    if (sourceDurationSeconds > MAX_TRANSCRIPTION_SECONDS) {
+      return { ok: false, error: "The selected layer timing maps to more than 30 minutes of source audio. Shorten the selected segment or use a faster layer stretch." };
+    }
+    return {
+      ok: true,
+      range: {
+        sourceStartSeconds: Math.max(0, sourceStartSeconds),
+        sourceDurationSeconds: sourceDurationSeconds,
+        timelineDurationSeconds: timelineDurationSeconds
+      }
+    };
   }
 
   function toCaptionSegments(transcript, source, mode, frameRate) {
@@ -131,8 +165,8 @@
       var mediaStart = Math.max(0, Number(item.start));
       var mediaEnd = Number(item.end);
       var scale = stretch / 100;
-      var compStart = Math.max(Number(source.inPoint), Number(source.startTime) + mediaStart * scale);
-      var compEnd = Math.min(Number(source.outPoint), Number(source.startTime) + mediaEnd * scale);
+      var compStart = Math.max(Number(source.inPoint), Number(source.inPoint) + mediaStart * scale);
+      var compEnd = Math.min(Number(source.outPoint), Number(source.inPoint) + mediaEnd * scale);
       var start = Math.max(previousEnd, Math.round(compStart * fps) / fps);
       var end = Math.min(Number(source.outPoint), Math.round(compEnd * fps) / fps);
       if (end - start < 0.5 / fps) continue;
@@ -144,10 +178,12 @@
 
   root.OBSIDIANCaptions = {
     MAX_CAPTIONS: MAX_CAPTIONS,
+    MAX_TRANSCRIPTION_SECONDS: MAX_TRANSCRIPTION_SECONDS,
     STYLES: STYLES.slice(),
     formatSrt: formatSrt,
     parseSrt: parseSrt,
     validateSegments: validateSegments,
+    getTranscriptionRange: getTranscriptionRange,
     toCaptionSegments: toCaptionSegments,
     isStyle: function (style) { return STYLES.indexOf(style) !== -1; }
   };
