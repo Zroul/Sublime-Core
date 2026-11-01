@@ -70,7 +70,7 @@ A successful tool response confirms that a particular operation reported success
 
 LINEX now has a completion gate:
 - a requested change must produce a successful file write;
-- every changed file must then be read again;
+- every changed file must then be read again, and the actual text must exactly match the intended write;
 - a later edit invalidates the earlier read-back check;
 - failed writes do not count as completed work.
 
@@ -79,7 +79,7 @@ Tests provide another level of evidence:
 - **Integration test:** checks that multiple components work together.
 - **End-to-end test:** checks a complete user workflow.
 
-The LINEX self-tests cover path safety, nested file creation, and the completion gate. They do not replace OBSIDIAN application tests.
+The LINEX self-tests cover traversal and secret-path rejection, symlink escapes, nested file creation, and exact-content completion verification. They do not replace OBSIDIAN application tests.
 
 **Key lesson:** report exactly which checks ran. Never turn “I inspected the code” into “the tests passed.”
 
