@@ -37,7 +37,7 @@ See [LEARNING_GUIDE.md](./LEARNING_GUIDE.md) for the intern's explanations of LL
 
 ## Testing honesty
 
-The repository does not currently contain the OBSIDIAN host test file referenced by the original prototype. LINEX therefore does not advertise or invoke that nonexistent test command. `npm run linex:test` tests LINEX's own path handling and completion gate; it is not a substitute for an OBSIDIAN application test suite.
+The original prototype referenced `obsidian/backend/host/host.test.cjs`, but that exact path is absent on the LINEX feature branch. LINEX therefore does not advertise or invoke that unverified command. `npm run linex:test` tests LINEX's own path handling and completion gate; it is not a substitute for an OBSIDIAN application test suite.
 
 When changing OBSIDIAN code, LINEX must run relevant tests only if a real test suite is present and available. Otherwise it must re-read the changed files and clearly report that application tests were not run.
 
