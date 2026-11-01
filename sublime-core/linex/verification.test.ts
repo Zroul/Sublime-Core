@@ -52,8 +52,12 @@ test("mismatched read-back content does not satisfy verification", () => {
   assert.equal(gate.beforeToolCall(toolCall("done-right", "task_done")).block, false);
 });
 
-test("read-only tasks can finish without writing files", () => {
+test("read-only tasks block file writes and can finish without changes", () => {
   const gate = createLinexVerificationGate("Inspect the project and report findings. Do not edit files.");
+  assert.equal(
+    gate.beforeToolCall(toolCall("write", "obsidian_edit_file", { path: "app.js", content: "bad" })).block,
+    true,
+  );
   assert.equal(gate.beforeToolCall(toolCall("done", "task_done")).block, false);
 });
 
