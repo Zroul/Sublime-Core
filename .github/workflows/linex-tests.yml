@@ -1,0 +1,32 @@
+name: LINEX tests
+
+on:
+  push:
+    branches:
+      - feat/linex-v1-audit-fixes
+    paths:
+      - "sublime-core/**"
+      - ".github/workflows/linex-tests.yml"
+  pull_request:
+    branches:
+      - feat/linex-coding-agent-v1
+    paths:
+      - "sublime-core/**"
+      - ".github/workflows/linex-tests.yml"
+
+jobs:
+  linex:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install dependencies
+        working-directory: sublime-core
+        run: npm install --no-audit --no-fund
+      - name: Compile TypeScript and run LINEX tests
+        working-directory: sublime-core
+        run: npm run linex:test
