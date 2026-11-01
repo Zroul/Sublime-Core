@@ -21,6 +21,16 @@ export function createLinexVerificationGate(task: string): LinexVerificationGate
 
   return {
     beforeToolCall(call) {
+      if (
+        explicitlyReadOnly &&
+        (call.name === "obsidian_create_file" || call.name === "obsidian_edit_file")
+      ) {
+        return {
+          block: true,
+          reason: "This task is explicitly read-only. File creation and editing are blocked.",
+        };
+      }
+
       if (call.name !== "task_done") return { block: false };
 
       if (requiresChanges && changedFiles.size === 0) {
