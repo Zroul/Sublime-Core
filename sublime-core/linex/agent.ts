@@ -203,31 +203,5 @@ export function createLinexTools(projectRoot: string): Tool[] {
     },
   };
 
-  const runHostTests: Tool = {
-    name: "obsidian_run_host_tests",
-    description: "Run the fixed OBSIDIAN host test suite. No arbitrary shell commands are accepted.",
-    parameters: { type: "object", properties: {}, required: [], additionalProperties: false },
-    async handler() {
-      const testPath = path.join(root, "backend", "host", "host.test.cjs");
-      try {
-        await fs.access(testPath);
-        const result = await execFileAsync(process.execPath, ["--test", testPath], {
-          cwd: path.dirname(root),
-          timeout: 45_000,
-          maxBuffer: 1_000_000,
-          windowsHide: true,
-        });
-        return [result.stdout.trim(), result.stderr.trim()].filter(Boolean).join("\n") || "Host tests passed with no output.";
-      } catch (error) {
-        const err = error as NodeJS.ErrnoException & { stdout?: string; stderr?: string; code?: number | string };
-        return {
-          toolCallId: "",
-          content: ["Host tests failed or could not run.", err.message ?? String(error), err.stdout, err.stderr].filter(Boolean).join("\n"),
-          isError: true,
-        };
-      }
-    },
-  };
-
-  return [listFiles, readFile, createFile, editFile, runHostTests];
+  return [listFiles, readFile, createFile, editFile];
 }
