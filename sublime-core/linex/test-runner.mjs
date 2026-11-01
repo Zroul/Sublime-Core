@@ -17,7 +17,7 @@ function runNode(args, label) {
 try {
   const compiler = path.join(root, "node_modules", "typescript", "bin", "tsc");
   runNode([compiler, "--outDir", outputDirectory, "--sourceMap", "false"], "TypeScript compilation");
-  await writeFile(path.join(outputDirectory, "package.json"), '{"type":"module"}\\n', "utf8");
+  await writeFile(path.join(outputDirectory, "package.json"), '{"type":"module"}\n', "utf8");
   runNode(["--test", path.join(outputDirectory, "linex", "agent.test.js")], "LINEX agent tests");
 } catch (error) {
   console.error(error instanceof Error ? error.stack ?? error.message : String(error));
