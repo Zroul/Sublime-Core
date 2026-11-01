@@ -5,6 +5,7 @@ import { OllamaProvider } from "../core/ai/providers/ollama.js";
 import { runReActLoop } from "../core/ai/reasoning/loop.js";
 import type { Message } from "../core/ai/reasoning/types.js";
 import { createLinexTools } from "./agent.js";
+import { createLinexVerificationGate } from "./verification.js";
 
 const MAX_TURNS = 8;
 const SYSTEM_PROMPT = `
@@ -12,9 +13,9 @@ You are LINEX, a restricted coding agent using the user's existing local CORE mo
 Your job is to help develop OBSIDIAN, not to start unrelated projects.
 Think carefully, then use tools to inspect the repository and verify any claimed changes.
 Only operate within the OBSIDIAN project using the provided tools.
-Never claim a file was changed unless a tool confirms it. Never claim tests passed unless the test tool ran successfully.
+Never claim a file was changed unless a tool confirms it. Never claim tests passed unless a test command actually ran successfully.
 Prefer the smallest change that directly advances the user's task. Read relevant files before editing.
-After editing, run the provided host tests when relevant. If a test fails, diagnose from its actual output and make at most two repair attempts.
+After editing, re-read every changed file and compare it with the intended result. If relevant project tests exist, run them; if they do not exist or cannot run, say so clearly. Do not invent a test command.
 Do not request or expose secrets. Do not attempt arbitrary shell execution, package installation, external publication, Git commits, pushes, merges, or deletion.
 If a task asks for something outside the available tools, explain the limitation rather than inventing a result.
 When finished, call task_done with a concise evidence-based summary, including files changed and test status.
@@ -22,9 +23,12 @@ When finished, call task_done with a concise evidence-based summary, including f
 
 export async function runLinexTask(task: string): Promise<void> {
   const repositoryRoot = process.cwd();
-  const projectRoot = path.join(repositoryRoot, "obsidian");
+  const projectPath = path.join(repositoryRoot, "obsidian");
+  let projectRoot = projectPath;
   try {
-    const stat = await import("node:fs/promises").then((fs) => fs.stat(projectRoot));
+    const fs = await import("node:fs/promises");
+    projectRoot = await fs.realpath(projectPath);
+    const stat = await fs.stat(projectRoot);
     if (!stat.isDirectory()) throw new Error("not a directory");
   } catch {
     throw new Error(`OBSIDIAN directory not found at ${projectRoot}. Run LINEX from the sublime-core repository root.`);
@@ -32,6 +36,7 @@ export async function runLinexTask(task: string): Promise<void> {
 
   const provider = new OllamaProvider();
   const messages: Message[] = [{ role: "user", content: task }];
+  const verificationGate = createLinexVerificationGate(task);
   console.log(`LINEX online. CORE model: ${process.env.OLLAMA_MODEL ?? "core"}`);
   console.log(`Scope: ${projectRoot}`);
   console.log(`Task budget: ${MAX_TURNS} turns\n`);
@@ -44,10 +49,13 @@ export async function runLinexTask(task: string): Promise<void> {
     maxTurns: MAX_TURNS,
     hooks: {
       beforeToolCall(call) {
+        const decision = verificationGate.beforeToolCall(call);
+        if (decision.block) return decision;
         console.log(`[TOOL] ${call.name}`);
         return { block: false };
       },
-      onToolResult(result) {
+      onToolResult(result, state) {
+        verificationGate.recordToolResult(result, state.messages);
         const preview = result.content.replace(/\s+/g, " ").slice(0, 220);
         console.log(`[${result.isError ? "ERROR" : "OBSERVE"}] ${preview}`);
       },

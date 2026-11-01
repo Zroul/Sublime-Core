@@ -12,7 +12,8 @@
   },
   "include": [
     "core/**/*.ts",
-    "app/**/*.ts"
+    "app/**/*.ts",
+    "linex/**/*.ts"
   ],
   "exclude": [
     "node_modules",

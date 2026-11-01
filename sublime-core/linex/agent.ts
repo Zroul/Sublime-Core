@@ -1,11 +1,8 @@
 import { promises as fs } from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { execFile } from "node:child_process";
-import { promisify } from "node:util";
 import type { Tool } from "../core/ai/reasoning/types.js";
 
-const execFileAsync = promisify(execFile);
 const BLOCKED_SEGMENTS = new Set([
   ".git",
   "node_modules",
@@ -22,6 +19,11 @@ function isInside(root: string, target: string): boolean {
   return relative === "" || (!relative.startsWith("..") && !path.isAbsolute(relative));
 }
 
+function isBlockedSegment(part: string): boolean {
+  const name = part.toLowerCase();
+  return BLOCKED_SEGMENTS.has(name) || /^\.env(?:$|\.)/.test(name) || /\.(?:pem|key|p12|pfx)$/i.test(name) || /^(?:id_rsa|id_ed25519|credentials(?:\..*)?|secrets(?:\..*)?)$/.test(name) || name === ".npmrc";
+}
+
 function validateRelativePath(input: unknown): string {
   if (typeof input !== "string" || !input.trim()) {
     throw new Error("A non-empty relative project path is required.");
@@ -31,7 +33,7 @@ function validateRelativePath(input: unknown): string {
     path.isAbsolute(input) ||
     normalizedInput.startsWith("/") ||
     /^[a-zA-Z]:/.test(normalizedInput) ||
-    normalizedInput.split("/").some((part) => part === ".." || BLOCKED_SEGMENTS.has(part.toLowerCase()))
+    normalizedInput.split("/").some((part) => part === ".." || isBlockedSegment(part))
   ) {
     throw new Error("Path rejected: use a relative path inside OBSIDIAN and avoid protected locations.");
   }
@@ -40,22 +42,39 @@ function validateRelativePath(input: unknown): string {
 
 export async function resolveObsidianPath(root: string, input: unknown, allowMissing = false): Promise<string> {
   const relative = validateRelativePath(input);
-  const candidate = path.resolve(root, relative);
-  if (!isInside(root, candidate) || candidate === root) {
+  const realRoot = await fs.realpath(root);
+  const candidate = path.resolve(realRoot, relative);
+  if (!isInside(realRoot, candidate) || candidate === realRoot) {
     throw new Error("Path rejected: operation must stay inside the OBSIDIAN project.");
   }
 
   try {
     const realCandidate = await fs.realpath(candidate);
-    if (!isInside(root, realCandidate) || realCandidate === root) {
+    if (!isInside(realRoot, realCandidate) || realCandidate === realRoot) {
       throw new Error("Path rejected: symlinks may not escape the OBSIDIAN project.");
     }
     return realCandidate;
   } catch (error) {
     if (!allowMissing || (error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
-    const parent = await fs.realpath(path.dirname(candidate));
-    if (!isInside(root, parent)) {
-      throw new Error("Path rejected: parent directory escapes OBSIDIAN.");
+
+    // A new file may be several directories deep. Walk upward to the nearest
+    // existing ancestor and verify its real path before allowing creation.
+    let ancestor = path.dirname(candidate);
+    while (true) {
+      try {
+        const realAncestor = await fs.realpath(ancestor);
+        if (!isInside(realRoot, realAncestor)) {
+          throw new Error("Path rejected: parent directory escapes OBSIDIAN.");
+        }
+        break;
+      } catch (ancestorError) {
+        if ((ancestorError as NodeJS.ErrnoException).code !== "ENOENT") throw ancestorError;
+        const parent = path.dirname(ancestor);
+        if (parent === ancestor) {
+          throw new Error("Path rejected: no existing parent inside OBSIDIAN was found.");
+        }
+        ancestor = parent;
+      }
     }
     return candidate;
   }
@@ -85,7 +104,7 @@ export function createLinexTools(projectRoot: string): Tool[] {
           if (depth > 8 || found.length >= 500) return;
           const entries = await fs.readdir(current, { withFileTypes: true });
           for (const entry of entries) {
-            if (BLOCKED_SEGMENTS.has(entry.name.toLowerCase())) continue;
+            if (isBlockedSegment(entry.name)) continue;
             const full = path.join(current, entry.name);
             if (entry.isSymbolicLink()) continue;
             if (entry.isDirectory()) await walk(full, depth + 1);
@@ -142,10 +161,11 @@ export function createLinexTools(projectRoot: string): Tool[] {
         if (Buffer.byteLength(content, "utf8") > MAX_WRITE_BYTES) throw new Error("File content exceeds the 300 KB limit.");
         const target = await resolveObsidianPath(root, args.path, true);
         await fs.mkdir(path.dirname(target), { recursive: true });
+        const realRoot = await fs.realpath(root);
         const parent = await fs.realpath(path.dirname(target));
-        if (!isInside(root, parent)) throw new Error("Parent directory escapes OBSIDIAN.");
+        if (!isInside(realRoot, parent)) throw new Error("Parent directory escapes OBSIDIAN.");
         await fs.writeFile(target, content, { encoding: "utf8", flag: "wx" });
-        return `Created ${path.relative(root, target)}.`;
+        return `Created ${path.relative(realRoot, target)}.`;
       } catch (error) {
         return { toolCallId: "", content: error instanceof Error ? error.message : String(error), isError: true };
       }
@@ -185,31 +205,5 @@ export function createLinexTools(projectRoot: string): Tool[] {
     },
   };
 
-  const runHostTests: Tool = {
-    name: "obsidian_run_host_tests",
-    description: "Run the fixed OBSIDIAN host test suite. No arbitrary shell commands are accepted.",
-    parameters: { type: "object", properties: {}, required: [], additionalProperties: false },
-    async handler() {
-      const testPath = path.join(root, "backend", "host", "host.test.cjs");
-      try {
-        await fs.access(testPath);
-        const result = await execFileAsync(process.execPath, ["--test", testPath], {
-          cwd: path.dirname(root),
-          timeout: 45_000,
-          maxBuffer: 1_000_000,
-          windowsHide: true,
-        });
-        return [result.stdout.trim(), result.stderr.trim()].filter(Boolean).join("\n") || "Host tests passed with no output.";
-      } catch (error) {
-        const err = error as NodeJS.ErrnoException & { stdout?: string; stderr?: string; code?: number | string };
-        return {
-          toolCallId: "",
-          content: ["Host tests failed or could not run.", err.message ?? String(error), err.stdout, err.stderr].filter(Boolean).join("\n"),
-          isError: true,
-        };
-      }
-    },
-  };
-
-  return [listFiles, readFile, createFile, editFile, runHostTests];
+  return [listFiles, readFile, createFile, editFile];
 }
