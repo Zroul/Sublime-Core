@@ -32,12 +32,12 @@ See [LEARNING_GUIDE.md](./LEARNING_GUIDE.md) for the intern's explanations of LL
 - Rejects absolute paths, parent traversal, protected directories, and symlink escapes.
 - Saves a copy of an existing file to the operating system's temporary directory before replacing it.
 - Has no arbitrary shell command, package installation, Git commit/push/merge, or delete tool.
-- A completion gate requires every file LINEX changed to be read again before it can call `task_done`.
+- A completion gate requires every changed file to be read again and compares the read-back text with the exact content LINEX intended to write before it can call `task_done`.
 - Each run is limited to 8 model turns.
 
 ## Testing honesty
 
-The repository does not currently contain the OBSIDIAN host test file referenced by the original prototype. LINEX therefore does not advertise or invoke that nonexistent test command. `npm run linex:test` tests LINEX's own path handling; it is not a substitute for an OBSIDIAN application test suite.
+The repository does not currently contain the OBSIDIAN host test file referenced by the original prototype. LINEX therefore does not advertise or invoke that nonexistent test command. `npm run linex:test` tests LINEX's own path handling and completion gate; it is not a substitute for an OBSIDIAN application test suite.
 
 When changing OBSIDIAN code, LINEX must run relevant tests only if a real test suite is present and available. Otherwise it must re-read the changed files and clearly report that application tests were not run.
 
