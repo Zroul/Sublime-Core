@@ -273,3 +273,133 @@ html, body { background:var(--aura-bg); color:var(--aura-text); }
 @keyframes panel-refresh-spin{to{transform:rotate(360deg)}}
 @media(max-width:300px){.panel-utility{align-items:flex-start;flex-direction:column}.panel-refresh-button{align-self:flex-end}}
 @media(prefers-reduced-motion:reduce){.panel-refresh-button[aria-busy="true"]:before{animation:none}}
+
+
+/* ===== OBSIDIAN glass-energy orb: visual-only refinement ===== */
+html, body, button, textarea, input, select {
+  font-family: "Segoe UI Variable Display", "Segoe UI Variable", "Aptos Display",
+    "Inter", "Segoe UI", system-ui, sans-serif;
+  font-weight: 550;
+}
+.brand, .welcome h1, .composer, .action-button, .panel-refresh-button,
+.caption-primary, .caption-tab, .style-animation-choice {
+  font-weight: 700;
+}
+.welcome h1 {
+  font-weight: 760 !important;
+  letter-spacing: -.025em !important;
+  text-shadow: 0 2px 18px rgba(0,0,0,.32) !important;
+}
+
+/* A true sphere: fixed circular silhouette, glass shell, internal spectrum. */
+.welcome-orb {
+  position: relative !important;
+  width: 104px !important;
+  height: 104px !important;
+  flex: 0 0 104px;
+  margin-bottom: 28px !important;
+  overflow: visible !important;
+  isolation: isolate;
+  border: 1px solid rgba(230,248,255,.58) !important;
+  border-radius: 50% !important;
+  background:
+    radial-gradient(ellipse at 29% 17%, rgba(255,255,255,.92) 0 2%, rgba(255,255,255,.28) 8%, transparent 24%),
+    radial-gradient(circle at 34% 27%, rgba(255,255,255,.16), transparent 39%),
+    radial-gradient(circle at 50% 55%, rgba(15,24,44,.12), rgba(4,8,18,.82) 76%),
+    linear-gradient(145deg, rgba(255,255,255,.20), rgba(120,155,190,.035) 48%, rgba(0,0,0,.48)) !important;
+  box-shadow:
+    inset 7px 8px 18px rgba(255,255,255,.22),
+    inset -12px -14px 24px rgba(0,0,0,.48),
+    0 0 0 1px rgba(255,255,255,.08),
+    0 10px 38px rgba(0,0,0,.48),
+    0 0 34px rgba(98,230,245,.16) !important;
+  animation: glass-orb-float 7s ease-in-out infinite !important;
+  transform: translateZ(0);
+  will-change: transform;
+}
+
+/* Internal colour wheel, clipped inside the glass sphere. */
+.welcome-orb:before {
+  content: "";
+  position: absolute;
+  z-index: -1;
+  inset: 13px !important;
+  border: 0 !important;
+  border-radius: 50% !important;
+  background:
+    conic-gradient(from 12deg,
+      #68e6ff 0deg,
+      #7d79ff 62deg,
+      #d77cff 125deg,
+      #ff8b9f 184deg,
+      #ffc36f 244deg,
+      #7df0c5 305deg,
+      #68e6ff 360deg);
+  opacity: .78;
+  filter: blur(8px) saturate(1.22);
+  animation: spectrum-drift 16s linear infinite !important;
+  box-shadow: 0 0 24px rgba(116,174,255,.22);
+}
+
+/* Glass reflection and inner depth. */
+.welcome-orb:after {
+  content: "";
+  position: absolute;
+  z-index: 3;
+  inset: 1px !important;
+  border: 1px solid rgba(255,255,255,.24) !important;
+  border-radius: 50% !important;
+  background:
+    radial-gradient(ellipse at 28% 16%, rgba(255,255,255,.78), transparent 18%),
+    radial-gradient(ellipse at 72% 82%, rgba(150,205,255,.12), transparent 34%),
+    linear-gradient(132deg, rgba(255,255,255,.12), transparent 36% 68%, rgba(0,0,0,.22));
+  box-shadow: inset 0 0 18px rgba(255,255,255,.10);
+  pointer-events: none;
+  animation: none !important;
+}
+
+/* Small luminous energy core travels through the spectrum. */
+.welcome-orb span {
+  position: absolute !important;
+  z-index: 2 !important;
+  top: 50%;
+  left: 50%;
+  width: 19px !important;
+  height: 19px !important;
+  margin: -9.5px 0 0 -9.5px;
+  border: 1px solid rgba(255,255,255,.8);
+  border-radius: 50% !important;
+  background:
+    radial-gradient(circle at 30% 24%, #fff 0 8%, #e7fbff 18%, #8cecff 42%, #8c8aff 72%, #d28cff 100%) !important;
+  box-shadow:
+    0 0 8px 3px rgba(255,255,255,.56),
+    0 0 20px 7px rgba(105,205,255,.48),
+    0 0 34px 10px rgba(173,117,255,.25) !important;
+  animation: energy-orbit 6.8s cubic-bezier(.45,.05,.55,.95) infinite !important;
+  will-change: transform;
+}
+
+@keyframes glass-orb-float {
+  0%,100% { transform: translateY(0) rotate(-2deg); }
+  50% { transform: translateY(-5px) rotate(2deg); }
+}
+@keyframes spectrum-drift {
+  to { transform: rotate(360deg) scale(1.06); }
+}
+@keyframes energy-orbit {
+  0%   { transform: translate(0,-20px) scale(.92); }
+  25%  { transform: translate(19px,-2px) scale(1.08); }
+  50%  { transform: translate(1px,19px) scale(.96); }
+  75%  { transform: translate(-18px,1px) scale(1.12); }
+  100% { transform: translate(0,-20px) scale(.92); }
+}
+@media (max-width:360px) {
+  .welcome-orb { width:88px !important; height:88px !important; flex-basis:88px; }
+  .welcome-orb span { animation-duration:7.8s !important; }
+}
+@media (prefers-reduced-motion:reduce) {
+  .welcome-orb, .welcome-orb:before, .welcome-orb span {
+    animation:none !important;
+  }
+}
+/* ===== end glass-energy orb refinement ===== */
