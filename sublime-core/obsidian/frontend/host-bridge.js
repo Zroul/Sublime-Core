@@ -8,6 +8,7 @@
   "use strict";
 
   var DEFAULT_TIMEOUT_MS = 30000;
+  var CAPTION_CREATION_TIMEOUT_MS = 5 * 60 * 1000;
   var MAX_CAPTION_PAYLOAD_LENGTH = 1000000;
 
   function buildExpression(action, value) {
@@ -92,5 +93,9 @@
     });
   }
 
-  return { buildExpression: buildExpression, execute: execute };
+  return {
+    buildExpression: buildExpression,
+    execute: execute,
+    CAPTION_CREATION_TIMEOUT_MS: CAPTION_CREATION_TIMEOUT_MS
+  };
 }));

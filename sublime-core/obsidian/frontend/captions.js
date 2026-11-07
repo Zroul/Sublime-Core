@@ -2,7 +2,7 @@
 (function (root) {
   "use strict";
 
-  var MAX_CAPTIONS = 400;
+  var MAX_CAPTIONS = 1000;
   var MAX_TRANSCRIPTION_SECONDS = 30 * 60;
   var STYLES = ["clean", "bold", "yellow"];
 
@@ -57,7 +57,7 @@
       var text = item && typeof item.text === "string" ? item.text.replace(/[\r\n]+/g, " ").replace(/\s+/g, " ").trim() : "";
       var start = Number(item && item.start);
       var end = Number(item && item.end);
-      if (!text || text.length > 140 || !isFinite(start) || !isFinite(end) || start < 0 || end <= start || end > maxDuration + 0.001) {
+      if (!text || !isFinite(start) || !isFinite(end) || start < 0 || end <= start || end > maxDuration + 0.001) {
         return { ok: false, error: "Caption " + (i + 1) + " has invalid text or timing." };
       }
       if (start < previousEnd - 0.001) return { ok: false, error: "Caption " + (i + 1) + " overlaps the previous caption." };

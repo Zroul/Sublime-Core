@@ -8,6 +8,17 @@ const source = fs.readFileSync(path.join(__dirname, "../../frontend/host-bridge.
 vm.runInNewContext(source, sandbox, { filename: "host-bridge.js" });
 const { buildExpression, execute } = sandbox.module.exports;
 
+test("caption source inspection passes through the bridge as its registered typed action", () => {
+  const expression = buildExpression("inspect_caption_source", null);
+  assert.equal(expression, 'OBSIDIAN_executePlan("inspect_caption_source",null,"",null)');
+  const result = vm.runInNewContext(expression, {
+    OBSIDIAN_executePlan: (action, value, profile, secondaryValue) => ({ action, value, profile, secondaryValue }),
+  });
+  assert.deepEqual(JSON.parse(JSON.stringify(result)), {
+    action: "inspect_caption_source", value: null, profile: "", secondaryValue: null,
+  });
+});
+
 test("caption bridge embeds a structured payload and preserves timing and text", () => {
   const payload = {
     source: { path: "C:/mock/clip.mp4", layerIndex: 1 },
@@ -27,7 +38,11 @@ test("caption bridge embeds a structured payload and preserves timing and text",
 
 test("caption bridge retains the one-megacharacter bound", () => {
   assert.throws(
-    () => buildExpression("create_captions", { source: "x".repeat(1000001) }),
+    () => buildExpression("create_captions", {
+      source: { path: "C:/mock/clip.mp4" },
+      style: "clean",
+      segments: [{ text: "x".repeat(1000001), start: 0, end: 1 }],
+    }),
     /1,000,000-character safe transport limit/
   );
   assert.throws(() => buildExpression("create_captions", "{}"), /structured object/);
@@ -60,6 +75,21 @@ test("phrase and word caption modes transfer realistic ordered payloads without 
   });
 });
 
+test("caption bridge transports complete caption text longer than the former character limit", () => {
+  const text = "a complete reviewed caption word ".repeat(350);
+  const payload = {
+    source: { path: "C:/mock/clip.mp4" },
+    style: "clean",
+    segments: [{ text, start: 0, end: 5 }],
+  };
+  const expression = buildExpression("create_captions", payload);
+  const received = vm.runInNewContext(expression, {
+    OBSIDIAN_executePlan: (action, args) => ({ action, args }),
+  });
+  assert.equal(received.args.segments[0].text, text);
+  assert.ok(expression.length < 1000000);
+});
+
 test("maximum allowed caption payload stays within the existing safe transport bound", () => {
   const payload = {
     source: {
@@ -78,10 +108,10 @@ test("maximum allowed caption payload stays within the existing safe transport b
       compHeight: 1080,
     },
     style: "clean",
-    segments: Array.from({ length: 400 }, (_, index) => ({
+    segments: Array.from({ length: 1000 }, (_, index) => ({
       text: "x".repeat(140),
-      start: index * 0.1,
-      end: (index + 1) * 0.1,
+      start: index * 0.04,
+      end: (index + 1) * 0.04,
     })),
   };
   const expression = buildExpression("create_captions", payload);
@@ -89,9 +119,9 @@ test("maximum allowed caption payload stays within the existing safe transport b
   const received = vm.runInNewContext(expression, {
     OBSIDIAN_executePlan: (action, args) => ({ action, args }),
   });
-  assert.equal(received.args.segments.length, 400);
-  assert.equal(received.args.segments[399].text, "x".repeat(140));
-  assert.equal(received.args.segments[399].end, 40);
+  assert.equal(received.args.segments.length, 1000);
+  assert.equal(received.args.segments[999].text, "x".repeat(140));
+  assert.equal(received.args.segments[999].end, 40);
 });
 
 test("caption bridge escapes legacy ExtendScript line-separator characters", () => {

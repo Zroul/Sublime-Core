@@ -84,6 +84,24 @@ test("Whisper output is normalized and invalid timestamps are discarded", () => 
   assert.throws(() => validateWhisperOutput({ segments: new Array(5001) }), /oversized transcript/);
 });
 
+test("Whisper normalization preserves long segment and word text without arbitrary character caps", () => {
+  const longSegmentText = "longrecognizedword".repeat(140);
+  const longWordText = "recognizedword".repeat(12);
+  const result = validateWhisperOutput({
+    duration: 2,
+    segments: [{
+      text: longSegmentText,
+      start: 0,
+      end: 2,
+      words: [{ text: longWordText, start: 0, end: 2 }],
+    }],
+  });
+
+  assert.equal(result.segments.length, 1);
+  assert.equal(result.segments[0].text, longSegmentText);
+  assert.equal(result.segments[0].words[0].text, longWordText);
+});
+
 test("transcription request returns local results from the injected local engine", async () => {
   const response = responseCapture();
   let pathValue;

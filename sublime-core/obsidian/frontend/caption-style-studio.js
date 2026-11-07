@@ -4,8 +4,9 @@
 
   var ANIMATIONS = ["none", "fade", "pop", "smooth_scale", "slide", "typewriter", "word_emphasis"];
   var ALIGNMENTS = ["left", "center", "right"];
-  var MIN_FONT_SIZE = 10;
-  var MAX_FONT_SIZE = 180;
+  /* Match After Effects TextDocument.fontSize's supported pixel range. */
+  var MIN_FONT_SIZE = 0.1;
+  var MAX_FONT_SIZE = 1296;
 
   function color(value) {
     if (!Array.isArray(value) || value.length !== 3) return null;
@@ -50,25 +51,127 @@
     };
   }
 
-  /* One batch-wide size is chosen from its longest caption so layer styling stays uniform. */
-  function fitStyle(style, segments, compWidth) {
+  function characterWidthUnits(character) {
+    if (/\s/.test(character)) return 0.32;
+    if (/[ilI1|!.,'`:;]/.test(character)) return 0.31;
+    if (/[MW@#%&]/.test(character)) return 0.88;
+    var code = character.charCodeAt(0);
+    if (code > 255) return 0.96;
+    if (/[A-Z0-9]/.test(character)) return 0.66;
+    return 0.55;
+  }
+
+  function prepareCaptionWords(text) {
+    var words = String(text || "").trim().split(/\s+/);
+    if (!words.length || !words[0]) return [];
+    return words.map(function (word) {
+      var units = 0;
+      for (var i = 0; i < word.length; i++) units += characterWidthUnits(word.charAt(i));
+      return units;
+    });
+  }
+
+  function wrappedLineCount(words, width, fontSize) {
+    var capacity = width / fontSize;
+    var lines = 1;
+    var used = 0;
+    for (var i = 0; i < words.length; i++) {
+      if (words[i] > capacity + 0.001) return { ok: false, lines: lines, reason: "word_width" };
+      var next = used ? used + 0.32 + words[i] : words[i];
+      if (used && next > capacity) {
+        lines++;
+        used = words[i];
+      } else {
+        used = next;
+      }
+    }
+    return { ok: true, lines: lines };
+  }
+
+  function availableCaptionWidth(compWidth, positionX, alignment) {
+    var left = Number(compWidth) * Number(positionX);
+    var right = Number(compWidth) * (1 - Number(positionX));
+    var safeMargin = Number(compWidth) * 0.02;
+    if (alignment === "left") return Math.floor(right - safeMargin);
+    if (alignment === "right") return Math.floor(left - safeMargin);
+    return Math.floor(2 * Math.min(left - safeMargin, right - safeMargin));
+  }
+
+  /* Fit the complete batch as one style, wrapping at word boundaries before reducing size. */
+  function fitStyle(style, segments, compWidth, compHeight) {
     var normalized = normalizeStyle(style);
     var width = Number(compWidth);
-    if (!normalized || !Array.isArray(segments) || !isFinite(width) || width <= 0) {
-      return { ok: false, error: "Caption style or composition width is invalid." };
+    var height = Number(compHeight);
+    if (!isFinite(height) || height <= 0) height = width * 9 / 16;
+    if (!normalized || !Array.isArray(segments) || !isFinite(width) || width <= 0 || !isFinite(height) || height <= 0) {
+      return { ok: false, error: "Caption style or composition dimensions are invalid." };
     }
+    var captions = [];
     var longest = 0;
+    var failureIndex = -1;
+    var failureReason = "";
     for (var i = 0; i < segments.length; i++) {
       var text = segments[i] && typeof segments[i].text === "string" ? segments[i].text : "";
+      var words = prepareCaptionWords(text);
+      if (!words.length) return { ok: false, error: "Caption " + (i + 1) + " has no text to fit." };
       longest = Math.max(longest, text.length);
+      captions.push(words);
     }
-    if (!longest) return { ok: false, error: "No caption text is available for style fitting." };
-    var fittedSize = Math.min(normalized.fontSize, (width * 0.9) / (longest * 0.56));
-    if (fittedSize < normalized.minFontSize) {
-      return { ok: false, error: "The longest caption cannot fit the composition at the approved minimum font size. Shorten the caption text or lower the minimum size." };
+    if (!captions.length) return { ok: false, error: "No caption text is available for style fitting." };
+
+    var boxWidth = availableCaptionWidth(width, normalized.positionX, normalized.alignment);
+    var availableHeight = Math.floor(Math.min(height * 0.38, height * (normalized.positionY >= 0.5 ? normalized.positionY - 0.02 : 0.98 - normalized.positionY)));
+    if (boxWidth <= 0) return { ok: false, error: "The selected caption alignment and position leave no usable composition width." };
+    function fitsAt(fontSize) {
+      var lineCounts = [];
+      var maxLines = 0;
+      for (var captionIndex = 0; captionIndex < captions.length; captionIndex++) {
+        var wrapped = wrappedLineCount(captions[captionIndex], boxWidth, fontSize);
+        if (!wrapped.ok || wrapped.lines * fontSize * 1.2 > availableHeight + 0.01) {
+          failureIndex = captionIndex;
+          failureReason = wrapped.reason || "height";
+          return null;
+        }
+        lineCounts.push(wrapped.lines);
+        maxLines = Math.max(maxLines, wrapped.lines);
+      }
+      return { lineCounts: lineCounts, maxLines: maxLines };
     }
-    normalized.fontSize = Math.round(fittedSize * 10) / 10;
-    return { ok: true, style: normalized, longestCaptionLength: longest };
+
+    var minimumFit = fitsAt(normalized.minFontSize);
+    if (!minimumFit) {
+      var reason = failureReason === "word_width" ? "A word in caption " + (failureIndex + 1) + " exceeds the available composition width" :
+        "Caption " + (failureIndex + 1) + " exceeds the available composition height";
+      return {
+        ok: false,
+        error: reason + " at the selected auto-fit floor of " + normalized.minFontSize + " px. Increase the composition area, move the caption position, or lower the auto-fit floor. No text was discarded."
+      };
+    }
+
+    var fittedSize = normalized.fontSize;
+    var fitted = fitsAt(fittedSize);
+    if (!fitted) {
+      var low = normalized.minFontSize;
+      var high = normalized.fontSize;
+      for (var iteration = 0; iteration < 20; iteration++) {
+        var middle = (low + high) / 2;
+        if (fitsAt(middle)) low = middle;
+        else high = middle;
+      }
+      fittedSize = Math.max(normalized.minFontSize, Math.floor(low * 10) / 10);
+      fitted = fitsAt(fittedSize) || minimumFit;
+    }
+    normalized.fontSize = fittedSize;
+    return {
+      ok: true,
+      style: normalized,
+      longestCaptionLength: longest,
+      boxWidth: boxWidth,
+      boxHeight: availableHeight,
+      maxLines: fitted.maxLines,
+      lineCounts: fitted.lineCounts,
+      verticalAnchor: normalized.positionY >= 0.5 ? "bottom" : "top"
+    };
   }
 
   function fromHex(hex) {

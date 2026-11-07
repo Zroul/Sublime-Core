@@ -4,6 +4,18 @@
  * Inspect commands are read-only. Editing commands use undo groups and verify read-back.
  */
 
+/* Trusted, data-only definitions are registered here as they are approved for migration.
+ * The frontend can request an ID and bounded parameters, never a definition or host code.
+ */
+var OBSIDIAN_ANIMATION_DEFINITIONS = {};
+var OBSIDIAN_ANIMATION_MAX_LAYERS = 64;
+var OBSIDIAN_ANIMATION_MAX_TRACKS = 32;
+var OBSIDIAN_ANIMATION_MAX_KEYS_PER_TRACK = 128;
+var OBSIDIAN_ANIMATION_MAX_GENERATED_KEYS = 8192;
+var OBSIDIAN_ANIMATION_MAX_DURATION_SECONDS = 600;
+var OBSIDIAN_ANIMATION_KEY_TIME_TOLERANCE = 0.001;
+var OBSIDIAN_ANIMATION_BOUNDARY_TOLERANCE_FRAMES = 0.000001;
+
 function OBSIDIAN_getActiveComp() {
     var item = app.project ? app.project.activeItem : null;
     return item && item instanceof CompItem ? item : null;
@@ -141,7 +153,7 @@ function OBSIDIAN_inspectCaptionStyle() {
             (document.applyStroke ? "1" : "0") + "|" + Number(strokeValue[0]) + "|" + Number(strokeValue[1]) + "|" + Number(strokeValue[2]) + "|" +
             Number(document.strokeWidth) + "|" + alignment + "|" + Number(positionValue[0]) / Number(comp.width) + "|" +
             Number(positionValue[1]) / Number(comp.height) + "|" + Number(anchorValue[0] || 0) + "|" + Number(anchorValue[1] || 0) + "|" +
-            OBSIDIAN_escapeCaptionField(String(document.text || "").substring(0, 140)) + "|" + OBSIDIAN_escapeCaptionField(effects) + "|" +
+            OBSIDIAN_escapeCaptionField(String(document.text || "")) + "|" + OBSIDIAN_escapeCaptionField(effects) + "|" +
             OBSIDIAN_escapeCaptionField("Opacity: " + OBSIDIAN_captionKeyframeSummary(OBSIDIAN_styleProperty(layer, "ADBE Opacity")) +
                 " | Scale: " + OBSIDIAN_captionKeyframeSummary(OBSIDIAN_styleProperty(layer, "ADBE Scale")) +
                 " | Position: " + OBSIDIAN_captionKeyframeSummary(position) +
@@ -184,31 +196,157 @@ function OBSIDIAN_inspectCaptionSource() {
         OBSIDIAN_escapeCaptionField(comp.name);
 }
 
+function OBSIDIAN_captionCharacterWidthUnits(character) {
+    if (/\s/.test(character)) return 0.32;
+    if (/[ilI1|!.,'`:;]/.test(character)) return 0.31;
+    if (/[MW@#%&]/.test(character)) return 0.88;
+    var code = character.charCodeAt(0);
+    if (code > 255) return 0.96;
+    if (/[A-Z0-9]/.test(character)) return 0.66;
+    return 0.55;
+}
+
+function OBSIDIAN_captionWordWidths(text) {
+    var source = String(text || "").replace(/^\s+|\s+$/g, "");
+    if (!source) return [];
+    var tokens = source.split(/\s+/);
+    var widths = [];
+    for (var tokenIndex = 0; tokenIndex < tokens.length; tokenIndex++) {
+        var width = 0;
+        for (var characterIndex = 0; characterIndex < tokens[tokenIndex].length; characterIndex++) {
+            width += OBSIDIAN_captionCharacterWidthUnits(tokens[tokenIndex].charAt(characterIndex));
+        }
+        widths.push(width);
+    }
+    return widths;
+}
+
+function OBSIDIAN_captionWrapMetrics(wordWidths, boxWidth, fontSize) {
+    var capacity = Number(boxWidth) / Number(fontSize);
+    var lineCount = 1;
+    var used = 0;
+    for (var i = 0; i < wordWidths.length; i++) {
+        if (wordWidths[i] > capacity + 0.001) return { ok: false, lineCount: lineCount, reason: "word_width" };
+        var next = used ? used + 0.32 + wordWidths[i] : wordWidths[i];
+        if (used && next > capacity) {
+            lineCount++;
+            used = wordWidths[i];
+        } else {
+            used = next;
+        }
+    }
+    return { ok: true, lineCount: lineCount };
+}
+
+function OBSIDIAN_measureCaptionBatch(wordWidths, boxWidth, fontSize, maxHeight) {
+    var lineCounts = [];
+    var maxLines = 0;
+    for (var i = 0; i < wordWidths.length; i++) {
+        var metrics = OBSIDIAN_captionWrapMetrics(wordWidths[i], boxWidth, fontSize);
+        if (!metrics.ok) return { ok: false, index: i, reason: metrics.reason };
+        if (metrics.lineCount * Number(fontSize) * 1.2 > Number(maxHeight) + 0.01) {
+            return { ok: false, index: i, reason: "height" };
+        }
+        lineCounts.push(metrics.lineCount);
+        maxLines = Math.max(maxLines, metrics.lineCount);
+    }
+    return { ok: true, lineCounts: lineCounts, maxLines: maxLines };
+}
+
+function OBSIDIAN_availableCaptionWidth(compWidth, positionX, alignment) {
+    var left = Number(compWidth) * Number(positionX);
+    var right = Number(compWidth) * (1 - Number(positionX));
+    var safeMargin = Number(compWidth) * 0.02;
+    if (alignment === "left") return Math.floor(right - safeMargin);
+    if (alignment === "right") return Math.floor(left - safeMargin);
+    return Math.floor(2 * Math.min(left - safeMargin, right - safeMargin));
+}
+
+function OBSIDIAN_fitCaptionBatch(segments, comp, fontSize, minFontSize, positionX, positionY, alignment) {
+    var width = OBSIDIAN_availableCaptionWidth(comp.width, positionX, alignment);
+    var height = Number(comp.height);
+    var availableHeight = Math.floor(Math.min(height * 0.38, height * (Number(positionY) >= 0.5 ? Number(positionY) - 0.02 : 0.98 - Number(positionY))));
+    if (!isFinite(width) || width <= 0 || !isFinite(height) || height <= 0 || availableHeight <= 0) {
+        return { ok: false, error: "The selected caption alignment and position leave no usable composition area for text." };
+    }
+    var wordWidths = [];
+    for (var i = 0; i < segments.length; i++) {
+        var words = OBSIDIAN_captionWordWidths(segments[i] && segments[i].text);
+        if (!words.length) return { ok: false, error: "Caption " + (i + 1) + " has no text to fit." };
+        wordWidths.push(words);
+    }
+    var minimum = Number(minFontSize);
+    var base = Number(fontSize);
+    var minimumFit = OBSIDIAN_measureCaptionBatch(wordWidths, width, minimum, availableHeight);
+    if (!minimumFit.ok) {
+        var reason = minimumFit.reason === "word_width" ? "A word in caption " + (minimumFit.index + 1) + " exceeds the available composition width" :
+            "Caption " + (minimumFit.index + 1) + " exceeds the available composition height";
+        return { ok: false, error: reason + " at the selected auto-fit floor of " + minimum + " px. Increase the composition area, move the caption position, or lower the auto-fit floor. No text was discarded." };
+    }
+    var fitted = OBSIDIAN_measureCaptionBatch(wordWidths, width, base, availableHeight);
+    var fittedSize = base;
+    if (!fitted.ok) {
+        var low = minimum;
+        var high = base;
+        for (var iteration = 0; iteration < 20; iteration++) {
+            var middle = (low + high) / 2;
+            if (OBSIDIAN_measureCaptionBatch(wordWidths, width, middle, availableHeight).ok) low = middle;
+            else high = middle;
+        }
+        fittedSize = Math.max(minimum, Math.floor(low * 10) / 10);
+        fitted = OBSIDIAN_measureCaptionBatch(wordWidths, width, fittedSize, availableHeight) || minimumFit;
+    }
+    return {
+        ok: true,
+        fontSize: fittedSize,
+        boxWidth: width,
+        boxHeight: availableHeight,
+        leading: fittedSize * 1.2,
+        lineCounts: fitted.lineCounts,
+        maxLines: fitted.maxLines,
+        verticalAnchor: Number(positionY) >= 0.5 ? "bottom" : "top"
+    };
+}
+
 function OBSIDIAN_captionStyle(style, comp, segments) {
     if (typeof style === "string") {
         var normalized = String(style || "");
         if (normalized !== "clean" && normalized !== "bold" && normalized !== "yellow") return null;
         var fill = normalized === "yellow" ? [1, 0.86, 0.08] : [1, 1, 1];
-        return {
+        var baseStyle = {
             name: normalized,
             font: normalized === "bold" ? "Arial-BoldMT" : "ArialMT",
             fontSize: Math.max(24, Math.min(100, Math.round(Number(comp.height) * (normalized === "bold" ? 0.052 : 0.046)))),
+            minFontSize: 10,
             fillColor: fill,
             fillEnabled: true,
             strokeEnabled: true,
             strokeColor: [0, 0, 0],
             strokeWidth: Math.max(2, Math.round(Number(comp.height) * 0.003)),
             alignment: "center",
-            x: Number(comp.width) / 2,
-            y: Number(comp.height) * 0.86,
+            positionX: 0.5,
+            positionY: 0.86,
             animation: "none",
             animationDuration: 0.4
         };
+        var baseFit = OBSIDIAN_fitCaptionBatch(segments, comp, baseStyle.fontSize, baseStyle.minFontSize,
+            baseStyle.positionX, baseStyle.positionY, baseStyle.alignment);
+        if (!baseFit.ok) return { fitError: baseFit.error };
+        baseStyle.fontSize = baseFit.fontSize;
+        baseStyle.boxWidth = baseFit.boxWidth;
+        baseStyle.boxHeight = baseFit.boxHeight;
+        baseStyle.leading = baseFit.leading;
+        baseStyle.maxLines = baseFit.maxLines;
+        baseStyle.verticalAnchor = baseFit.verticalAnchor;
+        baseStyle.verticalAlignmentSupported = typeof BoxVerticalAlignment !== "undefined";
+        baseStyle.x = Number(comp.width) * baseStyle.positionX;
+        baseStyle.y = Number(comp.height) * baseStyle.positionY;
+        return baseStyle;
     }
     if (!style || typeof style !== "object" || Number(style.version) !== 1 ||
         typeof style.font !== "string" || !style.font || style.font.length > 128 ||
-        !isFinite(Number(style.fontSize)) || Number(style.fontSize) < 10 || Number(style.fontSize) > 180 ||
-        !isFinite(Number(style.minFontSize)) || Number(style.minFontSize) < 10 || Number(style.minFontSize) > Number(style.fontSize) ||
+        !isFinite(Number(style.fontSize)) || Number(style.fontSize) < 0.1 || Number(style.fontSize) > 1296 ||
+        !isFinite(Number(style.minFontSize)) || Number(style.minFontSize) < 0.1 || Number(style.minFontSize) > Number(style.fontSize) ||
         !OBSIDIAN_captionColorIsValid(style.fillColor) || !OBSIDIAN_captionColorIsValid(style.strokeColor) ||
         typeof style.fillEnabled !== "boolean" || typeof style.strokeEnabled !== "boolean" || !isFinite(Number(style.strokeWidth)) || Number(style.strokeWidth) < 0 || Number(style.strokeWidth) > 20 ||
         !/^(left|center|right)$/.test(String(style.alignment || "")) ||
@@ -217,15 +355,20 @@ function OBSIDIAN_captionStyle(style, comp, segments) {
         !/^(none|fade|pop|smooth_scale|slide|typewriter|word_emphasis)$/.test(String(style.animation || "")) ||
         !isFinite(Number(style.animationDuration)) || Number(style.animationDuration) < 0.08 || Number(style.animationDuration) > 2 ||
         !segments || Object.prototype.toString.call(segments) !== "[object Array]") return null;
-    var longest = 0;
-    for (var i = 0; i < segments.length; i++) longest = Math.max(longest, String(segments[i].text || "").length);
-    if (!longest) return null;
-    var fitted = Math.min(Number(style.fontSize), (Number(comp.width) * 0.9) / (longest * 0.56));
-    if (fitted < Number(style.minFontSize)) return null;
+    var fit = OBSIDIAN_fitCaptionBatch(segments, comp, Number(style.fontSize), Number(style.minFontSize),
+        Number(style.positionX), Number(style.positionY), String(style.alignment));
+    if (!fit.ok) return { fitError: fit.error };
     return {
         name: "Caption Style Studio",
         font: String(style.font),
-        fontSize: Math.round(fitted * 10) / 10,
+        fontSize: fit.fontSize,
+        minFontSize: Number(style.minFontSize),
+        boxWidth: fit.boxWidth,
+        boxHeight: fit.boxHeight,
+        leading: fit.leading,
+        maxLines: fit.maxLines,
+        verticalAnchor: fit.verticalAnchor,
+        verticalAlignmentSupported: typeof BoxVerticalAlignment !== "undefined",
         fillColor: [Number(style.fillColor[0]), Number(style.fillColor[1]), Number(style.fillColor[2])],
         fillEnabled: style.fillEnabled,
         strokeEnabled: style.strokeEnabled,
@@ -248,9 +391,19 @@ function OBSIDIAN_applyCaptionStyle(layer, caption, styleValues) {
         throw new Error("Text layer styling properties were unavailable.");
     }
     var document = textProperty.value;
+    if (!document || document.boxText !== true || typeof document.boxTextSize === "undefined" || typeof document.boxTextPos === "undefined") {
+        throw new Error("After Effects did not expose paragraph-text layout for a caption layer.");
+    }
     document.text = caption.text;
     document.font = styleValues.font;
     document.fontSize = styleValues.fontSize;
+    document.autoLeading = false;
+    document.leading = styleValues.leading;
+    document.boxTextSize = [styleValues.boxWidth, caption.boxHeight];
+    document.boxTextPos = [caption.boxTextPos[0], caption.boxTextPos[1]];
+    if (styleValues.verticalAlignmentSupported && typeof document.boxVerticalAlignment !== "undefined") {
+        document.boxVerticalAlignment = styleValues.verticalAnchor === "bottom" ? BoxVerticalAlignment.BOTTOM : BoxVerticalAlignment.TOP;
+    }
     document.applyFill = styleValues.fillEnabled;
     document.fillColor = styleValues.fillColor;
     document.applyStroke = styleValues.strokeEnabled;
@@ -447,6 +600,20 @@ function OBSIDIAN_captionReadBackMismatches(verifyIndex, created, prepared, crea
     }
     add("strokeWidth", Math.abs(Number(textValue && textValue.strokeWidth) - props.style.strokeWidth) > 0.01, props.style.strokeWidth, Number(textValue && textValue.strokeWidth));
     add("justification", !textValue || textValue.justification !== expectedJustification, expectedJustification, textValue && textValue.justification);
+    add("paragraph text", !textValue || textValue.boxText !== true, true, textValue && textValue.boxText);
+    if (textValue && textValue.boxText === true) {
+        add("boxTextSize.width", !textValue.boxTextSize || Math.abs(Number(textValue.boxTextSize[0]) - Number(caption.boxTextSize[0])) > 0.01,
+            Number(caption.boxTextSize[0]), textValue.boxTextSize && Number(textValue.boxTextSize[0]));
+        add("boxTextSize.height", !textValue.boxTextSize || Math.abs(Number(textValue.boxTextSize[1]) - Number(caption.boxTextSize[1])) > 0.01,
+            Number(caption.boxTextSize[1]), textValue.boxTextSize && Number(textValue.boxTextSize[1]));
+        add("boxTextPos.x", !textValue.boxTextPos || Math.abs(Number(textValue.boxTextPos[0]) - Number(caption.boxTextPos[0])) > 0.01,
+            Number(caption.boxTextPos[0]), textValue.boxTextPos && Number(textValue.boxTextPos[0]));
+        add("boxTextPos.y", !textValue.boxTextPos || Math.abs(Number(textValue.boxTextPos[1]) - Number(caption.boxTextPos[1])) > 0.01,
+            Number(caption.boxTextPos[1]), textValue.boxTextPos && Number(textValue.boxTextPos[1]));
+        if (textValue.boxOverflow === true) add("text box overflow", true, false, true);
+    }
+    add("leading", Math.abs(Number(textValue && textValue.leading) - Number(props.style.leading)) > 0.01,
+        Number(props.style.leading), Number(textValue && textValue.leading));
     var animationMismatches = OBSIDIAN_captionAnimationMismatchDetails(props.animation);
     for (var animationIndex = 0; animationIndex < animationMismatches.length; animationIndex++) mismatches.push(animationMismatches[animationIndex]);
     return mismatches;
@@ -543,8 +710,8 @@ function OBSIDIAN_createCaptionLayers(payload) {
     if (!payload.source || typeof payload.source !== "object" || Object.prototype.toString.call(payload.source) === "[object Array]" || !payload.source.path ||
         !(typeof payload.style === "string" ? /^(clean|bold|yellow)$/.test(payload.style) : payload.style && typeof payload.style === "object" && Number(payload.style.version) === 1) ||
         !payload.segments || Object.prototype.toString.call(payload.segments) !== "[object Array]" ||
-        payload.segments.length < 1 || payload.segments.length > 400) {
-        return "REJECTED|Caption data must contain a supported style, one source, and 1 to 400 timed captions.";
+        payload.segments.length < 1 || payload.segments.length > 1000) {
+        return "REJECTED|Caption data must contain a supported style, one source, and 1 to 1,000 timed captions.";
     }
 
     var comp = OBSIDIAN_getActiveComp();
@@ -587,7 +754,7 @@ function OBSIDIAN_createCaptionLayers(payload) {
         var text = segment.text.replace(/[\r\n]+/g, " ").replace(/\s+/g, " ").replace(/^\s+|\s+$/g, "");
         var start = Number(segment.start);
         var end = Number(segment.end);
-        if (!text || text.length > 140 || !isFinite(start) || !isFinite(end) || start < Number(sourceLayer.inPoint) - 0.001 ||
+        if (!text || !isFinite(start) || !isFinite(end) || start < Number(sourceLayer.inPoint) - 0.001 ||
             end <= start || end > Number(sourceLayer.outPoint) + 0.001 || start < previousEnd - 0.001 ||
             end > Number(comp.duration) + 0.001) {
             return "REJECTED|Caption " + (i + 1) + " has invalid or overlapping timing for the selected footage.";
@@ -597,8 +764,25 @@ function OBSIDIAN_createCaptionLayers(payload) {
     }
 
     var styleValues = OBSIDIAN_captionStyle(payload.style, comp, prepared);
-    if (!styleValues) return "REJECTED|The approved caption style is invalid or cannot fit the longest caption at its minimum size.";
-    if (!comp.layers || typeof comp.layers.addText !== "function") return "REJECTED|After Effects text-layer creation is unavailable.";
+    if (!styleValues) return "REJECTED|The approved caption style is invalid.";
+    if (styleValues.fitError) return "REJECTED|" + styleValues.fitError;
+    if (!comp.layers || typeof comp.layers.addBoxText !== "function") {
+        return "REJECTED|Automatic caption wrapping requires After Effects 24.2 or later. No layers were created.";
+    }
+    var horizontalBoxOffset = styleValues.alignment === "left" ? 0 :
+        styleValues.alignment === "right" ? -styleValues.boxWidth : -styleValues.boxWidth / 2;
+    for (var layoutIndex = 0; layoutIndex < prepared.length; layoutIndex++) {
+        var layoutMetrics = OBSIDIAN_captionWrapMetrics(OBSIDIAN_captionWordWidths(prepared[layoutIndex].text), styleValues.boxWidth, styleValues.fontSize);
+        if (!layoutMetrics.ok || layoutMetrics.lineCount * styleValues.leading > styleValues.boxHeight + 0.01) {
+        return "REJECTED|Caption " + (layoutIndex + 1) + " cannot fit inside the selected composition area at its auto-fit floor. No layers were created.";
+        }
+        prepared[layoutIndex].lineCount = layoutMetrics.lineCount;
+        prepared[layoutIndex].boxHeight = styleValues.verticalAlignmentSupported
+            ? styleValues.boxHeight
+            : Math.min(styleValues.boxHeight, Math.ceil(layoutMetrics.lineCount * styleValues.leading + styleValues.fontSize * 0.25));
+        prepared[layoutIndex].boxTextSize = [styleValues.boxWidth, prepared[layoutIndex].boxHeight];
+        prepared[layoutIndex].boxTextPos = [horizontalBoxOffset, styleValues.verticalAnchor === "bottom" ? -prepared[layoutIndex].boxHeight : 0];
+    }
     if (styleValues.animation === "typewriter") {
         var typewriterKeyCount = 0;
         for (var typewriterIndex = 0; typewriterIndex < prepared.length; typewriterIndex++) typewriterKeyCount += Math.min(12, prepared[typewriterIndex].text.length);
@@ -612,7 +796,7 @@ function OBSIDIAN_createCaptionLayers(payload) {
     try {
         for (var j = 0; j < prepared.length; j++) {
             var caption = prepared[j];
-            var textLayer = comp.layers.addText(caption.text);
+            var textLayer = comp.layers.addBoxText([styleValues.boxWidth, caption.boxHeight]);
             if (!textLayer) throw new Error("After Effects did not create caption layer " + (j + 1) + ".");
             created.push(textLayer);
             textLayer.name = "OBSIDIAN Caption " + (j + 1);
@@ -622,11 +806,55 @@ function OBSIDIAN_createCaptionLayers(payload) {
             textLayer.enabled = true;
             textLayer.shy = false;
             textLayer.locked = false;
-            props.animation = OBSIDIAN_applyCaptionAnimation(textLayer, props, caption, styleValues, comp);
             createdProperties.push(props);
         }
 
-        /* addText inserts at the top; reverse-stack the batch so its timeline order is chronological. */
+        /* Refit the entire batch against AE's composed text when this AE version exposes overflow state. */
+        var supportsBoxOverflow = false;
+        for (var overflowProbe = 0; overflowProbe < createdProperties.length; overflowProbe++) {
+            if (typeof createdProperties[overflowProbe].textProperty.value.boxOverflow === "boolean") {
+                supportsBoxOverflow = true;
+                break;
+            }
+        }
+        var refitPass = 0;
+        while (supportsBoxOverflow) {
+            var overflowCaption = -1;
+            for (var overflowIndex = 0; overflowIndex < createdProperties.length; overflowIndex++) {
+                if (createdProperties[overflowIndex].textProperty.value.boxOverflow === true) {
+                    overflowCaption = overflowIndex;
+                    break;
+                }
+            }
+            if (overflowCaption < 0) break;
+            if (styleValues.fontSize <= styleValues.minFontSize + 0.001 || refitPass++ >= 180) {
+                throw new Error("Caption " + (overflowCaption + 1) + " still overflows the composition text area at the selected auto-fit floor of " +
+                    styleValues.minFontSize + " px. No caption text was truncated.");
+            }
+            styleValues.fontSize = Math.max(styleValues.minFontSize, Math.round((styleValues.fontSize - 1) * 10) / 10);
+            styleValues.leading = styleValues.fontSize * 1.2;
+            for (var refitIndex = 0; refitIndex < prepared.length; refitIndex++) {
+                var refitCaption = prepared[refitIndex];
+                var refitMetrics = OBSIDIAN_captionWrapMetrics(OBSIDIAN_captionWordWidths(refitCaption.text), styleValues.boxWidth, styleValues.fontSize);
+                if (!refitMetrics.ok || refitMetrics.lineCount * styleValues.leading > styleValues.boxHeight + 0.01) {
+                    throw new Error("Caption " + (refitIndex + 1) + " cannot fit at the selected auto-fit floor. No caption text was truncated.");
+                }
+                refitCaption.lineCount = refitMetrics.lineCount;
+                refitCaption.boxHeight = styleValues.verticalAlignmentSupported
+                    ? styleValues.boxHeight
+                    : Math.min(styleValues.boxHeight, Math.ceil(refitMetrics.lineCount * styleValues.leading + styleValues.fontSize * 0.25));
+                refitCaption.boxTextSize = [styleValues.boxWidth, refitCaption.boxHeight];
+                refitCaption.boxTextPos = [horizontalBoxOffset, styleValues.verticalAnchor === "bottom" ? -refitCaption.boxHeight : 0];
+                createdProperties[refitIndex] = OBSIDIAN_applyCaptionStyle(created[refitIndex], refitCaption, styleValues);
+            }
+        }
+
+        for (var animationIndex = 0; animationIndex < prepared.length; animationIndex++) {
+            createdProperties[animationIndex].animation = OBSIDIAN_applyCaptionAnimation(
+                created[animationIndex], createdProperties[animationIndex], prepared[animationIndex], styleValues, comp);
+        }
+
+        /* addBoxText inserts at the top; reverse-stack the batch so its timeline order is chronological. */
         for (var orderIndex = created.length - 1; orderIndex >= 0; orderIndex--) {
             if (typeof created[orderIndex].moveToBeginning !== "function") throw new Error("After Effects could not order the generated caption layers.");
             created[orderIndex].moveToBeginning();
@@ -1145,6 +1373,589 @@ function OBSIDIAN_scaleSnapshotMatches(snapshot, expected, layer, expectedType) 
         if (!isFinite(Number(current[i])) || Math.abs(Number(current[i]) - expected[i]) > 0.01) return false;
     }
     return true;
+}
+
+/* Phase 1 animation engine. Only semantic, host-approved property IDs are accepted. */
+function OBSIDIAN_animationIsObject(value) {
+    return value && typeof value === "object" && Object.prototype.toString.call(value) !== "[object Array]";
+}
+
+function OBSIDIAN_animationArrayContains(values, candidate) {
+    if (!values || typeof values.length !== "number") return false;
+    for (var i = 0; i < values.length; i++) if (values[i] === candidate) return true;
+    return false;
+}
+
+function OBSIDIAN_animationTimeSeconds(time, frameRate, allowNegative) {
+    if (!OBSIDIAN_animationIsObject(time) || typeof time.value !== "number" || !isFinite(time.value) ||
+        (time.unit !== "frames" && time.unit !== "seconds")) return null;
+    if (time.unit === "frames") {
+        if (!isFinite(Number(frameRate)) || Number(frameRate) <= 0 || Math.floor(time.value) !== time.value) return null;
+        if (!allowNegative && time.value < 0) return null;
+        return time.value / Number(frameRate);
+    }
+    if (!allowNegative && time.value < 0) return null;
+    return time.value;
+}
+
+function OBSIDIAN_animationTimeWithinBoundary(time, boundary, frameRate, isLowerBound) {
+    var rate = Number(frameRate);
+    var resolvedTime = Number(time);
+    var boundaryTime = Number(boundary);
+    if (!isFinite(rate) || rate <= 0 || !isFinite(resolvedTime) || !isFinite(boundaryTime)) return false;
+    var deltaFrames = (resolvedTime - boundaryTime) * rate;
+    if (!isFinite(deltaFrames)) return false;
+    return isLowerBound
+        ? deltaFrames >= -OBSIDIAN_ANIMATION_BOUNDARY_TOLERANCE_FRAMES
+        : deltaFrames <= OBSIDIAN_ANIMATION_BOUNDARY_TOLERANCE_FRAMES;
+}
+
+function OBSIDIAN_animationDefinitionError(message) {
+    return { ok: false, error: message };
+}
+
+function OBSIDIAN_animationHasParameter(definition, name) {
+    for (var i = 0; i < definition.parameters.length; i++) {
+        if (definition.parameters[i].name === name) return true;
+    }
+    return false;
+}
+
+function OBSIDIAN_animationValidateValueDefinition(track, keyframe, definition) {
+    var value = keyframe.value;
+    if (!OBSIDIAN_animationIsObject(value)) return "Animation keyframe value must use a supported structured value strategy.";
+    if (value.kind === "literal") {
+        if (track.property === "opacity") {
+            if (typeof value.value !== "number" || !isFinite(value.value) || value.value < 0 || value.value > 100) {
+                return "Opacity keyframe literals must be numbers from 0 to 100.";
+            }
+        } else if (track.property === "scale") {
+            if (Object.prototype.toString.call(value.value) !== "[object Array]" ||
+                (value.value.length !== 2 && value.value.length !== 3)) {
+                return "Scale keyframe literals must be two- or three-component numeric vectors.";
+            }
+            for (var literalIndex = 0; literalIndex < value.value.length; literalIndex++) {
+                if (typeof value.value[literalIndex] !== "number" || !isFinite(value.value[literalIndex]) ||
+                    Math.abs(value.value[literalIndex]) > 1000) return "Scale keyframe components must be finite and within -1,000 to 1,000.";
+            }
+        }
+        return null;
+    }
+    if (value.kind === "current") return null;
+    if (value.kind === "multiply_current") {
+        return typeof value.factor === "number" && isFinite(value.factor) ? null : "Relative keyframe scale factor must be a finite number.";
+    }
+    if (value.kind === "add_current") {
+        if (track.property === "opacity") {
+            return typeof value.amount === "number" && isFinite(value.amount) ? null : "Opacity offset must be a finite number.";
+        }
+        if (Object.prototype.toString.call(value.amount) !== "[object Array]" ||
+            (value.amount.length !== 2 && value.amount.length !== 3)) return "Scale offsets must be two- or three-component numeric vectors.";
+        for (var amountIndex = 0; amountIndex < value.amount.length; amountIndex++) {
+            if (typeof value.amount[amountIndex] !== "number" || !isFinite(value.amount[amountIndex])) return "Scale offsets must contain finite numbers.";
+        }
+        return null;
+    }
+    if (value.kind === "parameter") {
+        if (track.property !== "opacity" || typeof value.name !== "string" || !OBSIDIAN_animationHasParameter(definition, value.name)) {
+            return "Animation keyframe references an unsupported or undeclared parameter.";
+        }
+        return null;
+    }
+    return "Unsupported animation keyframe value strategy: " + OBSIDIAN_cleanText(value.kind) + ".";
+}
+
+function OBSIDIAN_validateAnimationDefinition(definition, frameRate) {
+    if (!OBSIDIAN_animationIsObject(definition) || typeof definition.id !== "string" ||
+        !/^[a-z][a-z0-9_.-]{1,63}$/.test(definition.id) || typeof definition.version !== "number" || definition.version !== 1) {
+        return OBSIDIAN_animationDefinitionError("Animation definition needs a stable ID and supported version 1 schema.");
+    }
+    if (!OBSIDIAN_animationIsObject(definition.compatibility) ||
+        typeof definition.compatibility.minLayers !== "number" || !isFinite(definition.compatibility.minLayers) || Math.floor(definition.compatibility.minLayers) !== definition.compatibility.minLayers ||
+        typeof definition.compatibility.maxLayers !== "number" || !isFinite(definition.compatibility.maxLayers) || Math.floor(definition.compatibility.maxLayers) !== definition.compatibility.maxLayers ||
+        definition.compatibility.minLayers < 1 || definition.compatibility.maxLayers < definition.compatibility.minLayers ||
+        definition.compatibility.maxLayers > OBSIDIAN_ANIMATION_MAX_LAYERS ||
+        Object.prototype.toString.call(definition.compatibility.layerTypes) !== "[object Array]" || !definition.compatibility.layerTypes.length ||
+        Object.prototype.toString.call(definition.compatibility.dimensions) !== "[object Array]" || !definition.compatibility.dimensions.length) {
+        return OBSIDIAN_animationDefinitionError("Animation compatibility must bound selected layers, layer types, and 2D/3D dimensions.");
+    }
+    var layerTypes = ["Text", "Shape", "Precomp", "Solid/Footage", "AV", "Other"];
+    var dimensions = ["2d", "3d"];
+    for (var typeIndex = 0; typeIndex < definition.compatibility.layerTypes.length; typeIndex++) {
+        if (!OBSIDIAN_animationArrayContains(layerTypes, definition.compatibility.layerTypes[typeIndex])) return OBSIDIAN_animationDefinitionError("Animation definition contains an unsupported layer type.");
+    }
+    for (var dimensionIndex = 0; dimensionIndex < definition.compatibility.dimensions.length; dimensionIndex++) {
+        if (!OBSIDIAN_animationArrayContains(dimensions, definition.compatibility.dimensions[dimensionIndex])) return OBSIDIAN_animationDefinitionError("Animation definition contains an unsupported dimension mode.");
+    }
+    if (!OBSIDIAN_animationIsObject(definition.timing) ||
+        !OBSIDIAN_animationArrayContains(["layer.inPoint", "layer.outPoint", "composition.time", "composition.absolute"], definition.timing.anchor)) {
+        return OBSIDIAN_animationDefinitionError("Animation timing anchor is unsupported.");
+    }
+    if (OBSIDIAN_animationTimeSeconds(definition.timing.offset, frameRate, true) === null ||
+        OBSIDIAN_animationTimeSeconds(definition.timing.duration, frameRate, false) === null) {
+        return OBSIDIAN_animationDefinitionError("Animation start offset or duration has invalid frame/second timing.");
+    }
+    var durationSeconds = OBSIDIAN_animationTimeSeconds(definition.timing.duration, frameRate, false);
+    if (durationSeconds <= 0 || durationSeconds > OBSIDIAN_ANIMATION_MAX_DURATION_SECONDS) {
+        return OBSIDIAN_animationDefinitionError("Animation duration must be greater than zero and no longer than 600 seconds.");
+    }
+    if (Object.prototype.toString.call(definition.parameters) !== "[object Array]" ||
+        Object.prototype.toString.call(definition.tracks) !== "[object Array]" || !definition.tracks.length ||
+        definition.tracks.length > OBSIDIAN_ANIMATION_MAX_TRACKS) {
+        return OBSIDIAN_animationDefinitionError("Animation definition must contain a bounded track list and parameter schema.");
+    }
+    for (var parameterIndex = 0; parameterIndex < definition.parameters.length; parameterIndex++) {
+        var parameter = definition.parameters[parameterIndex];
+        if (!OBSIDIAN_animationIsObject(parameter) || typeof parameter.name !== "string" ||
+            !/^[a-z][a-zA-Z0-9_]{0,47}$/.test(parameter.name) ||
+            typeof parameter.minimum !== "number" || !isFinite(parameter.minimum) ||
+            typeof parameter.maximum !== "number" || !isFinite(parameter.maximum) || parameter.maximum < parameter.minimum ||
+            (parameter.defaultValue !== undefined && (typeof parameter.defaultValue !== "number" || !isFinite(parameter.defaultValue) ||
+              parameter.defaultValue < parameter.minimum || parameter.defaultValue > parameter.maximum))) {
+            return OBSIDIAN_animationDefinitionError("Animation parameter schema contains an invalid name, bound, or default.");
+        }
+        for (var duplicateParameter = 0; duplicateParameter < parameterIndex; duplicateParameter++) {
+            if (definition.parameters[duplicateParameter].name === parameter.name) return OBSIDIAN_animationDefinitionError("Animation parameter names must be unique.");
+        }
+    }
+    var supportedProperties = ["opacity", "scale"];
+    var totalKeys = 0;
+    for (var trackIndex = 0; trackIndex < definition.tracks.length; trackIndex++) {
+        var track = definition.tracks[trackIndex];
+        if (!OBSIDIAN_animationIsObject(track) || !OBSIDIAN_animationArrayContains(supportedProperties, track.property) ||
+            Object.prototype.toString.call(track.keyframes) !== "[object Array]" ||
+            track.keyframes.length < 2 || track.keyframes.length > OBSIDIAN_ANIMATION_MAX_KEYS_PER_TRACK) {
+            return OBSIDIAN_animationDefinitionError("Animation track has an unsupported property or invalid keyframe count.");
+        }
+        for (var duplicateTrack = 0; duplicateTrack < trackIndex; duplicateTrack++) {
+            if (definition.tracks[duplicateTrack].property === track.property) return OBSIDIAN_animationDefinitionError("Each animation definition may contain only one track per semantic property.");
+        }
+        totalKeys += track.keyframes.length * Number(definition.compatibility.maxLayers);
+        var previousOffset = -Infinity;
+        for (var keyIndex = 0; keyIndex < track.keyframes.length; keyIndex++) {
+            var keyframe = track.keyframes[keyIndex];
+            var keyOffset = keyframe && OBSIDIAN_animationTimeSeconds(keyframe.at, frameRate, false);
+            if (keyOffset === null || keyOffset > durationSeconds + 0.000001 ||
+                (keyIndex > 0 && keyOffset - previousOffset <= OBSIDIAN_ANIMATION_KEY_TIME_TOLERANCE)) {
+                return OBSIDIAN_animationDefinitionError("Animation keyframe times must be strictly increasing, distinct, and inside the sequence duration.");
+            }
+            previousOffset = keyOffset;
+            var valueError = OBSIDIAN_animationValidateValueDefinition(track, keyframe, definition);
+            if (valueError) return OBSIDIAN_animationDefinitionError(valueError);
+            if (!OBSIDIAN_animationArrayContains(["linear", "bezier", "hold"], keyframe.interpolation)) {
+                return OBSIDIAN_animationDefinitionError("Animation keyframe uses an unsupported temporal interpolation type.");
+            }
+            if (keyframe.interpolation === "bezier") {
+                var easeValues = [keyframe.easeIn, keyframe.easeOut];
+                for (var easeIndex = 0; easeIndex < easeValues.length; easeIndex++) {
+                    var ease = easeValues[easeIndex];
+                    if (!OBSIDIAN_animationIsObject(ease) || typeof ease.speed !== "number" || !isFinite(ease.speed) ||
+                        typeof ease.influence !== "number" || !isFinite(ease.influence) || ease.influence < 0.1 || ease.influence > 100) {
+                        return OBSIDIAN_animationDefinitionError("Bezier keyframes require finite temporal easing with influence from 0.1 to 100.");
+                    }
+                }
+            } else if (keyframe.easeIn !== undefined || keyframe.easeOut !== undefined) {
+                return OBSIDIAN_animationDefinitionError("Only Bezier keyframes may declare temporal easing.");
+            }
+        }
+    }
+    if (totalKeys > OBSIDIAN_ANIMATION_MAX_GENERATED_KEYS) return OBSIDIAN_animationDefinitionError("Animation definition exceeds the 8,192 generated-key safety limit.");
+    return { ok: true, error: "" };
+}
+
+function OBSIDIAN_animationNormalizeParameters(definition, supplied) {
+    if (supplied === undefined || supplied === null) supplied = {};
+    if (!OBSIDIAN_animationIsObject(supplied)) return OBSIDIAN_animationDefinitionError("Animation parameters must be a structured object.");
+    var normalized = {};
+    for (var suppliedName in supplied) {
+        if (Object.prototype.hasOwnProperty.call(supplied, suppliedName) && !OBSIDIAN_animationHasParameter(definition, suppliedName)) {
+            return OBSIDIAN_animationDefinitionError("Unsupported animation parameter: " + OBSIDIAN_cleanText(suppliedName) + ".");
+        }
+    }
+    for (var i = 0; i < definition.parameters.length; i++) {
+        var parameter = definition.parameters[i];
+        var value = Object.prototype.hasOwnProperty.call(supplied, parameter.name) ? supplied[parameter.name] : parameter.defaultValue;
+        if (value === undefined) return OBSIDIAN_animationDefinitionError("Required animation parameter is missing: " + parameter.name + ".");
+        if (typeof value !== "number" || !isFinite(value) || value < parameter.minimum || value > parameter.maximum) {
+            return OBSIDIAN_animationDefinitionError("Animation parameter '" + parameter.name + "' must be from " + parameter.minimum + " to " + parameter.maximum + ".");
+        }
+        normalized[parameter.name] = value;
+    }
+    return { ok: true, values: normalized };
+}
+
+function OBSIDIAN_animationPropertyValueTypeIs(property, expected) {
+    if (!property) return false;
+    var valueType = property.propertyValueType;
+    if (typeof PropertyValueType !== "undefined" && PropertyValueType[expected] !== undefined && valueType === PropertyValueType[expected]) return true;
+    return String(valueType) === expected;
+}
+
+function OBSIDIAN_animationResolveProperty(layer, propertyId) {
+    var transform;
+    try { transform = layer.property("ADBE Transform Group"); } catch (ignored) { transform = null; }
+    if (!transform) return { ok: false, error: "Selected layer does not expose the After Effects Transform group." };
+    var property = null;
+    try { property = transform.property(propertyId === "opacity" ? "ADBE Opacity" : "ADBE Scale"); } catch (ignored2) { property = null; }
+    if (!property) return { ok: false, error: "Selected layer does not expose the approved '" + propertyId + "' property." };
+    if (propertyId === "opacity") {
+        var opacity = Number(property.value);
+        if (!OBSIDIAN_animationPropertyValueTypeIs(property, "OneD") || !isFinite(opacity) || opacity < 0 || opacity > 100) {
+            return { ok: false, error: "Opacity property type or current value is unsupported." };
+        }
+        return { ok: true, property: property, propertyId: propertyId, scalar: true, activeDimensions: 1, initialValue: opacity };
+    }
+    var snapshot = OBSIDIAN_scaleSnapshot(property);
+    if (!OBSIDIAN_scaleVectorIsSupported(snapshot, layer)) {
+        return { ok: false, error: "Scale property dimensions or value type do not match the selected layer's 2D/3D state." };
+    }
+    for (var i = 0; i < snapshot.values.length; i++) {
+        if (!isFinite(Number(snapshot.values[i])) || Math.abs(Number(snapshot.values[i])) > 1000) {
+            return { ok: false, error: "Scale property contains a component outside the supported -1,000 to 1,000 range." };
+        }
+    }
+    return {
+        ok: true,
+        property: property,
+        propertyId: propertyId,
+        scalar: false,
+        activeDimensions: OBSIDIAN_scaleActiveDimensions(snapshot, layer),
+        initialValue: snapshot.values.slice(0),
+        propertyDimensions: snapshot.values.length,
+        layerIs3D: Boolean(layer.threeDLayer)
+    };
+}
+
+function OBSIDIAN_animationResolveValue(keyframe, descriptor, parameters) {
+    var spec = keyframe.value;
+    var base = descriptor.initialValue;
+    var result;
+    if (descriptor.scalar) {
+        if (spec.kind === "literal") result = spec.value;
+        else if (spec.kind === "current") result = base;
+        else if (spec.kind === "multiply_current") result = base * spec.factor;
+        else if (spec.kind === "add_current") result = base + spec.amount;
+        else if (spec.kind === "parameter") result = parameters[spec.name];
+        if (typeof result !== "number" || !isFinite(result) || result < 0 || result > 100) return { ok: false, error: "Resolved opacity keyframe is outside 0% to 100%." };
+        return { ok: true, value: result };
+    }
+    result = base.slice(0);
+    if (spec.kind === "literal") {
+        if (Object.prototype.toString.call(spec.value) !== "[object Array]" || spec.value.length !== descriptor.activeDimensions) {
+            return { ok: false, error: "Scale keyframe vector dimensions do not match the active 2D/3D layer dimensions." };
+        }
+        for (var literalIndex = 0; literalIndex < descriptor.activeDimensions; literalIndex++) result[literalIndex] = spec.value[literalIndex];
+    } else if (spec.kind === "multiply_current") {
+        for (var multiplyIndex = 0; multiplyIndex < descriptor.activeDimensions; multiplyIndex++) result[multiplyIndex] = Number(base[multiplyIndex]) * spec.factor;
+    } else if (spec.kind === "add_current") {
+        if (Object.prototype.toString.call(spec.amount) !== "[object Array]" || spec.amount.length !== descriptor.activeDimensions) {
+            return { ok: false, error: "Scale offset dimensions do not match the active 2D/3D layer dimensions." };
+        }
+        for (var addIndex = 0; addIndex < descriptor.activeDimensions; addIndex++) result[addIndex] = Number(base[addIndex]) + spec.amount[addIndex];
+    }
+    for (var componentIndex = 0; componentIndex < result.length; componentIndex++) {
+        if (!isFinite(Number(result[componentIndex])) || Math.abs(Number(result[componentIndex])) > 1000) {
+            return { ok: false, error: "Resolved Scale keyframe contains a component outside -1,000 to 1,000." };
+        }
+    }
+    return { ok: true, value: result };
+}
+
+function OBSIDIAN_animationInterpolationEnum(name) {
+    if (typeof KeyframeInterpolationType === "undefined") return null;
+    var value = null;
+    if (name === "linear") value = KeyframeInterpolationType.LINEAR;
+    else if (name === "bezier") value = KeyframeInterpolationType.BEZIER;
+    else if (name === "hold") value = KeyframeInterpolationType.HOLD;
+    return value === undefined ? null : value;
+}
+
+function OBSIDIAN_animationBuildEase(ease, dimensions) {
+    var result = [];
+    for (var i = 0; i < dimensions; i++) result.push(new KeyframeEase(ease.speed, ease.influence));
+    return result;
+}
+
+function OBSIDIAN_animationPreflight(definition, parameters, comp, layers) {
+    if (!comp || !isFinite(Number(comp.frameRate)) || Number(comp.frameRate) <= 0 ||
+        !isFinite(Number(comp.duration)) || Number(comp.duration) <= 0) return OBSIDIAN_animationDefinitionError("Active composition timing is unavailable.");
+    if (!layers || layers.length < Number(definition.compatibility.minLayers) || layers.length > Number(definition.compatibility.maxLayers)) {
+        return OBSIDIAN_animationDefinitionError("Selected layer count is outside this animation's compatibility bounds.");
+    }
+    var sequenceDuration = OBSIDIAN_animationTimeSeconds(definition.timing.duration, Number(comp.frameRate), false);
+    var startOffset = OBSIDIAN_animationTimeSeconds(definition.timing.offset, Number(comp.frameRate), true);
+    if (sequenceDuration === null || startOffset === null) return OBSIDIAN_animationDefinitionError("Animation timing could not be resolved for the active composition frame rate.");
+    var totalKeys = 0;
+    var prepared = [];
+    for (var layerIndex = 0; layerIndex < layers.length; layerIndex++) {
+        var layer = layers[layerIndex];
+        var layerType = OBSIDIAN_layerType(layer);
+        if (layer.locked) return OBSIDIAN_animationDefinitionError("Animation cancelled: unlock '" + OBSIDIAN_cleanText(layer.name) + "'.");
+        if (!OBSIDIAN_animationArrayContains(definition.compatibility.layerTypes, layerType) ||
+            !OBSIDIAN_animationArrayContains(definition.compatibility.dimensions, layer.threeDLayer ? "3d" : "2d")) {
+            return OBSIDIAN_animationDefinitionError("Selected layer type or 2D/3D state is not supported by this animation definition.");
+        }
+        var inPoint = Number(layer.inPoint);
+        var outPoint = Number(layer.outPoint);
+        if (!isFinite(inPoint) || !isFinite(outPoint) || outPoint <= inPoint) return OBSIDIAN_animationDefinitionError("Selected layer timing is invalid.");
+        var startBase = 0;
+        if (definition.timing.anchor === "layer.inPoint") startBase = inPoint;
+        else if (definition.timing.anchor === "layer.outPoint") startBase = outPoint;
+        else if (definition.timing.anchor === "composition.time") {
+            startBase = Number(comp.time);
+            if (!isFinite(startBase)) return OBSIDIAN_animationDefinitionError("Composition current time is unavailable for the requested sequence anchor.");
+        }
+        var sequenceStart = startBase + startOffset;
+        if (definition.timing.anchor === "composition.absolute") sequenceStart = startOffset;
+        for (var trackIndex = 0; trackIndex < definition.tracks.length; trackIndex++) {
+            var track = definition.tracks[trackIndex];
+            var descriptor = OBSIDIAN_animationResolveProperty(layer, track.property);
+            if (!descriptor.ok) return OBSIDIAN_animationDefinitionError(descriptor.error);
+            var property = descriptor.property;
+            if (Number(property.numKeys) !== 0 || property.expressionEnabled ||
+                (typeof property.expression === "string" && property.expression.replace(/\s+/g, "") !== "")) {
+                return OBSIDIAN_animationDefinitionError("Animation cancelled: existing keyframes or expression on '" + OBSIDIAN_cleanText(layer.name) + "' were preserved.");
+            }
+            if (typeof property.setValueAtTime !== "function" || typeof property.setInterpolationTypeAtKey !== "function" ||
+                typeof property.keyTime !== "function" || typeof property.keyValue !== "function" ||
+                typeof property.keyInInterpolationType !== "function" || typeof property.keyOutInterpolationType !== "function" ||
+                typeof property.removeKey !== "function" || typeof property.setValue !== "function") {
+                return OBSIDIAN_animationDefinitionError("Property '" + track.property + "' lacks required keyframe write, read-back, value restoration, or cleanup methods.");
+            }
+            if (typeof property.isInterpolationTypeValid === "function") {
+                for (var supportedIndex = 0; supportedIndex < track.keyframes.length; supportedIndex++) {
+                    var supportedType = OBSIDIAN_animationInterpolationEnum(track.keyframes[supportedIndex].interpolation);
+                    if (supportedType === null || property.isInterpolationTypeValid(supportedType) === false) {
+                        return OBSIDIAN_animationDefinitionError("After Effects does not support the requested interpolation on '" + track.property + "'.");
+                    }
+                }
+            }
+            var keyframePlans = [];
+            var previousTime = -Infinity;
+            for (var keyframeIndex = 0; keyframeIndex < track.keyframes.length; keyframeIndex++) {
+                var keyframe = track.keyframes[keyframeIndex];
+                var keyOffset = OBSIDIAN_animationTimeSeconds(keyframe.at, Number(comp.frameRate), false);
+                var resolvedTime = sequenceStart + keyOffset;
+                if (!OBSIDIAN_animationTimeWithinBoundary(resolvedTime, inPoint, Number(comp.frameRate), true) ||
+                    !OBSIDIAN_animationTimeWithinBoundary(resolvedTime, outPoint, Number(comp.frameRate), false) ||
+                    !OBSIDIAN_animationTimeWithinBoundary(resolvedTime, 0, Number(comp.frameRate), true) ||
+                    !OBSIDIAN_animationTimeWithinBoundary(resolvedTime, Number(comp.duration), Number(comp.frameRate), false) ||
+                    resolvedTime - previousTime <= OBSIDIAN_ANIMATION_KEY_TIME_TOLERANCE) {
+                    return OBSIDIAN_animationDefinitionError("Animation sequence exceeds selected layer or composition timing; no duration was shortened.");
+                }
+                var resolvedValue = OBSIDIAN_animationResolveValue(keyframe, descriptor, parameters);
+                if (!resolvedValue.ok) return OBSIDIAN_animationDefinitionError(resolvedValue.error);
+                var interpolationEnum = OBSIDIAN_animationInterpolationEnum(keyframe.interpolation);
+                if (interpolationEnum === null) return OBSIDIAN_animationDefinitionError("Requested temporal interpolation enum is unavailable in this After Effects runtime.");
+                if (keyframe.interpolation === "bezier" &&
+                    (typeof KeyframeEase === "undefined" || typeof property.setTemporalEaseAtKey !== "function" ||
+                     typeof property.keyInTemporalEase !== "function" || typeof property.keyOutTemporalEase !== "function")) {
+                    return OBSIDIAN_animationDefinitionError("After Effects cannot safely set and verify the requested Bezier temporal easing on '" + track.property + "'.");
+                }
+                keyframePlans.push({
+                    time: resolvedTime,
+                    value: resolvedValue.value,
+                    interpolation: keyframe.interpolation,
+                    interpolationEnum: interpolationEnum,
+                    easeIn: keyframe.easeIn || null,
+                    easeOut: keyframe.easeOut || null
+                });
+                previousTime = resolvedTime;
+            }
+            totalKeys += keyframePlans.length;
+            prepared.push({
+                layer: layer,
+                layerName: OBSIDIAN_cleanText(layer.name),
+                propertyId: track.property,
+                descriptor: descriptor,
+                property: property,
+                writeAttemptTimes: [],
+                generatedKeyTimes: [],
+                captureFailed: false,
+                keyframes: keyframePlans
+            });
+        }
+    }
+    if (totalKeys > OBSIDIAN_ANIMATION_MAX_GENERATED_KEYS) return OBSIDIAN_animationDefinitionError("Animation sequence exceeds the 8,192 generated-key safety limit.");
+    return { ok: true, tracks: prepared, totalKeys: totalKeys };
+}
+
+function OBSIDIAN_animationValueMatches(actual, expected) {
+    if (Object.prototype.toString.call(expected) === "[object Array]") {
+        if (!actual || typeof actual.length !== "number" || actual.length !== expected.length) return false;
+        for (var i = 0; i < expected.length; i++) {
+            if (!isFinite(Number(actual[i])) || Math.abs(Number(actual[i]) - Number(expected[i])) > 0.01) return false;
+        }
+        return true;
+    }
+    return isFinite(Number(actual)) && Math.abs(Number(actual) - Number(expected)) <= 0.01;
+}
+
+function OBSIDIAN_animationEaseMatches(actual, expected, dimensions) {
+    if (!actual || typeof actual.length !== "number" || actual.length !== dimensions) return false;
+    for (var i = 0; i < dimensions; i++) {
+        if (!actual[i] || Math.abs(Number(actual[i].speed) - Number(expected.speed)) > 0.01 ||
+            Math.abs(Number(actual[i].influence) - Number(expected.influence)) > 0.01) return false;
+    }
+    return true;
+}
+
+function OBSIDIAN_animationVerifyTrack(track) {
+    var property = track.property;
+    if (Number(property.numKeys) !== track.keyframes.length) return "key count requested " + track.keyframes.length + ", actual " + Number(property.numKeys);
+    for (var i = 0; i < track.keyframes.length; i++) {
+        var expected = track.keyframes[i];
+        var actualTime = Number(property.keyTime(i + 1));
+        if (!isFinite(actualTime) || Math.abs(actualTime - expected.time) > OBSIDIAN_ANIMATION_KEY_TIME_TOLERANCE) {
+            return "key " + (i + 1) + " time requested " + expected.time + ", actual " + actualTime;
+        }
+        var actualValue = property.keyValue(i + 1);
+        if (!OBSIDIAN_animationValueMatches(actualValue, expected.value)) {
+            return "key " + (i + 1) + " value requested " + OBSIDIAN_captionDiagnosticValue(expected.value) + ", actual " + OBSIDIAN_captionDiagnosticValue(actualValue);
+        }
+        if (property.keyInInterpolationType(i + 1) !== expected.interpolationEnum ||
+            property.keyOutInterpolationType(i + 1) !== expected.interpolationEnum) {
+            return "key " + (i + 1) + " interpolation did not match the requested " + expected.interpolation + " type";
+        }
+        if (expected.interpolation === "bezier" &&
+            (!OBSIDIAN_animationEaseMatches(property.keyInTemporalEase(i + 1), expected.easeIn, track.descriptor.propertyDimensions || 1) ||
+             !OBSIDIAN_animationEaseMatches(property.keyOutTemporalEase(i + 1), expected.easeOut, track.descriptor.propertyDimensions || 1))) {
+            return "key " + (i + 1) + " temporal easing read-back did not match the requested Bezier easing";
+        }
+    }
+    return "";
+}
+
+function OBSIDIAN_animationCaptureGeneratedKeys(track) {
+    var property = track.property;
+    try {
+        for (var keyIndex = 1; keyIndex <= Number(property.numKeys); keyIndex++) {
+            var actualTime = Number(property.keyTime(keyIndex));
+            if (!isFinite(actualTime)) throw new Error("After Effects returned an invalid generated key time.");
+            var alreadyRecorded = false;
+            for (var recordedIndex = 0; recordedIndex < track.generatedKeyTimes.length; recordedIndex++) {
+                if (Math.abs(track.generatedKeyTimes[recordedIndex] - actualTime) <= 0.000001) alreadyRecorded = true;
+            }
+            if (!alreadyRecorded) track.generatedKeyTimes.push(actualTime);
+        }
+        track.captureFailed = false;
+        return true;
+    } catch (captureError) {
+        track.captureFailed = true;
+        return false;
+    }
+}
+
+function OBSIDIAN_animationRollback(generatedTracks) {
+    var remaining = 0;
+    for (var trackIndex = generatedTracks.length - 1; trackIndex >= 0; trackIndex--) {
+        var track = generatedTracks[trackIndex];
+        var property = track.property;
+        OBSIDIAN_animationCaptureGeneratedKeys(track);
+        var keyCount = 0;
+        try { keyCount = Number(property.numKeys); } catch (keyCountError) { keyCount = 0; track.captureFailed = true; }
+        for (var keyIndex = keyCount; keyIndex >= 1; keyIndex--) {
+            var removeThisKey = false;
+            try {
+                var actualTime = Number(property.keyTime(keyIndex));
+                for (var generatedIndex = 0; generatedIndex < track.generatedKeyTimes.length; generatedIndex++) {
+                    if (isFinite(actualTime) && Math.abs(actualTime - track.generatedKeyTimes[generatedIndex]) <= 0.000001) removeThisKey = true;
+                }
+                if (removeThisKey) property.removeKey(keyIndex);
+            } catch (removeError) {}
+        }
+        var remainingKeys = 0;
+        try { remainingKeys = Number(property.numKeys); } catch (countError) { remainingKeys = 1; }
+        if (remainingKeys > 0) {
+            remaining += remainingKeys;
+        } else if (track.writeAttemptTimes.length && !track.captureFailed) {
+            try {
+                property.setValue(track.descriptor.initialValue);
+            } catch (restoreError) {
+                remaining++;
+            }
+        }
+        if (track.captureFailed && remainingKeys === 0) remaining++;
+    }
+    return { ok: remaining === 0, remaining: remaining };
+}
+
+function OBSIDIAN_executeAnimationDefinition(definitionId, suppliedParameters) {
+    var id = String(definitionId || "");
+    if (!Object.prototype.hasOwnProperty.call(OBSIDIAN_ANIMATION_DEFINITIONS, id)) {
+        return "REJECTED|Unknown trusted animation definition: " + OBSIDIAN_cleanText(id) + ".";
+    }
+    var definition = OBSIDIAN_ANIMATION_DEFINITIONS[id];
+    var comp = null;
+    var preflight = null;
+    var layers = [];
+    try {
+        comp = OBSIDIAN_getActiveComp();
+        if (!comp) return "REJECTED|Open a composition before running an animation sequence.";
+        var validation = OBSIDIAN_validateAnimationDefinition(definition, Number(comp.frameRate));
+        if (!validation.ok) return "REJECTED|" + validation.error;
+        if (definition.id !== id) return "REJECTED|Trusted animation registry ID does not match its definition ID.";
+        var parameters = OBSIDIAN_animationNormalizeParameters(definition, suppliedParameters);
+        if (!parameters.ok) return "REJECTED|" + parameters.error;
+        layers = OBSIDIAN_getSelectedLayers();
+        preflight = OBSIDIAN_animationPreflight(definition, parameters.values, comp, layers);
+        if (!preflight.ok) return "REJECTED|" + preflight.error;
+    } catch (preflightError) {
+        return "REJECTED|Animation preflight failed without editing: " + OBSIDIAN_cleanText(preflightError && preflightError.toString ? preflightError.toString() : preflightError);
+    }
+
+    var undoStarted = false;
+    var operationError = null;
+    var cleanup = { ok: true, remaining: 0 };
+    try {
+        app.beginUndoGroup("OBSIDIAN - Animation " + id);
+        undoStarted = true;
+        for (var trackIndex = 0; trackIndex < preflight.tracks.length; trackIndex++) {
+            var track = preflight.tracks[trackIndex];
+            for (var keyIndex = 0; keyIndex < track.keyframes.length; keyIndex++) {
+                track.writeAttemptTimes.push(track.keyframes[keyIndex].time);
+                track.property.setValueAtTime(track.keyframes[keyIndex].time, track.keyframes[keyIndex].value);
+                if (!OBSIDIAN_animationCaptureGeneratedKeys(track)) throw new Error("After Effects could not record generated key times for '" + track.propertyId + "'.");
+            }
+            for (var interpolationIndex = 0; interpolationIndex < track.keyframes.length; interpolationIndex++) {
+                var keyframe = track.keyframes[interpolationIndex];
+                track.property.setInterpolationTypeAtKey(interpolationIndex + 1, keyframe.interpolationEnum, keyframe.interpolationEnum);
+                if (keyframe.interpolation === "bezier") {
+                    var dimensions = track.descriptor.scalar ? 1 : track.descriptor.propertyDimensions;
+                    track.property.setTemporalEaseAtKey(
+                        interpolationIndex + 1,
+                        OBSIDIAN_animationBuildEase(keyframe.easeIn, dimensions),
+                        OBSIDIAN_animationBuildEase(keyframe.easeOut, dimensions));
+                }
+            }
+        }
+        for (var verifyTrackIndex = 0; verifyTrackIndex < preflight.tracks.length; verifyTrackIndex++) {
+            var mismatch = OBSIDIAN_animationVerifyTrack(preflight.tracks[verifyTrackIndex]);
+            if (mismatch) throw new Error("Track '" + preflight.tracks[verifyTrackIndex].propertyId + "' on '" +
+                preflight.tracks[verifyTrackIndex].layerName + "' failed read-back: " + mismatch + ".");
+        }
+    } catch (error) {
+        operationError = error;
+        if (undoStarted) cleanup = OBSIDIAN_animationRollback(preflight.tracks);
+    }
+    var undoError = null;
+    if (undoStarted) {
+        try { app.endUndoGroup(); } catch (endError) { undoError = endError; }
+    }
+    if (operationError) {
+        var operationResponse = cleanup.ok
+            ? "ERROR|Animation '" + id + "' failed and generated keyframes were removed. " + operationError.toString()
+            : "ERROR|Animation '" + id + "' failed; cleanup left " + cleanup.remaining + " generated keyframe(s). Use After Effects Undo and inspect the selected layers. " + operationError.toString();
+        if (undoError) operationResponse += " Undo-group close failed: " + undoError.toString();
+        return operationResponse;
+    }
+    if (undoError) {
+        cleanup = OBSIDIAN_animationRollback(preflight.tracks);
+        return "ERROR|Animation '" + id + "' could not close its undo group" +
+            (cleanup.ok ? "; generated keyframes were removed. " : "; cleanup left " + cleanup.remaining + " generated keyframe(s). Use After Effects Undo. ") + undoError.toString();
+    }
+    return "OK|Verified animation '" + id + "' across " + layers.length + " layer(s), " +
+        preflight.tracks.length + " track(s), and " + preflight.totalKeys + " keyframe(s).";
 }
 
 function OBSIDIAN_prepareScaleTargets(layers, factor, absoluteValue) {

@@ -177,12 +177,12 @@ export function validateWhisperOutput(value) {
     const start = Number(raw.start);
     const end = Number(raw.end);
     const text = typeof raw.text === "string" ? raw.text.trim() : "";
-    if (!text || text.length > 2_000 || !Number.isFinite(start) || !Number.isFinite(end) || start < 0 || end <= start) continue;
+    if (!text || !Number.isFinite(start) || !Number.isFinite(end) || start < 0 || end <= start) continue;
     const words = Array.isArray(raw.words) ? raw.words.map((word) => ({
       text: typeof word?.text === "string" ? word.text.trim() : "",
       start: Number(word?.start),
       end: Number(word?.end),
-    })).filter((word) => word.text && word.text.length <= 100 && Number.isFinite(word.start) && Number.isFinite(word.end) && word.start >= start && word.end > word.start && word.end <= end + 0.25) : [];
+    })).filter((word) => word.text && Number.isFinite(word.start) && Number.isFinite(word.end) && word.start >= start && word.end > word.start && word.end <= end + 0.25) : [];
     segments.push({ text, start, end, words });
   }
   if (segments.length === 0) throw new TranscriptionError(422, "No speech was recognized in the selected audio.");

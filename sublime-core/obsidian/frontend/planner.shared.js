@@ -402,9 +402,10 @@
     var checked = captions.validateSegments(segments, Number(source.outPoint));
     if (!checked.ok) return { status: "needs_clarification", question: checked.error };
     if (typeof normalizedStyle !== "string") {
-    var fittedStyle = studio.fitStyle(normalizedStyle, checked.segments, Number(source.compWidth));
+      var fittedStyle = studio.fitStyle(normalizedStyle, checked.segments, Number(source.compWidth), Number(source.compHeight));
       if (!fittedStyle.ok) return { status: "needs_clarification", question: fittedStyle.error };
-      normalizedStyle = fittedStyle.style;
+      /* Keep the reviewed Base Size in the request. The guarded host independently
+         fits the batch to the same composition constraints before applying it. */
     }
     for (var i = 0; i < checked.segments.length; i++) {
       if (checked.segments[i].start < Number(source.inPoint) - 0.001 ||
@@ -456,8 +457,8 @@
     var styleValid = root.OBSIDIANCaptions.isStyle(args.style);
     if (!styleValid) {
       var style = root.OBSIDIANCaptionStyleStudio.normalizeStyle(args.style);
-      var fit = style && root.OBSIDIANCaptionStyleStudio.fitStyle(style, checked.segments, Number(args.source.compWidth));
-      styleValid = Boolean(fit && fit.ok && Math.abs(fit.style.fontSize - style.fontSize) < 0.05);
+      var fit = style && root.OBSIDIANCaptionStyleStudio.fitStyle(style, checked.segments, Number(args.source.compWidth), Number(args.source.compHeight));
+      styleValid = Boolean(fit && fit.ok);
     }
     return styleValid && checked.segments.every(function (segment) {
       return segment.start >= Number(args.source.inPoint) - 0.001 &&

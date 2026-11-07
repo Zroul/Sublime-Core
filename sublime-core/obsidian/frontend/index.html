@@ -1,176 +1,228 @@
-<!doctype html>
-<html lang="en">
+﻿<!doctype html>
+<html lang="en" data-aura-theme="mint">
 <head>
   <meta charset="UTF-8">
   <meta http-equiv="X-UA-Compatible" content="IE=edge">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>OBSIDIAN</title>
   <link rel="stylesheet" href="styles.css">
+  <script>
+    (function () {
+      var themes = ["violet", "ice", "ember", "rose", "mint"];
+      try {
+        var saved = window.localStorage.getItem("obsidian-aura-theme");
+        if (themes.indexOf(saved) !== -1) document.documentElement.dataset.auraTheme = saved;
+      } catch (error) {
+        document.documentElement.dataset.auraTheme = "mint";
+      }
+    }());
+  </script>
 </head>
 <body>
   <main class="obsidian" aria-label="OBSIDIAN After Effects assistant">
     <header class="topbar">
-      <div class="brand">
-        <span>OBSIDIAN</span>
+      <div class="brand" aria-label="OBSIDIAN">
+        <span class="brand-mark" aria-hidden="true">O</span>
+        <span class="brand-name">OBSIDIAN</span>
       </div>
-      <button id="captions-open" class="menu-button captions-open" type="button" aria-label="Generate captions" title="Generate captions">CC</button>
-      <button id="menu" class="menu-button" type="button" aria-label="OBSIDIAN menu">☰</button>
+      <div class="topbar-actions">
+        <button id="captions-open" class="captions-open" type="button" aria-label="Open caption workspace" title="Open caption workspace">
+          <span class="captions-icon" aria-hidden="true">CC</span><span>Captions</span>
+        </button>
+        <button id="menu" class="menu-button" type="button" aria-label="Open OBSIDIAN appearance menu" aria-expanded="false" aria-controls="panel-menu" title="Appearance and themes">
+          <svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="4" cy="10" r="1.15"></circle><circle cx="10" cy="10" r="1.15"></circle><circle cx="16" cy="10" r="1.15"></circle></svg>
+        </button>
+      </div>
+      <div id="panel-menu" class="panel-menu hidden" aria-label="OBSIDIAN menu">
+        <p class="menu-heading">Appearance</p>
+        <p class="menu-description">Choose an accent theme</p>
+        <div class="theme-options" role="group" aria-label="Accent theme">
+          <button type="button" class="theme-option" data-aura-theme-option="mint" aria-pressed="false"><span class="theme-swatch theme-swatch-mint" aria-hidden="true"></span><span>Teal</span><span class="theme-check" aria-hidden="true">✓</span></button>
+          <button type="button" class="theme-option" data-aura-theme-option="ice" aria-pressed="false"><span class="theme-swatch theme-swatch-ice" aria-hidden="true"></span><span>Ice</span><span class="theme-check" aria-hidden="true">✓</span></button>
+          <button type="button" class="theme-option" data-aura-theme-option="violet" aria-pressed="false"><span class="theme-swatch theme-swatch-violet" aria-hidden="true"></span><span>Violet</span><span class="theme-check" aria-hidden="true">✓</span></button>
+          <button type="button" class="theme-option" data-aura-theme-option="ember" aria-pressed="false"><span class="theme-swatch theme-swatch-ember" aria-hidden="true"></span><span>Ember</span><span class="theme-check" aria-hidden="true">✓</span></button>
+          <button type="button" class="theme-option" data-aura-theme-option="rose" aria-pressed="false"><span class="theme-swatch theme-swatch-rose" aria-hidden="true"></span><span>Rose</span><span class="theme-check" aria-hidden="true">✓</span></button>
+        </div>
+      </div>
     </header>
+
     <section class="panel-utility" aria-label="OBSIDIAN services and panel controls">
-      <div class="service-status" role="status" aria-live="polite" aria-label="Local service status">
-        <span id="core-service-status" class="service-status-item" data-state="checking" title="Checking the existing local CORE service">CORE checking</span>
-        <span id="whisper-service-status" class="service-status-item" data-state="checking" title="Checking local transcription dependencies">Whisper checking</span>
-      </div>
-      <button id="panel-refresh" class="panel-refresh-button" type="button" aria-label="Refresh OBSIDIAN panel">↻ Refresh OBSIDIAN</button>
-    </section>
-
-    <section class="welcome" aria-live="polite">
-      <div class="welcome-orb" aria-hidden="true">
-        <span></span>
-      </div>
-      <h1 id="welcome-message">READY WHEN U ARE</h1>
-    </section>
-
-    <section class="composer-wrap">
-      <form id="command-form" class="composer">
-        <textarea
-          id="command"
-          rows="1"
-          maxlength="1000"
-          autocomplete="off"
-          spellcheck="false"
-          placeholder="Ask OBSIDIAN to edit..."
-          aria-label="OBSIDIAN command"
-        ></textarea>
-        <button id="voice" class="action-button voice-button" type="button" aria-label="Voice command">●</button>
-        <button class="action-button send-button" type="submit" aria-label="Send command">↑</button>
-      </form>
-    </section>
-
-    <section id="caption-workspace" class="caption-workspace hidden" role="dialog" aria-modal="true" aria-labelledby="caption-title">
-      <header class="caption-header">
-        <div>
-          <strong id="caption-title">Local captions</strong>
-          <span>Review first. Nothing changes until you create captions.</span>
-        </div>
-        <button id="captions-close" type="button" aria-label="Close captions">×</button>
-      </header>
-      <nav class="caption-nav" aria-label="Caption workspace">
-        <button id="caption-view-review" class="caption-tab selected" type="button" aria-pressed="true">TRANSCRIPT</button>
-        <button id="caption-view-studio" class="caption-tab" type="button" aria-pressed="false">STYLE STUDIO</button>
-      </nav>
-      <div id="caption-review-space" class="caption-review-space">
-      <p class="caption-privacy">Audio stays on this computer. OBSIDIAN uses cached local Whisper and does not upload footage.</p>
-      <section id="caption-pipeline" class="caption-pipeline hidden" aria-live="polite">
-        <svg id="caption-progress-line" class="caption-progress-line" viewBox="0 0 320 16" preserveAspectRatio="none" role="progressbar" aria-label="Local caption transcription" aria-valuemin="0" aria-valuemax="100" aria-busy="true">
-          <defs>
-            <linearGradient id="caption-progress-glow" x1="0" y1="0" x2="1" y2="0">
-              <stop offset="0" stop-color="var(--aura-accent)" stop-opacity=".18"></stop>
-              <stop offset=".45" stop-color="var(--aura-cyan)" stop-opacity=".95"></stop>
-              <stop offset=".55" stop-color="#efffff" stop-opacity=".95"></stop>
-              <stop offset="1" stop-color="var(--aura-accent)" stop-opacity=".2"></stop>
-            </linearGradient>
-          </defs>
-          <path class="caption-progress-wave" pathLength="1000" d="M1 8 C14 2.5 27 13.5 40 8 S66 2.5 79 8 105 13.5 118 8 144 2.5 157 8 183 13.5 196 8 222 2.5 235 8 261 13.5 274 8 300 2.5 319 8"></path>
-        </svg>
-        <p id="caption-pipeline-error" class="caption-pipeline-error hidden" role="alert"></p>
-      </section>
-      <div class="caption-controls">
-        <label>Timing
-          <select id="caption-mode"><option value="phrase">Readable phrases</option><option value="word">Word by word</option></select>
-        </label>
-        <label>Style
-          <select id="caption-style"><option value="clean">Clean white</option><option value="bold">Bold white</option><option value="yellow">Yellow emphasis</option></select>
-        </label>
-      </div>
-      <button id="captions-transcribe" class="caption-primary" type="button">Transcribe selected footage</button>
-      <label class="caption-transcript-label" for="caption-transcript">Editable transcript (SRT timing)</label>
-      <textarea id="caption-transcript" spellcheck="true" placeholder="After local transcription, review and edit the caption text and timing here." aria-label="Editable captions in SRT format"></textarea>
-      <div class="caption-footer">
-        <button id="captions-cancel" type="button">Cancel</button>
-        <button id="captions-create" class="caption-primary" type="button" disabled>Create caption layers</button>
-      </div>
-      <p id="caption-status" class="caption-status" aria-live="polite"></p>
-      </div>
-
-      <section id="caption-style-studio" class="caption-style-studio hidden" aria-label="Caption Style Studio">
-        <div class="style-studio-heading">
-          <div><span class="style-kicker">CAPTION DESIGN</span><h2>Caption Style Studio</h2></div>
-          <span class="style-local-badge">LOCAL PREVIEW</span>
-        </div>
-        <div class="style-import-row">
-          <button id="caption-style-import-ae" class="style-secondary" type="button">Import selected AE text layer</button>
-          <label class="style-file-button">Import image or short video<input id="caption-style-file" type="file" accept="image/*,video/*"></label>
-        </div>
-        <p id="caption-style-note" class="style-note">AE text layers provide typography and keyframe metadata. Image/video references stay local and provide visual preview and sampled color only.</p>
-
-        <div class="style-preview-grid">
-          <section class="style-preview-card">
-            <div class="style-card-heading"><span>REFERENCE</span><button id="caption-style-sample-frame" type="button" class="style-sample-button hidden">Sample frame color</button></div>
-            <div id="caption-style-reference" class="style-preview-frame style-reference-frame"><span class="style-empty-reference">Import a local reference<br>or inspect an AE text layer</span></div>
-          </section>
-          <section class="style-preview-card">
-            <div class="style-card-heading"><span>GENERATED CAPTION</span><span id="caption-style-fit-label">CONSISTENT FIT</span></div>
-            <div id="caption-style-generated" class="style-preview-frame style-generated-frame"><span id="caption-style-preview-anchor"><span id="caption-style-preview-text">THE STORY BEGINS HERE</span></span></div>
-          </section>
-        </div>
-
-        <div class="style-controls-grid">
-          <label>AE font name<input id="caption-style-font" type="text" maxlength="128" value="Arial-BoldMT" autocomplete="off"></label>
-          <label>Base size<input id="caption-style-size" type="number" min="10" max="180" value="64"></label>
-          <label>Minimum fit size<input id="caption-style-min-size" type="number" min="10" max="180" value="20"></label>
-          <label>Alignment<select id="caption-style-align"><option value="center">Center</option><option value="left">Left</option><option value="right">Right</option></select></label>
-          <label>Fill color<input id="caption-style-fill" type="color" value="#ffffff"></label>
-          <label>Outline color<input id="caption-style-stroke-color" type="color" value="#080b14"></label>
-          <label class="style-check-label"><input id="caption-style-fill-enabled" type="checkbox" checked> Fill</label>
-          <label class="style-check-label"><input id="caption-style-stroke-enabled" type="checkbox" checked> Outline</label>
-          <label>Outline width<input id="caption-style-stroke-width" type="number" min="0" max="20" value="3"></label>
-          <label>Horizontal position<input id="caption-style-x" type="range" min="2" max="98" value="50"><span id="caption-style-x-value">50%</span></label>
-          <label>Vertical position<input id="caption-style-y" type="range" min="2" max="98" value="86"><span id="caption-style-y-value">86%</span></label>
-        </div>
-        <div class="style-palette-row"><span>PALETTE</span><div id="caption-style-palette" class="style-palette" aria-label="Caption color palette"></div></div>
-
-        <section class="style-animation-section">
-          <div class="style-card-heading"><span>ANIMATION PRESETS</span><span>DETERMINISTIC</span></div>
-          <div class="style-animation-grid">
-            <button type="button" data-caption-animation="none" class="style-animation-choice">Static</button>
-            <button type="button" data-caption-animation="fade" class="style-animation-choice selected">Fade</button>
-            <button type="button" data-caption-animation="pop" class="style-animation-choice">Pop</button>
-            <button type="button" data-caption-animation="smooth_scale" class="style-animation-choice">Smooth scale</button>
-            <button type="button" data-caption-animation="slide" class="style-animation-choice">Slide</button>
-            <button type="button" data-caption-animation="typewriter" class="style-animation-choice">Typewriter</button>
-            <button type="button" data-caption-animation="word_emphasis" class="style-animation-choice">Word emphasis</button>
-          </div>
-          <p class="style-animation-note">Each preset uses the same bounded keyframe pattern on every caption layer. Word emphasis is most noticeable with word-by-word timing.</p>
-          <label class="style-duration-control">Animation duration<input id="caption-style-duration" type="number" min="0.08" max="2" step="0.04" value="0.4"><span>seconds</span></label>
-        </section>
-
-        <details class="style-analysis-details">
-          <summary>Reference analysis</summary>
-          <p id="caption-style-analysis">No reference inspected yet.</p>
-          <p class="style-limits">Shadow/glow values can be reported from AE effects but are not reproduced on generated captions. Caption Glow remains unavailable. Static image pixels do not provide animation metadata.</p>
+      <div class="service-status" role="group" aria-label="Local service status">
+        <details class="service-status-control">
+          <summary id="core-service-status" class="service-status-item" data-state="checking" aria-live="polite" aria-label="CORE service status: checking">CORE checking</summary>
+          <p id="core-service-detail" class="service-status-detail">Checking the existing local CORE service.</p>
         </details>
+        <details class="service-status-control">
+          <summary id="whisper-service-status" class="service-status-item" data-state="checking" aria-live="polite" aria-label="Whisper service status: checking">Whisper checking</summary>
+          <p id="whisper-service-detail" class="service-status-detail">Checking local transcription dependencies.</p>
+        </details>
+      </div>
+      <button id="panel-refresh" class="panel-refresh-button" type="button" aria-label="Refresh OBSIDIAN panel" title="Reconnect to local services and reload the panel">
+        <span class="refresh-icon" aria-hidden="true">↻</span><span class="refresh-label">Refresh OBSIDIAN</span>
+      </button>
+    </section>
+
+    <section class="welcome" aria-label="Assistant welcome">
+      <div class="welcome-mark" aria-hidden="true"><span>O</span><i></i></div>
+      <div id="progress" class="working-status hidden" role="status" aria-live="polite" aria-atomic="true" data-state="working">
+        <span id="progress-label" class="working-status-label"></span>
+        <span id="progress-value" class="sr-only"></span>
+      </div>
+      <p class="welcome-eyebrow">LOCAL EDITING ASSISTANT</p>
+      <h1 id="welcome-message">Ready when you are.</h1>
+      <p class="welcome-support">Ask about editing or describe a supported change.</p>
+    </section>
+
+    <section class="composer-wrap" aria-label="Command composer">
+      <form id="command-form" class="composer">
+        <label class="sr-only" for="command">OBSIDIAN command</label>
+        <textarea id="command" rows="1" maxlength="1000" autocomplete="off" spellcheck="false" placeholder="Describe an edit or ask a question…" aria-label="OBSIDIAN command"></textarea>
+        <div class="composer-actions">
+          <button id="voice" class="action-button voice-button" type="button" aria-label="Voice command; record locally" title="Record a voice request locally; review the transcript before sending">
+            <svg class="voice-icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="3" width="6" height="12" rx="3"></rect><path d="M5.5 11.5a6.5 6.5 0 0 0 13 0M12 18v3m-4 0h8"></path></svg>
+            <span class="voice-stop-icon" aria-hidden="true"></span>
+          </button>
+          <button class="action-button send-button" type="submit" aria-label="Send command" title="Send command">
+            <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M10 15.5V4.5M5.5 9 10 4.5 14.5 9"></path></svg>
+          </button>
+        </div>
+      </form>
+      <p class="composer-hint"><span>Enter</span> to send <i aria-hidden="true">·</i> <span>Shift + Enter</span> for a new line</p>
+    </section>
+
+    <div id="result" class="result hidden" role="status" aria-live="polite" aria-atomic="true" data-state="success">
+      <span class="result-mark" aria-hidden="true">✓</span>
+      <span id="result-text">Done</span>
+    </div>
+
+    <section id="caption-workspace" class="caption-workspace hidden" role="dialog" aria-modal="true" aria-labelledby="caption-title" aria-describedby="caption-source-summary">
+      <header class="caption-header">
+        <div class="caption-heading-copy">
+          <p class="eyebrow">SOURCE · TRANSCRIPT · STYLE · IMPLEMENT · VERIFY</p>
+          <h2 id="caption-title">Caption Studio</h2>
+          <p id="caption-source-summary" class="caption-source-summary" data-state="empty">No footage inspected</p>
+        </div>
+        <div class="caption-header-tools">
+          <div id="caption-working-status" class="cc-working-status hidden" role="status" aria-live="polite" aria-atomic="true">
+            <span class="cc-status-orb" aria-hidden="true"></span>
+            <span id="caption-working-label" class="working-status-label"></span>
+          </div>
+          <div class="cc-service-status" role="group" aria-label="Local service health">
+            <span id="cc-core-service-status" class="cc-service-item" data-state="checking" aria-label="CORE service status: checking">CORE checking</span>
+            <span id="cc-whisper-service-status" class="cc-service-item" data-state="checking" aria-label="Whisper service status: checking">Whisper checking</span>
+            <button id="cc-refresh" class="cc-refresh-button" type="button" aria-label="Refresh OBSIDIAN services and panel" title="Reconnect and refresh service status"><span aria-hidden="true">↻</span></button>
+          </div>
+          <button id="captions-close" class="icon-button caption-close" type="button" aria-label="Close caption workspace" title="Close caption workspace">×</button>
+        </div>
+      </header>
+      <nav class="caption-nav" aria-label="Caption workspace views" role="tablist">
+        <button id="caption-view-review" class="caption-tab selected" type="button" role="tab" aria-selected="true" aria-pressed="true" aria-controls="caption-review-space" tabindex="0">Transcript</button>
+        <button id="caption-view-studio" class="caption-tab" type="button" role="tab" aria-selected="false" aria-pressed="false" aria-controls="caption-style-studio" tabindex="-1">Style Studio</button>
+      </nav>
+
+      <div id="caption-review-space" class="caption-review-space" role="tabpanel" aria-labelledby="caption-view-review" tabindex="0">
+        <p class="caption-privacy"><span class="privacy-mark" aria-hidden="true">●</span> Audio stays on this computer. Local Whisper does not upload footage.</p>
+        <section id="caption-pipeline" class="caption-pipeline hidden" aria-live="polite">
+          <svg id="caption-progress-line" class="caption-progress-line" viewBox="0 0 320 16" preserveAspectRatio="none" role="progressbar" aria-label="Local caption transcription" aria-valuemin="0" aria-valuemax="100" aria-busy="true">
+            <defs>
+              <linearGradient id="caption-progress-glow" x1="0" y1="0" x2="1" y2="0">
+                <stop offset="0" stop-color="var(--accent)" stop-opacity=".18"></stop>
+                <stop offset=".45" stop-color="var(--accent-soft)" stop-opacity=".95"></stop>
+                <stop offset=".55" stop-color="#efffff" stop-opacity=".95"></stop>
+                <stop offset="1" stop-color="var(--accent)" stop-opacity=".2"></stop>
+              </linearGradient>
+            </defs>
+            <path class="caption-progress-wave" pathLength="1000" d="M1 8 C14 2.5 27 13.5 40 8 S66 2.5 79 8 105 13.5 118 8 144 2.5 157 8 183 13.5 196 8 222 2.5 235 8 261 13.5 274 8 300 2.5 319 8"></path>
+          </svg>
+          <p id="caption-pipeline-error" class="caption-pipeline-error hidden" role="alert"></p>
+        </section>
+        <div class="caption-controls">
+          <label for="caption-mode">Timing
+            <select id="caption-mode"><option value="phrase">Readable phrases</option><option value="word">Word by word</option></select>
+          </label>
+        </div>
+        <button id="captions-transcribe" class="caption-primary transcribe-button" type="button">Transcribe selected footage</button>
+        <div class="caption-transcript-heading">
+          <label class="caption-transcript-label" for="caption-transcript">Editable transcript <span>· SRT timing</span></label>
+          <span id="caption-save-state" class="caption-save-state" data-state="empty" aria-live="polite">NO DRAFT</span>
+        </div>
+        <textarea id="caption-transcript" spellcheck="true" placeholder="After local transcription, review and edit the caption text and timing here." aria-label="Editable captions in SRT format"></textarea>
+        <div class="caption-footer">
+          <button id="captions-cancel" class="button-secondary" type="button">Cancel</button>
+          <button id="captions-create" class="caption-primary" type="button" disabled>Create caption layers</button>
+        </div>
+        <p id="caption-status" class="caption-status" aria-live="polite" aria-atomic="true"></p>
+      </div>
+
+      <section id="caption-style-studio" class="caption-style-studio hidden" aria-label="Caption Style Studio" role="tabpanel" aria-labelledby="caption-view-studio" tabindex="0">
+        <div class="style-studio-scroll">
+          <div class="style-studio-heading">
+            <div><p class="eyebrow">CAPTION DESIGN</p><h3>Caption Style Studio</h3></div>
+            <span class="style-local-badge"><span aria-hidden="true">●</span> Local preview</span>
+          </div>
+
+          <section class="style-section" aria-labelledby="style-preview-heading">
+            <div class="section-heading-row"><h4 id="style-preview-heading">Caption preview</h4></div>
+            <div class="style-preview-grid">
+              <section class="style-preview-card" aria-labelledby="style-generated-preview-title">
+                <div class="style-card-heading"><h5 id="style-generated-preview-title">Caption preview</h5><span id="caption-style-fit-label">Consistent fit</span></div>
+                <div id="caption-style-generated" class="style-preview-frame style-generated-frame"><span id="caption-style-preview-anchor"><span id="caption-style-preview-text">THE STORY BEGINS HERE</span></span></div>
+              </section>
+            </div>
+          </section>
+
+          <section class="style-section" aria-labelledby="style-typography-heading">
+            <div class="section-heading-row"><h4 id="style-typography-heading">Typography</h4></div>
+            <div class="style-controls-grid typography-grid">
+              <label for="caption-style-font">AE font name<input id="caption-style-font" type="text" maxlength="128" value="Arial-BoldMT" autocomplete="off"></label>
+              <label for="caption-style-size">Base size (px)<input id="caption-style-size" type="number" min="0.1" max="1296" step="0.1" value="64"></label>
+              <label for="caption-style-min-size">Auto-fit floor (px)<input id="caption-style-min-size" type="number" min="0.1" max="1296" step="0.1" value="20"></label>
+              <label for="caption-style-align">Alignment<select id="caption-style-align"><option value="center">Center</option><option value="left">Left</option><option value="right">Right</option></select></label>
+            </div>
+          </section>
+
+          <section class="style-section" aria-labelledby="style-color-heading">
+            <div class="section-heading-row"><h4 id="style-color-heading">Color and outline</h4></div>
+            <div class="style-controls-grid color-grid">
+              <label for="caption-style-fill">Fill color<input id="caption-style-fill" type="color" value="#ffffff"></label>
+              <label for="caption-style-stroke-color">Outline color<input id="caption-style-stroke-color" type="color" value="#080b14"></label>
+              <label class="style-check-label" for="caption-style-fill-enabled"><input id="caption-style-fill-enabled" type="checkbox" checked> Fill enabled</label>
+              <label class="style-check-label" for="caption-style-stroke-enabled"><input id="caption-style-stroke-enabled" type="checkbox" checked> Outline enabled</label>
+              <label for="caption-style-stroke-width">Outline width<input id="caption-style-stroke-width" type="number" min="0" max="20" value="3"></label>
+            </div>
+            <div class="style-palette-row"><span>Suggested colors</span><div id="caption-style-palette" class="style-palette" role="group" aria-label="Suggested caption colors"></div></div>
+          </section>
+
+          <section class="style-section" aria-labelledby="style-position-heading">
+            <div class="section-heading-row"><h4 id="style-position-heading">Position</h4><span class="section-meta">Composition proportions</span></div>
+            <div class="style-controls-grid position-grid">
+              <label for="caption-style-x">Horizontal position<input id="caption-style-x" type="range" min="2" max="98" value="50"><span id="caption-style-x-value">50%</span></label>
+              <label for="caption-style-y">Vertical position<input id="caption-style-y" type="range" min="2" max="98" value="86"><span id="caption-style-y-value">86%</span></label>
+            </div>
+          </section>
+
+          <section class="style-section style-animation-section" aria-labelledby="style-animation-heading">
+            <div class="section-heading-row"><h4 id="style-animation-heading">Animation</h4><span class="section-meta">Deterministic presets</span></div>
+            <div class="style-animation-grid" role="group" aria-label="Caption animation preset">
+              <button type="button" data-caption-animation="none" class="style-animation-choice" aria-pressed="false">Static</button>
+              <button type="button" data-caption-animation="fade" class="style-animation-choice selected" aria-pressed="true">Fade</button>
+              <button type="button" data-caption-animation="pop" class="style-animation-choice" aria-pressed="false">Pop</button>
+              <button type="button" data-caption-animation="smooth_scale" class="style-animation-choice" aria-pressed="false">Smooth scale</button>
+              <button type="button" data-caption-animation="slide" class="style-animation-choice" aria-pressed="false">Slide</button>
+              <button type="button" data-caption-animation="typewriter" class="style-animation-choice" aria-pressed="false">Typewriter</button>
+              <button type="button" data-caption-animation="word_emphasis" class="style-animation-choice" aria-pressed="false">Word emphasis</button>
+            </div>
+            <p class="style-animation-note">The same bounded keyframe pattern is used for each caption. Word emphasis is most noticeable with word-by-word timing.</p>
+            <label class="style-duration-control" for="caption-style-duration">Animation duration<input id="caption-style-duration" type="number" min="0.08" max="2" step="0.04" value="0.4"><span>seconds</span></label>
+          </section>
+
+        </div>
         <div class="style-implement-row">
-          <span id="caption-style-status" class="caption-status" aria-live="polite">Review the transcript first, then implement this style.</span>
+          <span id="caption-style-status" class="caption-status" aria-live="polite" aria-atomic="true"></span>
           <button id="caption-style-implement" class="caption-primary" type="button" disabled>IMPLEMENT</button>
         </div>
       </section>
     </section>
-
-    <div id="progress" class="progress hidden" aria-live="polite">
-      <div class="progress-head">
-        <span id="progress-label">Working...</span>
-        <span id="progress-value">0%</span>
-      </div>
-      <div class="progress-track">
-        <div id="progress-bar" class="progress-bar"></div>
-      </div>
-    </div>
-
-    <div id="result" class="result hidden" aria-live="polite">
-      <span class="result-mark">✓</span>
-      <span id="result-text">Done</span>
-    </div>
   </main>
 
   <script src="knowledge.js"></script>
@@ -178,35 +230,36 @@
   <script src="captions.js"></script>
   <script src="caption-style-studio.js"></script>
   <script src="caption-progress.js"></script>
+  <script src="working-status.js"></script>
   <script src="style-recipes.js"></script>
   <script src="planner.shared.js"></script>
   <script src="host-bridge.js"></script>
   <script src="panel-refresh.js"></script>
   <script src="app.js"></script>
-  <script>
-  (() => {
-    const themes = ["violet", "ice", "ember", "rose", "mint"];
-    let current = Math.max(0, themes.indexOf(document.documentElement.dataset.auraTheme || "violet"));
-    document.documentElement.dataset.auraTheme = themes[current];
-    const attach = () => {
-      const menu = document.getElementById("menu");
-      if (!menu || document.getElementById("aura-theme-toggle")) return;
-      const btn = document.createElement("button");
-      btn.id = "aura-theme-toggle";
-      btn.type = "button";
-      btn.title = "Change AURA accent theme";
-      btn.setAttribute("aria-label", "Change AURA accent theme");
-      btn.textContent = "◉ THEME";
-      btn.addEventListener("click", () => {
-        current = (current + 1) % themes.length;
-        document.documentElement.dataset.auraTheme = themes[current];
-        btn.textContent = "◉ " + themes[current].toUpperCase();
-      });
-      menu.insertAdjacentElement("beforebegin", btn);
-    };
-    if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", attach);
-    else attach();
-  })();
-  </script>
+<script>
+(() => {
+  const themes = ["violet", "ice", "ember", "rose", "mint"];
+  let current = Math.max(0, themes.indexOf(document.documentElement.dataset.auraTheme || "violet"));
+  document.documentElement.dataset.auraTheme = themes[current];
+  const attach = () => {
+    const menu = document.getElementById("menu");
+    if (!menu || document.getElementById("aura-theme-toggle")) return;
+    const btn = document.createElement("button");
+    btn.id = "aura-theme-toggle";
+    btn.type = "button";
+    btn.title = "Change AURA accent theme";
+    btn.setAttribute("aria-label", "Change AURA accent theme");
+    btn.textContent = "â—‰ THEME";
+    btn.addEventListener("click", () => {
+      current = (current + 1) % themes.length;
+      document.documentElement.dataset.auraTheme = themes[current];
+      btn.textContent = "â—‰ " + themes[current].toUpperCase();
+    });
+    menu.insertAdjacentElement("beforebegin", btn);
+  };
+  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", attach);
+  else attach();
+})();
+</script>
 </body>
 </html>
