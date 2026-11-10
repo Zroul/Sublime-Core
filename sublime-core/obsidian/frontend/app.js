@@ -4,6 +4,12 @@ const voiceButton = document.querySelector("#voice");
 const applicationShell = document.querySelector(".obsidian");
 const welcomeOrb = document.querySelector(".welcome-mark");
 const captionsOpenButton = document.querySelector("#captions-open");
+const transitionsOpenButton = document.querySelector("#transitions-open");
+const transitionsPanel = document.querySelector("#transitions-panel");
+const transitionsCloseButton = document.querySelector("#transitions-close");
+const shake01ApplyButton = document.querySelector("#shake-01-apply");
+const shake01OutgoingDuration = document.querySelector("#shake-01-outgoing");
+const shake01IncomingDuration = document.querySelector("#shake-01-incoming");
 const captionWorkspace = document.querySelector("#caption-workspace");
 const captionsCloseButton = document.querySelector("#captions-close");
 const captionsCancelButton = document.querySelector("#captions-cancel");
@@ -60,6 +66,25 @@ const whisperServiceDetail = document.querySelector("#whisper-service-detail");
 const panelMenuButton = document.querySelector("#menu");
 const panelMenu = document.querySelector("#panel-menu");
 const themeOptions = Array.from(document.querySelectorAll("[data-aura-theme-option]"));
+
+
+function setTransitionsPanelOpen(open) {
+  const isOpen = Boolean(open);
+  transitionsPanel.classList.toggle("hidden", !isOpen);
+  transitionsOpenButton.setAttribute("aria-expanded", String(isOpen));
+  if (isOpen) shake01OutgoingDuration.focus();
+  else transitionsOpenButton.focus();
+}
+transitionsOpenButton.addEventListener("click", () => setTransitionsPanelOpen(true));
+transitionsCloseButton.addEventListener("click", () => setTransitionsPanelOpen(false));
+shake01ApplyButton.addEventListener("click", () => {
+  const outgoing = Number(shake01OutgoingDuration.value), incoming = Number(shake01IncomingDuration.value);
+  if (!Number.isFinite(outgoing) || !Number.isFinite(incoming) || outgoing < 0.1 || outgoing > 2 || incoming < 0.1 || incoming > 2) {
+    showResult("Each transition duration must be between 0.1 and 2 seconds.", true); return;
+  }
+  setTransitionsPanelOpen(false); resetStatus();
+  runAE("shake 01 outgoing " + outgoing.toFixed(2) + " incoming " + incoming.toFixed(2));
+});
 
 let commandInFlight = false;
 let proposalInFlight = false;
@@ -1071,7 +1096,7 @@ function runAE(command) {
   const profileArgument = JSON.stringify(typeof args.profile === "string"
     ? args.profile
     : typeof args.recipeId === "string" ? args.recipeId : "");
-  const secondaryValueArgument = typeof args.contrast === "number" ? String(args.contrast) : "null";
+  const secondaryValueArgument = typeof args.secondaryValue === "number" ? String(args.secondaryValue) : typeof args.contrast === "number" ? String(args.contrast) : "null";
   let expression;
   try {
     expression = plan.action === "create_captions"
