@@ -2,6 +2,25 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { isExecutablePlan, planObsidianCommand } from "./planner.mjs";
 
+test("plans Shake 01 with independent outgoing and incoming durations", () => {
+  const plan = planObsidianCommand("shake 01 outgoing 0.40 incoming 0.65");
+  assert.equal(plan.status, "planned");
+  assert.equal(plan.action, "shake_transition");
+  assert.deepEqual(plan.args, { value: 0.4, secondaryValue: 0.65, profile: "shake_01" });
+  assert.equal(isExecutablePlan(plan), true);
+
+  for (const request of [
+    "shake 01",
+    "shake 01 outgoing 0.05 incoming 0.4",
+    "shake 01 outgoing 2.1 incoming 0.4",
+    "shake 01 outgoing 0.4 incoming 2.1",
+  ]) {
+    const invalid = planObsidianCommand(request);
+    assert.equal(invalid.status, "needs_clarification", request);
+    assert.equal(isExecutablePlan(invalid), false, request);
+  }
+});
+
 test("maps project inspection to a read-only action", () => {
   assert.equal(planObsidianCommand("inspect the active composition").action, "inspect_project");
 });
