@@ -2436,9 +2436,15 @@ function OBSIDIAN_shakeTransition(outgoingDuration, incomingDuration, profile) {
                 typeof prop.setInterpolationTypeAtKey !== "function" || Number(prop.numKeys) !== 0 || prop.expressionEnabled)
                 return "REJECTED|Existing transform keyframes, expressions, or unsupported properties were preserved.";
             if (spec.k === "vector") {
-                if (!prop.value || prop.value.length !== 2 || prop.dimensionsSeparated)
-                    return "REJECTED|Shake 01 requires unified 2D Position and Scale properties.";
-                if (!isFinite(Number(prop.value[0])) || !isFinite(Number(prop.value[1])))
+                var vectorLength = prop.value && typeof prop.value.length === "number" ? prop.value.length : 0;
+                if (spec.n === "Position" && (vectorLength !== 2 || prop.dimensionsSeparated))
+                    return "REJECTED|Shake 01 requires a unified 2D Position property.";
+                /* AE can expose a 2D layer's Scale as [x, y, z]. Preserve the
+                   hidden Z component exactly; only X/Y participate in the shake. */
+                if (spec.n === "Scale" && vectorLength !== 2 && !(vectorLength === 3 && !layer.threeDLayer))
+                    return "REJECTED|Shake 01 requires a supported 2D Scale property.";
+                if (!isFinite(Number(prop.value[0])) || !isFinite(Number(prop.value[1])) ||
+                    (vectorLength === 3 && !isFinite(Number(prop.value[2]))))
                     return "REJECTED|A selected clip has non-numeric transform values.";
             } else if (!isFinite(Number(prop.value))) return "REJECTED|A selected clip has a non-numeric Rotation value.";
             tracks.push({property:prop,kind:spec.k,channel:spec.n,base:spec.k==="vector"?[Number(prop.value[0]),Number(prop.value[1])]:Number(prop.value),
@@ -2454,7 +2460,11 @@ function OBSIDIAN_shakeTransition(outgoingDuration, incomingDuration, profile) {
                 var amp=12*sign, dx=[0,amp,-amp,amp*0.45,0][ki], dy=[0,-amp*0.55,amp*0.55,-amp*0.25,0][ki];
                 value=[t.base[0]+dx,t.base[1]+dy];
             } else if (t.channel==="Rotation") value=t.base+sign*[0,1.2,-1.2,0.55,0][ki];
-            else { var factor=[1,1.015,0.99,1.008,1][ki]; value=[t.base[0]*factor,t.base[1]*factor]; }
+            else {
+                var factor=[1,1.015,0.99,1.008,1][ki];
+                value=[t.base[0]*factor,t.base[1]*factor];
+                if (t.base.length === 3) value.push(t.base[2]);
+            }
             keys.push({time:start+Math.round(t.frames*offsets[ki])*frameDuration,value:value});
         }
         prepared.push({property:t.property,keys:keys,originalValue:t.kind==="vector"?[t.base[0],t.base[1]]:t.base});
