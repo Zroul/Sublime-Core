@@ -1986,3 +1986,11 @@ test("Shake 01 rolls back every generated key when a transform write fails", () 
   for (const entry of clips.properties) for (const track of Object.values(entry)) assert.equal(track.keys.length, 0);
   assert.deepEqual(undoEvents.map(([kind]) => kind), ["begin", "end"]);
 });
+
+test("Shake 01 rejects durations outside its supported range", () => {
+  const { context } = makeContext();
+  const clips = makeShakeClips(context);
+  const result = context.OBSIDIAN_shakeTransition(2.1, 0.4, "shake_01");
+  assert.match(result, /^REJECTED\\|Each Shake 01 duration must be between 0.1 and 2 seconds/);
+  for (const entry of clips.properties) for (const track of Object.values(entry)) assert.equal(track.keys.length, 0);
+});
