@@ -2391,6 +2391,39 @@ function OBSIDIAN_crossfade() {
 }
 
 
+function OBSIDIAN_shakePositionDiagnostic(layer) {
+    var transform = null, property = null, value = null, valueLength = 0;
+    var propertyValueType = "unavailable", dimensionsSeparated = "unavailable";
+    var isSeparationLeader = "unavailable", valueText = "unavailable";
+    try { transform = layer ? layer.property("ADBE Transform Group") : null; } catch (ignoredTransform) {}
+    try { property = transform ? transform.property("ADBE Position") : null; } catch (ignoredProperty) {}
+    if (property) {
+        try {
+            value = property.value;
+            valueLength = value && typeof value.length === "number" ? value.length : 0;
+            if (value && typeof value.length === "number") {
+                var parts = [];
+                for (var i = 0; i < value.length; i++) parts.push(String(value[i]));
+                valueText = "[" + parts.join(", ") + "]";
+            } else valueText = String(value);
+        } catch (ignoredValue) {}
+        try {
+            propertyValueType = String(property.propertyValueType);
+            if (typeof PropertyValueType !== "undefined") {
+                if (property.propertyValueType === PropertyValueType.OneD) propertyValueType = "OneD";
+                else if (property.propertyValueType === PropertyValueType.TwoD) propertyValueType = "TwoD";
+                else if (property.propertyValueType === PropertyValueType.ThreeD) propertyValueType = "ThreeD";
+            }
+        } catch (ignoredType) {}
+        try { dimensionsSeparated = String(property.dimensionsSeparated); } catch (ignoredSeparated) {}
+        try { isSeparationLeader = String(property.isSeparationLeader); } catch (ignoredLeader) {}
+    }
+    return "layer='" + OBSIDIAN_cleanText(layer && layer.name ? layer.name : "unnamed") +
+        "' valueLength=" + valueLength + " propertyValueType=" + propertyValueType +
+        " dimensionsSeparated=" + dimensionsSeparated + " isSeparationLeader=" + isSeparationLeader +
+        " layer3D=" + String(Boolean(layer && layer.threeDLayer)) + " value=" + valueText;
+}
+
 function OBSIDIAN_shakeTransition(outgoingDuration, incomingDuration, profile) {
     var comp = OBSIDIAN_getActiveComp();
     var layers = OBSIDIAN_getSelectedLayers();
@@ -2437,8 +2470,12 @@ function OBSIDIAN_shakeTransition(outgoingDuration, incomingDuration, profile) {
                 return "REJECTED|Existing transform keyframes, expressions, or unsupported properties were preserved.";
             if (spec.k === "vector") {
                 var vectorLength = prop.value && typeof prop.value.length === "number" ? prop.value.length : 0;
-                if (spec.n === "Position" && (vectorLength !== 2 || prop.dimensionsSeparated))
-                    return "REJECTED|Shake 01 requires a unified 2D Position property.";
+                if (spec.n === "Position" && (vectorLength !== 2 || prop.dimensionsSeparated)) {
+                    var positionDiagnostics = [];
+                    for (var pd = 0; pd < selected.length; pd++) positionDiagnostics.push(OBSIDIAN_shakePositionDiagnostic(selected[pd]));
+                    return "REJECTED|Shake 01 requires a unified 2D Position property. Position diagnostics: " +
+                        positionDiagnostics.join(" || ");
+                }
                 /* AE can expose a 2D layer's Scale as [x, y, z]. Preserve the
                    hidden Z component exactly; only X/Y participate in the shake. */
                 if (spec.n === "Scale" && vectorLength !== 2 && !(vectorLength === 3 && !layer.threeDLayer))
@@ -2472,7 +2509,7 @@ function OBSIDIAN_shakeTransition(outgoingDuration, incomingDuration, profile) {
             }
             keys.push({time:start+Math.round(t.frames*offsets[ki])*frameDuration,value:value});
         }
-        prepared.push({property:t.property,keys:keys,originalValue:t.kind==="vector"?[t.base[0],t.base[1]]:t.base});
+        prepared.push({property:t.property,keys:keys,originalValue:t.kind==="vector"?t.base.slice(0):t.base});
     }
     var error=null, undoOpen=false;
     try {
