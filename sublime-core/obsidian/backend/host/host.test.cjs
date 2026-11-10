@@ -1924,9 +1924,15 @@ function makeShakeClips(context, outgoingOutPoint = 3, incomingInPoint = 2) {
   const properties = [];
   for (const layer of [outgoing, incoming]) {
     const transform = layer.property("ADBE Transform Group");
-    const position = enableAnimationProperty(transform.property("ADBE Position"));
-    const rotation = enableAnimationProperty(transform.property("ADBE Rotation"));
-    const scale = enableAnimationProperty(transform.property("ADBE Scale"));
+    const positionProperty = transform.property("ADBE Position");
+    const rotationProperty = transform.property("ADBE Rotation");
+    const scaleProperty = transform.property("ADBE Scale");
+    const position = enableAnimationProperty(positionProperty);
+    const rotation = enableAnimationProperty(rotationProperty);
+    const scale = enableAnimationProperty(scaleProperty);
+    position.property = positionProperty;
+    rotation.property = rotationProperty;
+    scale.property = scaleProperty;
     properties.push({ position, rotation, scale });
   }
   context.comp.selectedLayers = [incoming, outgoing]; // Deliberately reverse selection order.
