@@ -1935,7 +1935,7 @@ function makeShakeClips(context, outgoingOutPoint = 3, incomingInPoint = 2) {
     scale.property = scaleProperty;
     properties.push({ position, rotation, scale });
   }
-  context.comp.selectedLayers = [incoming, outgoing]; // Deliberately reverse selection order.
+  context.app.project.activeItem.selectedLayers = [incoming, outgoing]; // Deliberately reverse selection order.
   return { outgoing, incoming, properties };
 }
 
