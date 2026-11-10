@@ -8,6 +8,8 @@ test("plans Shake 01 with independent outgoing and incoming durations", () => {
   assert.equal(plan.action, "shake_transition");
   assert.deepEqual(plan.args, { value: 0.4, secondaryValue: 0.65, profile: "shake_01" });
   assert.equal(isExecutablePlan(plan), true);
+  assert.equal(isExecutablePlan({ ...plan, args: { ...plan.args, value: 2.1 } }), false);
+  assert.equal(isExecutablePlan({ ...plan, args: { ...plan.args, profile: "shake_03" } }), false);
 
   for (const request of [
     "shake 01",
