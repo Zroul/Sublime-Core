@@ -485,6 +485,13 @@
       var creativeRecipes = root.OBSIDIANCreativeRecipes;
       return Boolean(plan.args && creativeRecipes && creativeRecipes.isExecutableRecipe(plan.args.recipeId));
     }
+    if (plan.action === "shake_transition") {
+      return Boolean(plan.args && plan.args.profile === "shake_01" &&
+        typeof plan.args.value === "number" && isFinite(plan.args.value) &&
+        typeof plan.args.secondaryValue === "number" && isFinite(plan.args.secondaryValue) &&
+        plan.args.value >= 0.1 && plan.args.value <= 2 &&
+        plan.args.secondaryValue >= 0.1 && plan.args.secondaryValue <= 2);
+    }
     if (plan.action === "set_brightness_contrast") {
       return Boolean(plan.args && typeof plan.args.brightness === "number" &&
         typeof plan.args.contrast === "number" && Math.abs(plan.args.brightness) <= 25 &&
