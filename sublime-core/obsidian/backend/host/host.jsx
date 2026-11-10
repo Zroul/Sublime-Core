@@ -2447,7 +2447,12 @@ function OBSIDIAN_shakeTransition(outgoingDuration, incomingDuration, profile) {
                     (vectorLength === 3 && !isFinite(Number(prop.value[2]))))
                     return "REJECTED|A selected clip has non-numeric transform values.";
             } else if (!isFinite(Number(prop.value))) return "REJECTED|A selected clip has a non-numeric Rotation value.";
-            tracks.push({property:prop,kind:spec.k,channel:spec.n,base:spec.k==="vector"?[Number(prop.value[0]),Number(prop.value[1])]:Number(prop.value),
+            var baseValue = spec.k === "vector"
+                ? (spec.n === "Scale" && vectorLength === 3
+                    ? [Number(prop.value[0]), Number(prop.value[1]), Number(prop.value[2])]
+                    : [Number(prop.value[0]), Number(prop.value[1])])
+                : Number(prop.value);
+            tracks.push({property:prop,kind:spec.k,channel:spec.n,base:baseValue,
                 role:li,frames:li===0?outgoingFrames:incomingFrames,anchor:li===0?overlapEnd:overlapStart});
         }
     }
@@ -2498,7 +2503,7 @@ function OBSIDIAN_shakeTransition(outgoingDuration, incomingDuration, profile) {
             if(!isFinite(count)||count>5) continue;
             for(var rk=count;rk>=1;rk--) rp.removeKey(rk);
             var originalValue=prepared[ri].originalValue;
-            rp.setValue(originalValue && typeof originalValue.length==="number" ? [originalValue[0],originalValue[1]] : originalValue);
+            rp.setValue(originalValue && typeof originalValue.length==="number" ? originalValue.slice(0) : originalValue);
             if(Number(rp.numKeys)===0 && OBSIDIAN_keyframeValueMatches(rp.value,originalValue)) restored++;
         } catch(ignoredRestore) {}
         if(undoOpen) try{app.endUndoGroup();}catch(ignoredEnd){}
