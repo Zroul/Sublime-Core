@@ -2390,6 +2390,110 @@ function OBSIDIAN_crossfade() {
     );
 }
 
+
+function OBSIDIAN_shakeTransition(outgoingDuration, incomingDuration, profile) {
+    var comp = OBSIDIAN_getActiveComp();
+    var layers = OBSIDIAN_getSelectedLayers();
+    if (!comp || layers.length !== 2) return "REJECTED|Open a composition and select exactly two overlapping clips.";
+    if (String(profile || "shake_01") !== "shake_01") return "REJECTED|Unsupported shake profile.";
+    var outgoing = Number(layers[0].inPoint) < Number(layers[1].inPoint) ? layers[0] : layers[1];
+    var incoming = outgoing === layers[0] ? layers[1] : layers[0];
+    if (Math.abs(Number(outgoing.inPoint) - Number(incoming.inPoint)) < 0.000001 / Number(comp.frameRate || 1))
+        return "REJECTED|Cannot identify outgoing and incoming clips because their start times match.";
+    var frameRate = Number(comp.frameRate);
+    if (!isFinite(frameRate) || frameRate <= 0) return "REJECTED|Composition frame rate is unavailable.";
+    var frameDuration = 1 / frameRate;
+    var overlapStart = Math.max(Number(outgoing.inPoint), Number(incoming.inPoint));
+    var overlapEnd = Math.min(Number(outgoing.outPoint), Number(incoming.outPoint));
+    var overlapFrames = Math.floor((overlapEnd - overlapStart) * frameRate + 0.000001);
+    if (!isFinite(overlapStart) || !isFinite(overlapEnd) || overlapFrames < 4)
+        return "REJECTED|The selected clips need at least four frames of overlap for Shake 01.";
+    var outgoingFrames = Math.round(Number(outgoingDuration) * frameRate);
+    var incomingFrames = Math.round(Number(incomingDuration) * frameRate);
+    if (!isFinite(outgoingFrames) || !isFinite(incomingFrames) || outgoingFrames < 4 || incomingFrames < 4 ||
+        outgoingFrames > overlapFrames || incomingFrames > overlapFrames)
+        return "REJECTED|Each duration must be at least four frames and cannot exceed the available overlap.";
+    var selected = [outgoing, incoming], tracks = [];
+    for (var li = 0; li < selected.length; li++) {
+        var layer = selected[li];
+        if (!(layer instanceof AVLayer) || !layer.source || layer.adjustmentLayer || layer.nullLayer)
+            return "REJECTED|Shake 01 applies only to footage or precomposition clips.";
+        if (layer.locked) return "REJECTED|Unlock '" + OBSIDIAN_cleanText(layer.name) + "' before applying Shake 01.";
+        if (layer.threeDLayer) return "REJECTED|Shake 01 v1 supports 2D clips only; no changes were made.";
+        var transform = layer.property("ADBE Transform Group");
+        var position = transform ? transform.property("ADBE Position") : null;
+        var rotation = transform ? (transform.property("ADBE Rotate Z") || transform.property("ADBE Rotation")) : null;
+        var scale = transform ? transform.property("ADBE Scale") : null;
+        var properties = [{p:position,k:"vector",n:"Position"},{p:rotation,k:"scalar",n:"Rotation"},{p:scale,k:"vector",n:"Scale"}];
+        for (var pi = 0; pi < properties.length; pi++) {
+            var spec = properties[pi], prop = spec.p;
+            if (!prop || typeof prop.setValueAtTime !== "function" || typeof prop.removeKey !== "function" ||
+                typeof prop.keyTime !== "function" || typeof prop.keyValue !== "function" ||
+                typeof prop.setInterpolationTypeAtKey !== "function" || Number(prop.numKeys) !== 0 || prop.expressionEnabled)
+                return "REJECTED|Existing transform keyframes, expressions, or unsupported properties were preserved.";
+            if (spec.k === "vector") {
+                if (!prop.value || prop.value.length !== 2 || prop.dimensionsSeparated)
+                    return "REJECTED|Shake 01 requires unified 2D Position and Scale properties.";
+                if (!isFinite(Number(prop.value[0])) || !isFinite(Number(prop.value[1])))
+                    return "REJECTED|A selected clip has non-numeric transform values.";
+            } else if (!isFinite(Number(prop.value))) return "REJECTED|A selected clip has a non-numeric Rotation value.";
+            tracks.push({property:prop,kind:spec.k,channel:spec.n,base:spec.k==="vector"?[Number(prop.value[0]),Number(prop.value[1])]:Number(prop.value),
+                role:li,frames:li===0?outgoingFrames:incomingFrames,anchor:li===0?overlapEnd:overlapStart});
+        }
+    }
+    var offsets=[0,0.25,0.5,0.75,1], prepared=[];
+    for (var ti=0;ti<tracks.length;ti++) {
+        var t=tracks[ti], sign=t.role===0?1:-1, start=t.role===0?t.anchor-t.frames*frameDuration:t.anchor, keys=[];
+        for (var ki=0;ki<5;ki++) {
+            var value;
+            if (t.channel==="Position") {
+                var amp=12*sign, dx=[0,amp,-amp,amp*0.45,0][ki], dy=[0,-amp*0.55,amp*0.55,-amp*0.25,0][ki];
+                value=[t.base[0]+dx,t.base[1]+dy];
+            } else if (t.channel==="Rotation") value=t.base+sign*[0,1.2,-1.2,0.55,0][ki];
+            else { var factor=[1,1.015,0.99,1.008,1][ki]; value=[t.base[0]*factor,t.base[1]*factor]; }
+            keys.push({time:start+Math.round(t.frames*offsets[ki])*frameDuration,value:value});
+        }
+        prepared.push({property:t.property,keys:keys});
+    }
+    var error=null, undoOpen=false;
+    try {
+        app.beginUndoGroup("OBSIDIAN - Shake 01 Transition"); undoOpen=true;
+        for (var wi=0;wi<prepared.length;wi++) {
+            var track=prepared[wi];
+            for (var wk=0;wk<5;wk++) track.property.setValueAtTime(track.keys[wk].time,track.keys[wk].value);
+            for (var ix=1;ix<=5;ix++) {
+                track.property.setInterpolationTypeAtKey(ix,KeyframeInterpolationType.BEZIER,KeyframeInterpolationType.BEZIER);
+                if (typeof track.property.setTemporalEaseAtKey==="function" && typeof KeyframeEase!=="undefined") {
+                    var dims=track.keys[0].value && typeof track.keys[0].value.length==="number"?track.keys[0].value.length:1, ein=[],eout=[];
+                    for(var ei=0;ei<dims;ei++){ein.push(new KeyframeEase(0,65));eout.push(new KeyframeEase(0,65));}
+                    track.property.setTemporalEaseAtKey(ix,ein,eout);
+                }
+            }
+        }
+        for (var vi=0;vi<prepared.length;vi++) {
+            var check=prepared[vi], ok=Number(check.property.numKeys)===5;
+            for(var vk=0;ok&&vk<5;vk++) ok=Math.abs(Number(check.property.keyTime(vk+1))-check.keys[vk].time)*frameRate<=OBSIDIAN_ANIMATION_BOUNDARY_TOLERANCE_FRAMES &&
+                OBSIDIAN_keyframeValueMatches(check.property.keyValue(vk+1),check.keys[vk].value);
+            if(!ok) throw new Error("Shake 01 keyframe read-back did not match.");
+        }
+    } catch (caught) { error=caught; }
+    if(error) {
+        var restored=0;
+        for(var ri=0;ri<prepared.length;ri++) try {
+            var rp=prepared[ri].property, count=Number(rp.numKeys);
+            if(!isFinite(count)||count>5) continue;
+            for(var rk=count;rk>=1;rk--) rp.removeKey(rk);
+            if(Number(rp.numKeys)===0) restored++;
+        } catch(ignoredRestore) {}
+        if(undoOpen) try{app.endUndoGroup();}catch(ignoredEnd){}
+        return restored===prepared.length
+            ? "ERROR|Shake 01 failed; generated keyframes were removed. "+OBSIDIAN_cleanText(error)
+            : "ERROR|Shake 01 failed and rollback could not be verified. Use After Effects Undo and inspect both clips.";
+    }
+    if(undoOpen) app.endUndoGroup();
+    return "OK|Applied and verified Shake 01 on both clips. Clip timing and layer count were unchanged.";
+}
+
 /**
  * Execute only typed actions produced by the frontend planner.
  * Never parse free-form natural language inside ExtendScript.
@@ -2441,6 +2545,7 @@ function OBSIDIAN_executePlan(action, value, profile, secondaryValue) {
     if (action === "scale_in") return OBSIDIAN_scaleIn();
     if (action === "slide_up") return OBSIDIAN_slideUp();
     if (action === "crossfade") return OBSIDIAN_crossfade();
+    if (action === "shake_transition") return OBSIDIAN_shakeTransition(value, secondaryValue, profile);
     if (action === "apply_recipe") return OBSIDIAN_applyRecipe(profile);
 
     if (action === "add_glow") {
