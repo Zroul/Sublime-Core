@@ -1984,6 +1984,12 @@ test("Shake 01 rolls back every generated key when a transform write fails", () 
   const result = context.OBSIDIAN_shakeTransition(0.4, 0.4, "shake_01");
   assert.match(result, /^ERROR\\|Shake 01 failed; generated keyframes were removed/);
   for (const entry of clips.properties) for (const track of Object.values(entry)) assert.equal(track.keys.length, 0);
+  for (const layer of [clips.outgoing, clips.incoming]) {
+    const transform = layer.property("ADBE Transform Group");
+    assert.deepEqual(transform.property("ADBE Position").value, [960, 540]);
+    assert.equal(transform.property("ADBE Rotation").value, 0);
+    assert.deepEqual(transform.property("ADBE Scale").value, [100, 100]);
+  }
   assert.deepEqual(undoEvents.map(([kind]) => kind), ["begin", "end"]);
 });
 
