@@ -1956,6 +1956,33 @@ test("Shake 01 applies verified Position, Rotation, and Scale keys without chang
   assert.equal(comp.selectedLayers.length, 2);
 });
 
+test("Shake 01 reports both selected layers' Position metadata when Position is not a 2D vector", () => {
+  const { context } = makeContext();
+  const clips = makeShakeClips(context);
+  clips.properties[0].position.property.value = [960, 540, 0];
+  clips.properties[0].position.property.propertyValueType = 3;
+  clips.properties[0].position.property.dimensionsSeparated = false;
+  clips.properties[0].position.property.isSeparationLeader = false;
+
+  const result = context.OBSIDIAN_shakeTransition(0.4, 0.4, "shake_01");
+  assert.match(result, /Shake 01 requires a unified 2D Position property/);
+  assert.match(result, /layer='Outgoing clip' valueLength=3 propertyValueType=ThreeD dimensionsSeparated=false isSeparationLeader=false layer3D=false value=\[960, 540, 0\]/);
+  assert.match(result, /layer='Incoming clip' valueLength=2/);
+  for (const entry of clips.properties) for (const track of Object.values(entry)) assert.equal(track.keys.length, 0);
+});
+
+test("Shake 01 reports separated Position metadata without changing either clip", () => {
+  const { context } = makeContext();
+  const clips = makeShakeClips(context);
+  clips.properties[1].position.property.dimensionsSeparated = true;
+  clips.properties[1].position.property.isSeparationLeader = true;
+
+  const result = context.OBSIDIAN_shakeTransition(0.4, 0.4, "shake_01");
+  assert.match(result, /layer='Outgoing clip' valueLength=2/);
+  assert.match(result, /layer='Incoming clip' valueLength=2 propertyValueType=undefined dimensionsSeparated=true isSeparationLeader=true/);
+  for (const entry of clips.properties) for (const track of Object.values(entry)) assert.equal(track.keys.length, 0);
+});
+
 test("Shake 01 supports AE 2D Scale read-back with a preserved third component", () => {
   const { context } = makeContext();
   const clips = makeShakeClips(context);
