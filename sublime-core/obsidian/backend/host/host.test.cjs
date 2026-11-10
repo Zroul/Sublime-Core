@@ -1908,3 +1908,75 @@ test("Caption Style Studio rejects unsupported styling before creating layers", 
   assert.match(result, /approved caption style is invalid/);
   assert.equal(generated.length, 0);
 });
+
+
+function makeShakeClips(context, outgoingOutPoint = 3, incomingInPoint = 2) {
+  const outgoing = makeTextLayer("Outgoing clip", 1, 100);
+  const incoming = makeTextLayer("Incoming clip", 2, 100);
+  for (const [layer, inPoint, outPoint] of [[outgoing, 0, outgoingOutPoint], [incoming, incomingInPoint, 5]]) {
+    Object.setPrototypeOf(layer, AVLayer.prototype);
+    layer.source = new FootageItem();
+    layer.inPoint = inPoint;
+    layer.outPoint = outPoint;
+    layer.threeDLayer = false;
+    layer.locked = false;
+  }
+  const properties = [];
+  for (const layer of [outgoing, incoming]) {
+    const transform = layer.property("ADBE Transform Group");
+    const position = enableAnimationProperty(transform.property("ADBE Position"));
+    const rotation = enableAnimationProperty(transform.property("ADBE Rotation"));
+    const scale = enableAnimationProperty(transform.property("ADBE Scale"));
+    properties.push({ position, rotation, scale });
+  }
+  context.comp.selectedLayers = [incoming, outgoing]; // Deliberately reverse selection order.
+  return { outgoing, incoming, properties };
+}
+
+test("Shake 01 applies verified Position, Rotation, and Scale keys without changing clip timing", () => {
+  const { context, comp, undoEvents } = makeContext();
+  const clips = makeShakeClips(context);
+  const before = clips.properties.map((entry) => Object.values(entry).map((track) => track.keys.length));
+  const result = context.OBSIDIAN_shakeTransition(0.4, 0.4, "shake_01");
+  assert.match(result, /^OK\\|Applied and verified Shake 01/);
+  assert.deepEqual(clips.properties.map((entry) => Object.values(entry).map((track) => track.keys.length)),
+    [[5, 5, 5], [5, 5, 5]]);
+  assert.deepEqual(before, [[0, 0, 0], [0, 0, 0]]);
+  assert.equal(clips.outgoing.inPoint, 0);
+  assert.equal(clips.outgoing.outPoint, 3);
+  assert.equal(clips.incoming.inPoint, 2);
+  assert.equal(clips.incoming.outPoint, 5);
+  assert.deepEqual(undoEvents.map(([kind]) => kind), ["begin", "end"]);
+  assert.equal(comp.selectedLayers.length, 2);
+});
+
+test("Shake 01 rejects clips without overlap before writing transform keys", () => {
+  const { context } = makeContext();
+  const clips = makeShakeClips(context, 2, 2);
+  const result = context.OBSIDIAN_shakeTransition(0.4, 0.4, "shake_01");
+  assert.match(result, /^REJECTED\\|The selected clips need at least four frames of overlap/);
+  for (const entry of clips.properties) for (const track of Object.values(entry)) assert.equal(track.keys.length, 0);
+});
+
+test("Shake 01 preserves pre-existing transform animation", () => {
+  const { context } = makeContext();
+  const clips = makeShakeClips(context);
+  clips.properties[0].scale.property.setValueAtTime(0.5, [110, 110]);
+  const result = context.OBSIDIAN_shakeTransition(0.4, 0.4, "shake_01");
+  assert.match(result, /^REJECTED\\|Existing transform keyframes/);
+  assert.equal(clips.properties[0].scale.keys.length, 1);
+  assert.equal(clips.properties[0].position.keys.length, 0);
+  assert.equal(clips.properties[1].position.keys.length, 0);
+});
+
+test("Shake 01 rolls back every generated key when a transform write fails", () => {
+  const { context, undoEvents } = makeContext();
+  const clips = makeShakeClips(context);
+  const transform = clips.outgoing.property("ADBE Transform Group");
+  const failing = enableAnimationProperty(transform.property("ADBE Position"), { throwBeforeSetAt: 3 });
+  clips.properties[0].position = failing;
+  const result = context.OBSIDIAN_shakeTransition(0.4, 0.4, "shake_01");
+  assert.match(result, /^ERROR\\|Shake 01 failed; generated keyframes were removed/);
+  for (const entry of clips.properties) for (const track of Object.values(entry)) assert.equal(track.keys.length, 0);
+  assert.deepEqual(undoEvents.map(([kind]) => kind), ["begin", "end"]);
+});
