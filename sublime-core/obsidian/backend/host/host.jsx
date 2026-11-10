@@ -2431,7 +2431,7 @@ function OBSIDIAN_shakeTransition(outgoingDuration, incomingDuration, profile) {
         var properties = [{p:position,k:"vector",n:"Position"},{p:rotation,k:"scalar",n:"Rotation"},{p:scale,k:"vector",n:"Scale"}];
         for (var pi = 0; pi < properties.length; pi++) {
             var spec = properties[pi], prop = spec.p;
-            if (!prop || typeof prop.setValueAtTime !== "function" || typeof prop.removeKey !== "function" ||
+            if (!prop || typeof prop.setValue !== "function" || typeof prop.setValueAtTime !== "function" || typeof prop.removeKey !== "function" ||
                 typeof prop.keyTime !== "function" || typeof prop.keyValue !== "function" ||
                 typeof prop.setInterpolationTypeAtKey !== "function" || Number(prop.numKeys) !== 0 || prop.expressionEnabled)
                 return "REJECTED|Existing transform keyframes, expressions, or unsupported properties were preserved.";
@@ -2457,7 +2457,7 @@ function OBSIDIAN_shakeTransition(outgoingDuration, incomingDuration, profile) {
             else { var factor=[1,1.015,0.99,1.008,1][ki]; value=[t.base[0]*factor,t.base[1]*factor]; }
             keys.push({time:start+Math.round(t.frames*offsets[ki])*frameDuration,value:value});
         }
-        prepared.push({property:t.property,keys:keys});
+        prepared.push({property:t.property,keys:keys,originalValue:t.kind==="vector"?[t.base[0],t.base[1]]:t.base});
     }
     var error=null, undoOpen=false;
     try {
@@ -2487,7 +2487,9 @@ function OBSIDIAN_shakeTransition(outgoingDuration, incomingDuration, profile) {
             var rp=prepared[ri].property, count=Number(rp.numKeys);
             if(!isFinite(count)||count>5) continue;
             for(var rk=count;rk>=1;rk--) rp.removeKey(rk);
-            if(Number(rp.numKeys)===0) restored++;
+            var originalValue=prepared[ri].originalValue;
+            rp.setValue(originalValue && typeof originalValue.length==="number" ? [originalValue[0],originalValue[1]] : originalValue);
+            if(Number(rp.numKeys)===0 && OBSIDIAN_keyframeValueMatches(rp.value,originalValue)) restored++;
         } catch(ignoredRestore) {}
         if(undoOpen) try{app.endUndoGroup();}catch(ignoredEnd){}
         return restored===prepared.length
