@@ -1956,6 +1956,24 @@ test("Shake 01 applies verified Position, Rotation, and Scale keys without chang
   assert.equal(comp.selectedLayers.length, 2);
 });
 
+test("Shake 01 supports AE 2D Scale read-back with a preserved third component", () => {
+  const { context } = makeContext();
+  const clips = makeShakeClips(context);
+  for (const entry of clips.properties) {
+    const property = entry.scale.property;
+    property.value = [100, 100, 73];
+    const originalSetValueAtTime = property.setValueAtTime.bind(property);
+    property.setValueAtTime = (time, value) => originalSetValueAtTime(time, [value[0], value[1], 73]);
+  }
+
+  const result = context.OBSIDIAN_shakeTransition(0.4, 0.4, "shake_01");
+  assert.match(result, /^OK\\|Applied and verified Shake 01/);
+  for (const entry of clips.properties) {
+    assert.equal(entry.scale.keys.length, 5);
+    assert.ok(entry.scale.keys.every(({ value }) => value.length === 3 && value[2] === 73));
+  }
+});
+
 test("Shake 01 rejects clips without overlap before writing transform keys", () => {
   const { context } = makeContext();
   const clips = makeShakeClips(context, 2, 2);
