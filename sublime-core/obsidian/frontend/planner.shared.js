@@ -20,7 +20,19 @@
     set_scale: true,
     scale_in: true,
     slide_up: true,
+    var shakeMatch = command.match(/\bshake\s*0?1\s+outgoing\s+(\d+(?:\.\d+)?)\s+incoming\s+(\d+(?:\.\d+)?)/);
+    if (/\bshake\s*0?1\b/.test(command)) {
+      if (!shakeMatch) return { status: "needs_clarification", question: "Set Shake 01 outgoing and incoming durations in seconds." };
+      var outgoingDuration = Number(shakeMatch[1]), incomingDuration = Number(shakeMatch[2]);
+      if (!isFinite(outgoingDuration) || !isFinite(incomingDuration) || outgoingDuration < 0.1 || outgoingDuration > 2 || incomingDuration < 0.1 || incomingDuration > 2)
+        return { status: "needs_clarification", question: "Each duration must be between 0.1 and 2 seconds; available overlap is checked in After Effects." };
+      return result("shake_transition",
+        { value: outgoingDuration, secondaryValue: incomingDuration, profile: "shake_01" },
+        "Apply Shake 01 to exactly two selected overlapping 2D clips. Clip timing is preserved and generated keys are rolled back if verification fails.");
+    }
+
     crossfade: true,
+    shake_transition: true,
     apply_recipe: true,
     set_brightness_contrast: true,
     fade_in: true,
