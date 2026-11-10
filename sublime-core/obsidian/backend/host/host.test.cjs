@@ -2001,6 +2001,20 @@ test("Shake 01 supports AE 2D Scale read-back with a preserved third component",
   }
 });
 
+test("Shake 01 rollback restores the full three-component Scale snapshot on a 2D layer", () => {
+  const { context } = makeContext();
+  const clips = makeShakeClips(context);
+  const scaleProperty = clips.outgoing.property("ADBE Transform Group").property("ADBE Scale");
+  scaleProperty.value = [100, 100, 73];
+  const failingScale = enableAnimationProperty(scaleProperty, { throwBeforeSetAt: 3 });
+  clips.properties[0].scale = failingScale;
+
+  const result = context.OBSIDIAN_shakeTransition(0.4, 0.4, "shake_01");
+  assert.match(result, /Shake 01 failed; generated keyframes were removed/);
+  assert.deepEqual(Array.from(scaleProperty.value), [100, 100, 73]);
+  assert.equal(failingScale.keys.length, 0);
+});
+
 test("Shake 01 rejects clips without overlap before writing transform keys", () => {
   const { context } = makeContext();
   const clips = makeShakeClips(context, 2, 2);
