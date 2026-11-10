@@ -2408,10 +2408,14 @@ function OBSIDIAN_shakeTransition(outgoingDuration, incomingDuration, profile) {
     var overlapFrames = Math.floor((overlapEnd - overlapStart) * frameRate + 0.000001);
     if (!isFinite(overlapStart) || !isFinite(overlapEnd) || overlapFrames < 4)
         return "REJECTED|The selected clips need at least four frames of overlap for Shake 01.";
-    var outgoingFrames = Math.round(Number(outgoingDuration) * frameRate);
-    var incomingFrames = Math.round(Number(incomingDuration) * frameRate);
-    if (!isFinite(outgoingFrames) || !isFinite(incomingFrames) || outgoingFrames < 4 || incomingFrames < 4 ||
-        outgoingFrames > overlapFrames || incomingFrames > overlapFrames)
+    outgoingDuration = Number(outgoingDuration);
+    incomingDuration = Number(incomingDuration);
+    if (!isFinite(outgoingDuration) || !isFinite(incomingDuration) ||
+        outgoingDuration < 0.1 || outgoingDuration > 2 || incomingDuration < 0.1 || incomingDuration > 2)
+        return "REJECTED|Each Shake 01 duration must be between 0.1 and 2 seconds.";
+    var outgoingFrames = Math.round(outgoingDuration * frameRate);
+    var incomingFrames = Math.round(incomingDuration * frameRate);
+    if (outgoingFrames < 4 || incomingFrames < 4 || outgoingFrames > overlapFrames || incomingFrames > overlapFrames)
         return "REJECTED|Each duration must be at least four frames and cannot exceed the available overlap.";
     var selected = [outgoing, incoming], tracks = [];
     for (var li = 0; li < selected.length; li++) {
