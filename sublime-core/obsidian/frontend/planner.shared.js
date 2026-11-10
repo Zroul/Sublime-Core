@@ -22,7 +22,6 @@
     slide_up: true,
     crossfade: true,
     shake_transition: true,
-    shake_transition: true,
     apply_recipe: true,
     set_brightness_contrast: true,
     fade_in: true,
