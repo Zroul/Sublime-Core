@@ -26,6 +26,7 @@
         <span class="brand-name">OBSIDIAN</span>
       </div>
       <div class="topbar-actions">
+        <button id="transitions-open" class="captions-open transitions-open" type="button" aria-label="Open transitions panel" aria-expanded="false" aria-controls="transitions-panel" title="Apply clip transitions"><span aria-hidden="true">↔</span><span>Transitions</span></button>
         <button id="captions-open" class="captions-open" type="button" aria-label="Open caption workspace" title="Open caption workspace">
           <span class="captions-icon" aria-hidden="true">CC</span><span>Captions</span>
         </button>
@@ -94,6 +95,18 @@
       <span class="result-mark" aria-hidden="true">✓</span>
       <span id="result-text">Done</span>
     </div>
+
+    <section id="transitions-panel" class="transitions-panel hidden" role="dialog" aria-modal="true" aria-labelledby="transitions-title">
+      <header class="transitions-header"><div><p class="transitions-eyebrow">OBSIDIAN MOTION</p><h2 id="transitions-title">Transitions</h2></div>
+        <button id="transitions-close" class="icon-button" type="button" aria-label="Close transitions panel">×</button></header>
+      <div class="transition-card"><div class="transition-card-heading"><span>SHAKE 01</span><span class="transition-tier">SUBTLE</span></div>
+        <p class="transition-description">Position · Rotation · Scale</p>
+        <div class="transition-duration-grid">
+          <label for="shake-01-outgoing">Outgoing <span>seconds</span><input id="shake-01-outgoing" type="number" min="0.1" max="2" step="0.05" value="0.40"></label>
+          <label for="shake-01-incoming">Incoming <span>seconds</span><input id="shake-01-incoming" type="number" min="0.1" max="2" step="0.05" value="0.40"></label>
+        </div><button id="shake-01-apply" class="transition-apply" type="button">APPLY SHAKE 01</button>
+      </div>
+    </section>
 
     <section id="caption-workspace" class="caption-workspace hidden" role="dialog" aria-modal="true" aria-labelledby="caption-title" aria-describedby="caption-source-summary">
       <header class="caption-header">
