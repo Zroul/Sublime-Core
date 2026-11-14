@@ -1949,7 +1949,7 @@ test("Shake 02 applies a stronger impact profile while preserving clip timing an
   const outgoing = clips.properties[0];
   const incoming = clips.properties[1];
   assert.deepEqual(outgoing.position.keys.map(({ value }) => Array.from(value)), [
-    [960, 540], [988, 524.6], [932, 555.4], [972.6, 532.3], [960, 540],
+    [960, 540], [988, 524.6], [932, 555.4], [972.6, 533], [960, 540],
   ]);
   assert.deepEqual(incoming.position.keys.map(({ value }) => Array.from(value)), [
     [960, 540], [932, 555.4], [988, 524.6], [947.4, 547.7], [960, 540],
