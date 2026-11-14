@@ -160,15 +160,17 @@
       );
     }
 
-    var shakeMatch = command.match(/\bshake\s*0?1\s+outgoing\s+(\d+(?:\.\d+)?)\s+incoming\s+(\d+(?:\.\d+)?)/);
-    if (/\bshake\s*0?1\b/.test(command)) {
-      if (!shakeMatch) return { status: "needs_clarification", question: "Set Shake 01 outgoing and incoming durations in seconds." };
-      var outgoingDuration = Number(shakeMatch[1]), incomingDuration = Number(shakeMatch[2]);
+    var shakeMatch = command.match(/\bshake\s*0?([12])\s+outgoing\s+(\d+(?:\.\d+)?)\s+incoming\s+(\d+(?:\.\d+)?)/);
+    if (/\bshake\s*0?[12]\b/.test(command)) {
+      var shakeNumber = shakeMatch ? shakeMatch[1] : (/\bshake\s*0?2\b/.test(command) ? "2" : "1");
+      var shakeLabel = "Shake 0" + shakeNumber;
+      if (!shakeMatch) return { status: "needs_clarification", question: "Set " + shakeLabel + " outgoing and incoming durations in seconds." };
+      var outgoingDuration = Number(shakeMatch[2]), incomingDuration = Number(shakeMatch[3]);
       if (!isFinite(outgoingDuration) || !isFinite(incomingDuration) || outgoingDuration < 0.1 || outgoingDuration > 2 || incomingDuration < 0.1 || incomingDuration > 2)
         return { status: "needs_clarification", question: "Each duration must be between 0.1 and 2 seconds; available overlap is checked in After Effects." };
       return result("shake_transition",
-        { value: outgoingDuration, secondaryValue: incomingDuration, profile: "shake_01" },
-        "Apply Shake 01 to exactly two selected overlapping 2D clips. Clip timing is preserved and generated keys are rolled back if verification fails.");
+        { value: outgoingDuration, secondaryValue: incomingDuration, profile: "shake_0" + shakeNumber },
+        "Apply " + shakeLabel + " to exactly two selected overlapping 2D clips. Clip timing is preserved and generated keys are rolled back if verification fails.");
     }
 
     if (/\bcross[\s-]*fade\b/.test(command)) {
@@ -486,7 +488,7 @@
       return Boolean(plan.args && creativeRecipes && creativeRecipes.isExecutableRecipe(plan.args.recipeId));
     }
     if (plan.action === "shake_transition") {
-      return Boolean(plan.args && plan.args.profile === "shake_01" &&
+      return Boolean(plan.args && (plan.args.profile === "shake_01" || plan.args.profile === "shake_02") &&
         typeof plan.args.value === "number" && isFinite(plan.args.value) &&
         typeof plan.args.secondaryValue === "number" && isFinite(plan.args.secondaryValue) &&
         plan.args.value >= 0.1 && plan.args.value <= 2 &&
