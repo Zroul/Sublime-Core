@@ -1952,7 +1952,7 @@ test("Shake 02 applies a stronger impact profile while preserving clip timing an
     [960, 540], [988, 524.6], [932, 555.4], [972.6, 533], [960, 540],
   ]);
   assert.deepEqual(incoming.position.keys.map(({ value }) => Array.from(value)), [
-    [960, 540], [932, 555.4], [988, 524.6], [947.4, 547.7], [960, 540],
+    [960, 540], [932, 555.4], [988, 524.6], [947.4, 547], [960, 540],
   ]);
   assert.deepEqual(outgoing.rotation.keys.map(({ value }) => value), [0, 3.4, -2.4, 0.9, 0]);
   assert.deepEqual(incoming.rotation.keys.map(({ value }) => value), [0, -3.4, 2.4, -0.9, 0]);
