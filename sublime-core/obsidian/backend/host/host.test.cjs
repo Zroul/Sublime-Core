@@ -1968,6 +1968,25 @@ test("Shake 01 supplies AE temporal-ease arrays by property type, not Position v
     .every((entry) => entry.inLength === 2 && entry.outLength === 2));
 });
 
+test("Shake 01 supplies three temporal-ease entries when AE exposes 2D Scale as a three-component vector", () => {
+  const { context } = makeContext();
+  const clips = makeShakeClips(context);
+  const observed = [];
+  for (const entry of clips.properties) {
+    entry.scale.property.value = [100, 100, 100];
+    entry.scale.property.setTemporalEaseAtKey = (index, easeIn, easeOut) => {
+      observed.push([easeIn.length, easeOut.length]);
+      if (easeIn.length !== 3 || easeOut.length !== 3) {
+        throw new Error("Value array does not have 3 elements.");
+      }
+    };
+  }
+  const result = context.OBSIDIAN_shakeTransition(0.4, 0.4, "shake_01");
+  assert.match(result, /^OK\\|Applied and verified Shake 01/);
+  assert.equal(observed.length, 10);
+  assert.ok(observed.every(([incoming, outgoing]) => incoming === 3 && outgoing === 3));
+});
+
 test("Shake 01 applies verified Position, Rotation, and Scale keys without changing clip timing", () => {
   const { context, comp, undoEvents } = makeContext();
   const clips = makeShakeClips(context);
