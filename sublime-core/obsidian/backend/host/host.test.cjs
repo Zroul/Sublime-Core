@@ -2199,3 +2199,13 @@ test("Shake 01 rejects durations outside its supported range", () => {
   assert.match(result, /^REJECTED\\|Each Shake 01 duration must be between 0.1 and 2 seconds/);
   for (const entry of clips.properties) for (const track of Object.values(entry)) assert.equal(track.keys.length, 0);
 });
+
+test("Shake transition rejects combined durations longer than the overlap without writing keys", () => {
+  const { context } = makeContext();
+  const clips = makeShakeClips(context);
+  const result = context.OBSIDIAN_shakeTransition(0.6, 0.5, "shake_01");
+  assert.match(result, /^REJECTED\\|Each duration must be at least four frames and their combined duration cannot exceed the available overlap/);
+  for (const entry of clips.properties) {
+    for (const track of Object.values(entry)) assert.equal(track.keys.length, 0);
+  }
+});
