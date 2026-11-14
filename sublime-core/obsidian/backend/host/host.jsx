@@ -2428,7 +2428,12 @@ function OBSIDIAN_shakeTransition(outgoingDuration, incomingDuration, profile) {
     var comp = OBSIDIAN_getActiveComp();
     var layers = OBSIDIAN_getSelectedLayers();
     if (!comp || layers.length !== 2) return "REJECTED|Open a composition and select exactly two overlapping clips.";
-    if (String(profile || "shake_01") !== "shake_01") return "REJECTED|Unsupported shake profile.";
+    var profileId = String(profile || "shake_01");
+    if (profileId !== "shake_01" && profileId !== "shake_02") return "REJECTED|Unsupported shake profile.";
+    var profileLabel = profileId === "shake_02" ? "Shake 02" : ""+profileLabel+"";
+    var intensity = profileId === "shake_02"
+        ? { position: 28, rotation: [0, 3.4, -2.4, 0.9, 0], scale: [1, 1.045, 0.975, 1.015, 1] }
+        : { position: 12, rotation: [0, 1.2, -1.2, 0.55, 0], scale: [1, 1.015, 0.99, 1.008, 1] };
     var outgoing = Number(layers[0].inPoint) < Number(layers[1].inPoint) ? layers[0] : layers[1];
     var incoming = outgoing === layers[0] ? layers[1] : layers[0];
     if (Math.abs(Number(outgoing.inPoint) - Number(incoming.inPoint)) < 0.000001 / Number(comp.frameRate || 1))
@@ -2440,12 +2445,12 @@ function OBSIDIAN_shakeTransition(outgoingDuration, incomingDuration, profile) {
     var overlapEnd = Math.min(Number(outgoing.outPoint), Number(incoming.outPoint));
     var overlapFrames = Math.floor((overlapEnd - overlapStart) * frameRate + 0.000001);
     if (!isFinite(overlapStart) || !isFinite(overlapEnd) || overlapFrames < 4)
-        return "REJECTED|The selected clips need at least four frames of overlap for Shake 01.";
+        return "REJECTED|The selected clips need at least four frames of overlap for "+profileLabel+".";
     outgoingDuration = Number(outgoingDuration);
     incomingDuration = Number(incomingDuration);
     if (!isFinite(outgoingDuration) || !isFinite(incomingDuration) ||
         outgoingDuration < 0.1 || outgoingDuration > 2 || incomingDuration < 0.1 || incomingDuration > 2)
-        return "REJECTED|Each Shake 01 duration must be between 0.1 and 2 seconds.";
+        return "REJECTED|Each "+profileLabel+" duration must be between 0.1 and 2 seconds.";
     var outgoingFrames = Math.round(outgoingDuration * frameRate);
     var incomingFrames = Math.round(incomingDuration * frameRate);
     if (outgoingFrames < 4 || incomingFrames < 4 || outgoingFrames > overlapFrames || incomingFrames > overlapFrames)
@@ -2454,9 +2459,9 @@ function OBSIDIAN_shakeTransition(outgoingDuration, incomingDuration, profile) {
     for (var li = 0; li < selected.length; li++) {
         var layer = selected[li];
         if (!(layer instanceof AVLayer) || !layer.source || layer.adjustmentLayer || layer.nullLayer)
-            return "REJECTED|Shake 01 applies only to footage or precomposition clips.";
-        if (layer.locked) return "REJECTED|Unlock '" + OBSIDIAN_cleanText(layer.name) + "' before applying Shake 01.";
-        if (layer.threeDLayer) return "REJECTED|Shake 01 v1 supports 2D clips only; no changes were made.";
+            return "REJECTED|"+profileLabel+" applies only to footage or precomposition clips.";
+        if (layer.locked) return "REJECTED|Unlock '" + OBSIDIAN_cleanText(layer.name) + "' before applying "+profileLabel+".";
+        if (layer.threeDLayer) return "REJECTED|"+profileLabel+" v1 supports 2D clips only; no changes were made.";
         var transform = layer.property("ADBE Transform Group");
         var position = transform ? transform.property("ADBE Position") : null;
         var rotation = transform ? (transform.property("ADBE Rotate Z") || transform.property("ADBE Rotation")) : null;
@@ -2485,14 +2490,14 @@ function OBSIDIAN_shakeTransition(outgoingDuration, incomingDuration, profile) {
                     if (!positionIsUnified2D) {
                         var positionDiagnostics = [];
                         for (var pd = 0; pd < selected.length; pd++) positionDiagnostics.push(OBSIDIAN_shakePositionDiagnostic(selected[pd]));
-                        return "REJECTED|Shake 01 requires a unified 2D Position property. Position diagnostics: " +
+                        return "REJECTED|"+profileLabel+" requires a unified 2D Position property. Position diagnostics: " +
                             positionDiagnostics.join(" || ");
                     }
                 }
                 /* AE can expose a 2D layer's Scale as [x, y, z]. Preserve the
                    hidden Z component exactly; only X/Y participate in the shake. */
                 if (spec.n === "Scale" && vectorLength !== 2 && !(vectorLength === 3 && !layer.threeDLayer))
-                    return "REJECTED|Shake 01 requires a supported 2D Scale property.";
+                    return "REJECTED|"+profileLabel+" requires a supported 2D Scale property.";
                 if (!isFinite(Number(prop.value[0])) || !isFinite(Number(prop.value[1])) ||
                     (vectorLength === 3 && !isFinite(Number(prop.value[2]))))
                     return "REJECTED|A selected clip has non-numeric transform values.";
@@ -2513,12 +2518,12 @@ function OBSIDIAN_shakeTransition(outgoingDuration, incomingDuration, profile) {
         for (var ki=0;ki<5;ki++) {
             var value;
             if (t.channel==="Position") {
-                var amp=12*sign, dx=[0,amp,-amp,amp*0.45,0][ki], dy=[0,-amp*0.55,amp*0.55,-amp*0.25,0][ki];
+                var amp=intensity.position*sign, dx=[0,amp,-amp,amp*0.45,0][ki], dy=[0,-amp*0.55,amp*0.55,-amp*0.25,0][ki];
                 value=[t.base[0]+dx,t.base[1]+dy];
                 if (t.base.length === 3) value.push(t.base[2]);
-            } else if (t.channel==="Rotation") value=t.base+sign*[0,1.2,-1.2,0.55,0][ki];
+            } else if (t.channel==="Rotation") value=t.base+sign*intensity.rotation[ki];
             else {
-                var factor=[1,1.015,0.99,1.008,1][ki];
+                var factor=intensity.scale[ki];
                 value=[t.base[0]*factor,t.base[1]*factor];
                 if (t.base.length === 3) value.push(t.base[2]);
             }
@@ -2534,7 +2539,7 @@ function OBSIDIAN_shakeTransition(outgoingDuration, incomingDuration, profile) {
     }
     var error=null, undoOpen=false;
     try {
-        app.beginUndoGroup("OBSIDIAN - Shake 01 Transition"); undoOpen=true;
+        app.beginUndoGroup("OBSIDIAN - "+profileLabel+" Transition"); undoOpen=true;
         for (var wi=0;wi<prepared.length;wi++) {
             var track=prepared[wi];
             for (var wk=0;wk<5;wk++) track.property.setValueAtTime(track.keys[wk].time,track.keys[wk].value);
@@ -2554,7 +2559,7 @@ function OBSIDIAN_shakeTransition(outgoingDuration, incomingDuration, profile) {
             var check=prepared[vi], ok=Number(check.property.numKeys)===5;
             for(var vk=0;ok&&vk<5;vk++) ok=Math.abs(Number(check.property.keyTime(vk+1))-check.keys[vk].time)*frameRate<=OBSIDIAN_ANIMATION_BOUNDARY_TOLERANCE_FRAMES &&
                 OBSIDIAN_keyframeValueMatches(check.property.keyValue(vk+1),check.keys[vk].value);
-            if(!ok) throw new Error("Shake 01 keyframe read-back did not match.");
+            if(!ok) throw new Error(""+profileLabel+" keyframe read-back did not match.");
         }
     } catch (caught) { error=caught; }
     if(error) {
@@ -2569,11 +2574,11 @@ function OBSIDIAN_shakeTransition(outgoingDuration, incomingDuration, profile) {
         } catch(ignoredRestore) {}
         if(undoOpen) try{app.endUndoGroup();}catch(ignoredEnd){}
         return restored===prepared.length
-            ? "ERROR|Shake 01 failed; generated keyframes were removed. "+OBSIDIAN_cleanText(error)
-            : "ERROR|Shake 01 failed and rollback could not be verified. Use After Effects Undo and inspect both clips.";
+            ? "ERROR|"+profileLabel+" failed; generated keyframes were removed. "+OBSIDIAN_cleanText(error)
+            : "ERROR|"+profileLabel+" failed and rollback could not be verified. Use After Effects Undo and inspect both clips.";
     }
     if(undoOpen) app.endUndoGroup();
-    return "OK|Applied and verified Shake 01 on both clips. Clip timing and layer count were unchanged.";
+    return "OK|Applied and verified "+profileLabel+" on both clips. Clip timing and layer count were unchanged.";
 }
 
 /**
