@@ -1939,6 +1939,34 @@ function makeShakeClips(context, outgoingOutPoint = 3, incomingInPoint = 2) {
   return { outgoing, incoming, properties };
 }
 
+test("Shake 01 supplies AE temporal-ease arrays by property type, not Position vector length", () => {
+  const { context } = makeContext();
+  const clips = makeShakeClips(context);
+  const observed = [];
+  for (const entry of clips.properties) {
+    for (const [channel, track] of Object.entries(entry)) {
+      const property = track.property;
+      property.setTemporalEaseAtKey = (index, easeIn, easeOut) => {
+        observed.push({ channel, index, inLength: easeIn.length, outLength: easeOut.length });
+        const expected = channel === "Scale" ? 2 : 1;
+        if (easeIn.length !== expected || easeOut.length !== expected) {
+          throw new Error("Value array does not have " + expected + " elements.");
+        }
+      };
+    }
+  }
+
+  const result = context.OBSIDIAN_shakeTransition(0.4, 0.4, "shake_01");
+  assert.match(result, /^OK\\|Applied and verified Shake 01/);
+  assert.equal(observed.length, 30);
+  assert.ok(observed.filter((entry) => entry.channel === "Position")
+    .every((entry) => entry.inLength === 1 && entry.outLength === 1));
+  assert.ok(observed.filter((entry) => entry.channel === "Rotation")
+    .every((entry) => entry.inLength === 1 && entry.outLength === 1));
+  assert.ok(observed.filter((entry) => entry.channel === "Scale")
+    .every((entry) => entry.inLength === 2 && entry.outLength === 2));
+});
+
 test("Shake 01 applies verified Position, Rotation, and Scale keys without changing clip timing", () => {
   const { context, comp, undoEvents } = makeContext();
   const clips = makeShakeClips(context);
