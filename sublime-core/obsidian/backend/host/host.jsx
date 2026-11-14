@@ -2524,7 +2524,13 @@ function OBSIDIAN_shakeTransition(outgoingDuration, incomingDuration, profile) {
             }
             keys.push({time:start+Math.round(t.frames*offsets[ki])*frameDuration,value:value});
         }
-        prepared.push({property:t.property,keys:keys,originalValue:t.kind==="vector"?t.base.slice(0):t.base});
+        prepared.push({
+            property:t.property,
+            keys:keys,
+            originalValue:t.kind==="vector"?t.base.slice(0):t.base,
+            channel:t.channel,
+            easeDimensions:t.channel==="Position" || t.channel==="Rotation" ? 1 : 2
+        });
     }
     var error=null, undoOpen=false;
     try {
@@ -2535,7 +2541,10 @@ function OBSIDIAN_shakeTransition(outgoingDuration, incomingDuration, profile) {
             for (var ix=1;ix<=5;ix++) {
                 track.property.setInterpolationTypeAtKey(ix,KeyframeInterpolationType.BEZIER,KeyframeInterpolationType.BEZIER);
                 if (typeof track.property.setTemporalEaseAtKey==="function" && typeof KeyframeEase!=="undefined") {
-                    var dims=track.keys[0].value && typeof track.keys[0].value.length==="number"?track.keys[0].value.length:1, ein=[],eout=[];
+                    /* AE spatial Position uses one temporal-ease dimension even when
+                       its value vector reads back as [x, y, z]. Rotation is scalar;
+                       2D Scale uses two temporal-ease dimensions. */
+                    var dims=track.easeDimensions || 1, ein=[],eout=[];
                     for(var ei=0;ei<dims;ei++){ein.push(new KeyframeEase(0,65));eout.push(new KeyframeEase(0,65));}
                     track.property.setTemporalEaseAtKey(ix,ein,eout);
                 }
