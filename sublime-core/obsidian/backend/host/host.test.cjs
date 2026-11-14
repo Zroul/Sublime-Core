@@ -1949,18 +1949,18 @@ test("Shake 02 applies a stronger impact profile while preserving clip timing an
   const outgoing = clips.properties[0];
   const incoming = clips.properties[1];
   assert.deepEqual(outgoing.position.keys.map(({ value }) => Array.from(value)), [
-    [960, 540], [988, 524.6], [932, 555.4], [972.6, 533], [960, 540],
+    [960, 540], [1065.6, 481.92], [854.4, 598.08], [1007.52, 513.6], [960, 540],
   ]);
   assert.deepEqual(incoming.position.keys.map(({ value }) => Array.from(value)), [
-    [960, 540], [932, 555.4], [988, 524.6], [947.4, 547], [960, 540],
+    [960, 540], [854.4, 598.08], [1065.6, 481.92], [912.48, 566.4], [960, 540],
   ]);
-  assert.deepEqual(outgoing.rotation.keys.map(({ value }) => value), [0, 3.4, -2.4, 0.9, 0]);
-  assert.deepEqual(incoming.rotation.keys.map(({ value }) => value), [0, -3.4, 2.4, -0.9, 0]);
+  assert.deepEqual(outgoing.rotation.keys.map(({ value }) => value), [0, 11, -8.5, 4, 0]);
+  assert.deepEqual(incoming.rotation.keys.map(({ value }) => value), [0, -11, 8.5, -4, 0]);
   const outgoingScale = outgoing.scale.keys.map(({ value }) => Array.from(value));
   assert.deepEqual(outgoingScale.map((value) => value[2]), [73, 73, 73, 73, 73]);
-  assert.ok(Math.abs(outgoingScale[1][0] - 104.5) < 1e-8);
-  assert.ok(Math.abs(outgoingScale[2][0] - 97.5) < 1e-8);
-  assert.ok(Math.abs(outgoingScale[3][0] - 101.5) < 1e-8);
+  assert.ok(Math.abs(outgoingScale[1][0] - 120) < 1e-8);
+  assert.ok(Math.abs(outgoingScale[2][0] - 88) < 1e-8);
+  assert.ok(Math.abs(outgoingScale[3][0] - 108) < 1e-8);
   assert.ok(outgoingScale.every((value) => value[0] === value[1]));
   assert.equal(clips.outgoing.inPoint, 0);
   assert.equal(clips.outgoing.outPoint, 3);
@@ -2045,6 +2045,12 @@ test("Shake 01 applies verified Position, Rotation, and Scale keys without chang
   assert.equal(clips.incoming.outPoint, 5);
   assert.deepEqual(undoEvents.map(([kind]) => kind), ["begin", "end"]);
   assert.equal(comp.selectedLayers.length, 2);
+  assert.deepEqual(clips.properties[0].position.keys.map(({ value }) => Array.from(value)), [
+    [960, 540], [1017.6, 508.32], [902.4, 571.68], [985.92, 525.6], [960, 540],
+  ]);
+  assert.deepEqual(clips.properties[0].rotation.keys.map(({ value }) => value), [0, 5.5, -4.2, 2.1, 0]);
+  assert.ok(Math.abs(clips.properties[0].scale.keys[1].value[0] - 109) < 1e-8);
+  assert.ok(Math.abs(clips.properties[0].scale.keys[2].value[0] - 93) < 1e-8);
 });
 
 test("Shake 01 accepts AE TwoD Position metadata with a three-component read-back and preserves hidden Z", () => {
