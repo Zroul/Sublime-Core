@@ -2431,12 +2431,11 @@ function OBSIDIAN_shakeTransition(outgoingDuration, incomingDuration, profile) {
     var profileId = String(profile || "shake_01");
     if (profileId !== "shake_01" && profileId !== "shake_02") return "REJECTED|Unsupported shake profile.";
     var profileLabel = profileId === "shake_02" ? "Shake 02" : "Shake 01";
-    /* Amplitude is proportional to comp width so the presets remain visible
-       on HD, 4K, and other common edit formats. Shake 01 is a strong rhythmic
-       hit; Shake 02 is a deliberately aggressive impact. */
+    /* One shared composition-space impact curve is sampled by both clips.
+       Shake 01 is a punch; Shake 02 is a harder, faster-feeling impact. */
     var intensity = profileId === "shake_02"
-        ? { position: Number(comp.width) * 0.055, rotation: [0, 11, -8.5, 4, 0], scale: [1, 1.20, 0.88, 1.08, 1] }
-        : { position: Number(comp.width) * 0.03, rotation: [0, 5.5, -4.2, 2.1, 0], scale: [1, 1.09, 0.93, 1.04, 1] };
+        ? { position: Number(comp.width) * 0.06, rotation: [0, -8, 15, -10, 0], scale: [1, 1.15, 1.32, 1.14, 1] }
+        : { position: Number(comp.width) * 0.035, rotation: [0, -4, 8, -5, 0], scale: [1, 1.08, 1.18, 1.08, 1] };
     var outgoing = Number(layers[0].inPoint) < Number(layers[1].inPoint) ? layers[0] : layers[1];
     var incoming = outgoing === layers[0] ? layers[1] : layers[0];
     if (Math.abs(Number(outgoing.inPoint) - Number(incoming.inPoint)) < 0.000001 / Number(comp.frameRate || 1))
@@ -2456,8 +2455,8 @@ function OBSIDIAN_shakeTransition(outgoingDuration, incomingDuration, profile) {
         return "REJECTED|Each "+profileLabel+" duration must be between 0.1 and 2 seconds.";
     var outgoingFrames = Math.round(outgoingDuration * frameRate);
     var incomingFrames = Math.round(incomingDuration * frameRate);
-    if (outgoingFrames < 4 || incomingFrames < 4 || outgoingFrames > overlapFrames || incomingFrames > overlapFrames)
-        return "REJECTED|Each duration must be at least four frames and cannot exceed the available overlap.";
+    if (outgoingFrames < 4 || incomingFrames < 4 || outgoingFrames + incomingFrames > overlapFrames)
+        return "REJECTED|Each duration must be at least four frames and their combined duration cannot exceed the available overlap.";
     var selected = [outgoing, incoming], tracks = [];
     for (var li = 0; li < selected.length; li++) {
         var layer = selected[li];
@@ -2511,26 +2510,36 @@ function OBSIDIAN_shakeTransition(outgoingDuration, incomingDuration, profile) {
                     ? [Number(prop.value[0]), Number(prop.value[1]), Number(prop.value[2])]
                     : [Number(prop.value[0]), Number(prop.value[1])])
                 : Number(prop.value);
-            tracks.push({property:prop,kind:spec.k,channel:spec.n,base:baseValue,
-                role:li,frames:li===0?outgoingFrames:incomingFrames,anchor:li===0?overlapEnd:overlapStart});
+            tracks.push({property:prop,kind:spec.k,channel:spec.n,base:baseValue});
         }
     }
-    var offsets=[0,0.25,0.5,0.75,1], prepared=[];
+    /* The impact is centered in the actual overlap. Both clips receive the
+       exact same absolute key times and motion offsets, so the transition
+       behaves as one camera move instead of two opposing clip animations. */
+    var impactTime=overlapStart+(overlapEnd-overlapStart)/2;
+    var keyTimes=[
+        impactTime-outgoingFrames*frameDuration,
+        impactTime-Math.round(outgoingFrames/2)*frameDuration,
+        impactTime,
+        impactTime+Math.round(incomingFrames/2)*frameDuration,
+        impactTime+incomingFrames*frameDuration
+    ];
+    var positionX=[0,-0.55,1,-0.65,0], positionY=[0,0.3,-0.45,0.25,0], prepared=[];
     for (var ti=0;ti<tracks.length;ti++) {
-        var t=tracks[ti], sign=t.role===0?1:-1, start=t.role===0?t.anchor-t.frames*frameDuration:t.anchor, keys=[];
+        var t=tracks[ti], keys=[];
         for (var ki=0;ki<5;ki++) {
             var value;
             if (t.channel==="Position") {
-                var amp=intensity.position*sign, dx=[0,amp,-amp,amp*0.45,0][ki], dy=[0,-amp*0.55,amp*0.55,-amp*0.25,0][ki];
-                value=[t.base[0]+dx,t.base[1]+dy];
+                var amp=intensity.position;
+                value=[t.base[0]+amp*positionX[ki],t.base[1]+amp*positionY[ki]];
                 if (t.base.length === 3) value.push(t.base[2]);
-            } else if (t.channel==="Rotation") value=t.base+sign*intensity.rotation[ki];
+            } else if (t.channel==="Rotation") value=t.base+intensity.rotation[ki];
             else {
                 var factor=intensity.scale[ki];
                 value=[t.base[0]*factor,t.base[1]*factor];
                 if (t.base.length === 3) value.push(t.base[2]);
             }
-            keys.push({time:start+Math.round(t.frames*offsets[ki])*frameDuration,value:value});
+            keys.push({time:keyTimes[ki],value:value});
         }
         prepared.push({
             property:t.property,
