@@ -1095,3 +1095,18 @@ textarea:focus, input:focus, #command:focus {
 .transition-apply{width:100%;margin-top:16px;padding:12px;border:1px solid rgba(var(--aura-accent-rgb),.55);border-radius:9px;color:#071311;background:var(--aura-accent);font-size:11px;font-weight:800;letter-spacing:.1em;cursor:pointer}
 .transitions-open{gap:7px}
 @media(max-width:420px){.transitions-panel{left:10px;right:10px;padding:14px}.transition-duration-grid{gap:8px}}
+
+
+/* Keep the transitions workspace usable when the preset list grows. */
+.transitions-panel {
+  box-sizing: border-box;
+  max-height: calc(100vh - 86px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(var(--aura-accent-rgb), .5) rgba(255,255,255,.05);
+}
+.transitions-panel::-webkit-scrollbar { width: 7px; }
+.transitions-panel::-webkit-scrollbar-track { background: rgba(255,255,255,.04); border-radius: 8px; }
+.transitions-panel::-webkit-scrollbar-thumb { background: rgba(var(--aura-accent-rgb), .45); border-radius: 8px; }
+.transitions-panel::-webkit-scrollbar-thumb:hover { background: rgba(var(--aura-accent-rgb), .7); }
