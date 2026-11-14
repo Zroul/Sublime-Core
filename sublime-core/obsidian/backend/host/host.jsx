@@ -2527,7 +2527,10 @@ function OBSIDIAN_shakeTransition(outgoingDuration, incomingDuration, profile) {
         impactFrame+Math.round(incomingFrames/2),
         impactFrame+incomingFrames
     ];
-    var keyTimes=keyFrames.map(function(frame){return frame*frameDuration;});
+    var keyTimes=[];
+    for (var keyTimeIndex=0;keyTimeIndex<keyFrames.length;keyTimeIndex++) {
+        keyTimes.push(keyFrames[keyTimeIndex]*frameDuration);
+    }
     var positionX=[0,-0.55,1,-0.65,0], positionY=[0,0.3,-0.45,0.25,0], prepared=[];
     for (var ti=0;ti<tracks.length;ti++) {
         var t=tracks[ti], keys=[];
