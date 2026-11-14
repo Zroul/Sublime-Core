@@ -1947,8 +1947,9 @@ test("Shake 01 supplies AE temporal-ease arrays by property type, not Position v
     for (const [channel, track] of Object.entries(entry)) {
       const property = track.property;
       property.setTemporalEaseAtKey = (index, easeIn, easeOut) => {
-        observed.push({ channel, index, inLength: easeIn.length, outLength: easeOut.length });
-        const expected = channel === "Scale" ? 2 : 1;
+        const normalizedChannel = channel.toUpperCase();
+        observed.push({ channel: normalizedChannel, index, inLength: easeIn.length, outLength: easeOut.length });
+        const expected = normalizedChannel === "SCALE" ? 2 : 1;
         if (easeIn.length !== expected || easeOut.length !== expected) {
           throw new Error("Value array does not have " + expected + " elements.");
         }
@@ -1959,11 +1960,11 @@ test("Shake 01 supplies AE temporal-ease arrays by property type, not Position v
   const result = context.OBSIDIAN_shakeTransition(0.4, 0.4, "shake_01");
   assert.match(result, /^OK\\|Applied and verified Shake 01/);
   assert.equal(observed.length, 30);
-  assert.ok(observed.filter((entry) => entry.channel === "Position")
+  assert.ok(observed.filter((entry) => entry.channel === "POSITION")
     .every((entry) => entry.inLength === 1 && entry.outLength === 1));
-  assert.ok(observed.filter((entry) => entry.channel === "Rotation")
+  assert.ok(observed.filter((entry) => entry.channel === "ROTATION")
     .every((entry) => entry.inLength === 1 && entry.outLength === 1));
-  assert.ok(observed.filter((entry) => entry.channel === "Scale")
+  assert.ok(observed.filter((entry) => entry.channel === "SCALE")
     .every((entry) => entry.inLength === 2 && entry.outLength === 2));
 });
 
