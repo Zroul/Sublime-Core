@@ -1975,6 +1975,25 @@ test("Shake 01 accepts AE TwoD Position metadata with a three-component read-bac
   }
 });
 
+test("Shake 01 accepts AE numeric TwoD enum 6413 when host enum globals do not match", () => {
+  const { context } = makeContext();
+  const clips = makeShakeClips(context);
+  for (const entry of clips.properties) {
+    const property = entry.position.property;
+    property.value = [640, 360, 0];
+    property.propertyValueType = 6413;
+    property.dimensionsSeparated = false;
+    property.isSeparationLeader = true;
+  }
+
+  const result = context.OBSIDIAN_shakeTransition(0.4, 0.4, "shake_01");
+  assert.match(result, /^OK\\|Applied and verified Shake 01/);
+  for (const entry of clips.properties) {
+    assert.equal(entry.position.keys.length, 5);
+    assert.ok(entry.position.keys.every(({ value }) => value.length === 3 && value[2] === 0));
+  }
+});
+
 test("Shake 01 reports both selected layers' Position metadata when Position is not a 2D vector", () => {
   const { context } = makeContext();
   const clips = makeShakeClips(context);
