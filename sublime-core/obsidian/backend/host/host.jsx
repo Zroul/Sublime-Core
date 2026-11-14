@@ -2516,14 +2516,18 @@ function OBSIDIAN_shakeTransition(outgoingDuration, incomingDuration, profile) {
     /* The impact is centered in the actual overlap. Both clips receive the
        exact same absolute key times and motion offsets, so the transition
        behaves as one camera move instead of two opposing clip animations. */
-    var impactTime=overlapStart+(overlapEnd-overlapStart)/2;
-    var keyTimes=[
-        impactTime-outgoingFrames*frameDuration,
-        impactTime-Math.round(outgoingFrames/2)*frameDuration,
-        impactTime,
-        impactTime+Math.round(incomingFrames/2)*frameDuration,
-        impactTime+incomingFrames*frameDuration
+    var overlapStartFrame=Math.round(overlapStart*frameRate);
+    var unusedOverlapFrames=overlapFrames-outgoingFrames-incomingFrames;
+    var transitionStartFrame=overlapStartFrame+Math.floor(unusedOverlapFrames/2);
+    var impactFrame=transitionStartFrame+outgoingFrames;
+    var keyFrames=[
+        transitionStartFrame,
+        transitionStartFrame+Math.round(outgoingFrames/2),
+        impactFrame,
+        impactFrame+Math.round(incomingFrames/2),
+        impactFrame+incomingFrames
     ];
+    var keyTimes=keyFrames.map(function(frame){return frame*frameDuration;});
     var positionX=[0,-0.55,1,-0.65,0], positionY=[0,0.3,-0.45,0.25,0], prepared=[];
     for (var ti=0;ti<tracks.length;ti++) {
         var t=tracks[ti], keys=[];
