@@ -2,19 +2,23 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { isExecutablePlan, planObsidianCommand } from "./planner.mjs";
 
-test("plans Shake 01 with independent outgoing and incoming durations", () => {
-  const plan = planObsidianCommand("shake 01 outgoing 0.40 incoming 0.65");
-  assert.equal(plan.status, "planned");
-  assert.equal(plan.action, "shake_transition");
-  assert.deepEqual(plan.args, { value: 0.4, secondaryValue: 0.65, profile: "shake_01" });
-  assert.equal(isExecutablePlan(plan), true);
-  assert.equal(isExecutablePlan({ ...plan, args: { ...plan.args, value: 2.1 } }), false);
-  assert.equal(isExecutablePlan({ ...plan, args: { ...plan.args, profile: "shake_03" } }), false);
+test("plans Shake 01 and the stronger Shake 02 impact profile with independent durations", () => {
+  for (const [number, profile] of [["01", "shake_01"], ["02", "shake_02"]]) {
+    const plan = planObsidianCommand("shake " + number + " outgoing 0.40 incoming 0.65");
+    assert.equal(plan.status, "planned");
+    assert.equal(plan.action, "shake_transition");
+    assert.deepEqual(plan.args, { value: 0.4, secondaryValue: 0.65, profile });
+    assert.equal(isExecutablePlan(plan), true);
+    assert.equal(isExecutablePlan({ ...plan, args: { ...plan.args, value: 2.1 } }), false);
+  }
+  const shake01 = planObsidianCommand("shake 01 outgoing 0.4 incoming 0.4");
+  assert.equal(isExecutablePlan({ ...shake01, args: { ...shake01.args, profile: "shake_03" } }), false);
 
   for (const request of [
     "shake 01",
+    "shake 02",
     "shake 01 outgoing 0.05 incoming 0.4",
-    "shake 01 outgoing 2.1 incoming 0.4",
+    "shake 02 outgoing 2.1 incoming 0.4",
     "shake 01 outgoing 0.4 incoming 2.1",
   ]) {
     const invalid = planObsidianCommand(request);
@@ -22,7 +26,6 @@ test("plans Shake 01 with independent outgoing and incoming durations", () => {
     assert.equal(isExecutablePlan(invalid), false, request);
   }
 });
-
 test("maps project inspection to a read-only action", () => {
   assert.equal(planObsidianCommand("inspect the active composition").action, "inspect_project");
 });
