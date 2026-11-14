@@ -2470,11 +2470,23 @@ function OBSIDIAN_shakeTransition(outgoingDuration, incomingDuration, profile) {
                 return "REJECTED|Existing transform keyframes, expressions, or unsupported properties were preserved.";
             if (spec.k === "vector") {
                 var vectorLength = prop.value && typeof prop.value.length === "number" ? prop.value.length : 0;
-                if (spec.n === "Position" && (vectorLength !== 2 || prop.dimensionsSeparated)) {
-                    var positionDiagnostics = [];
-                    for (var pd = 0; pd < selected.length; pd++) positionDiagnostics.push(OBSIDIAN_shakePositionDiagnostic(selected[pd]));
-                    return "REJECTED|Shake 01 requires a unified 2D Position property. Position diagnostics: " +
-                        positionDiagnostics.join(" || ");
+                if (spec.n === "Position") {
+                    var positionTypeIsTwoD = false, positionTypeIsThreeD = false;
+                    try {
+                        positionTypeIsTwoD = typeof PropertyValueType !== "undefined" &&
+                            prop.propertyValueType === PropertyValueType.TwoD;
+                        positionTypeIsThreeD = typeof PropertyValueType !== "undefined" &&
+                            prop.propertyValueType === PropertyValueType.ThreeD;
+                    } catch (ignoredPositionType) {}
+                    var positionIsUnified2D = !layer.threeDLayer && !prop.dimensionsSeparated &&
+                        !positionTypeIsThreeD &&
+                        (vectorLength === 2 || (vectorLength === 3 && positionTypeIsTwoD));
+                    if (!positionIsUnified2D) {
+                        var positionDiagnostics = [];
+                        for (var pd = 0; pd < selected.length; pd++) positionDiagnostics.push(OBSIDIAN_shakePositionDiagnostic(selected[pd]));
+                        return "REJECTED|Shake 01 requires a unified 2D Position property. Position diagnostics: " +
+                            positionDiagnostics.join(" || ");
+                    }
                 }
                 /* AE can expose a 2D layer's Scale as [x, y, z]. Preserve the
                    hidden Z component exactly; only X/Y participate in the shake. */
@@ -2485,7 +2497,8 @@ function OBSIDIAN_shakeTransition(outgoingDuration, incomingDuration, profile) {
                     return "REJECTED|A selected clip has non-numeric transform values.";
             } else if (!isFinite(Number(prop.value))) return "REJECTED|A selected clip has a non-numeric Rotation value.";
             var baseValue = spec.k === "vector"
-                ? (spec.n === "Scale" && vectorLength === 3
+                ? ((spec.n === "Scale" && vectorLength === 3) ||
+                   (spec.n === "Position" && vectorLength === 3)
                     ? [Number(prop.value[0]), Number(prop.value[1]), Number(prop.value[2])]
                     : [Number(prop.value[0]), Number(prop.value[1])])
                 : Number(prop.value);
@@ -2501,6 +2514,7 @@ function OBSIDIAN_shakeTransition(outgoingDuration, incomingDuration, profile) {
             if (t.channel==="Position") {
                 var amp=12*sign, dx=[0,amp,-amp,amp*0.45,0][ki], dy=[0,-amp*0.55,amp*0.55,-amp*0.25,0][ki];
                 value=[t.base[0]+dx,t.base[1]+dy];
+                if (t.base.length === 3) value.push(t.base[2]);
             } else if (t.channel==="Rotation") value=t.base+sign*[0,1.2,-1.2,0.55,0][ki];
             else {
                 var factor=[1,1.015,0.99,1.008,1][ki];
