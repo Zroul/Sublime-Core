@@ -2575,10 +2575,20 @@ function OBSIDIAN_shakeTransition(outgoingDuration, incomingDuration, profile) {
             }
         }
         for (var vi=0;vi<prepared.length;vi++) {
-            var check=prepared[vi], ok=Number(check.property.numKeys)===5;
-            for(var vk=0;ok&&vk<5;vk++) ok=Math.abs(Number(check.property.keyTime(vk+1))-check.keys[vk].time)*frameRate<=OBSIDIAN_ANIMATION_BOUNDARY_TOLERANCE_FRAMES &&
-                OBSIDIAN_keyframeValueMatches(check.property.keyValue(vk+1),check.keys[vk].value);
-            if(!ok) throw new Error(""+profileLabel+" keyframe read-back did not match.");
+            var check=prepared[vi], actualKeyCount=Number(check.property.numKeys);
+            if(actualKeyCount!==5) {
+                throw new Error(profileLabel+" "+check.channel+" expected 5 keys but AE reported "+actualKeyCount+".");
+            }
+            for(var vk=0;vk<5;vk++) {
+                var actualKeyTime=Number(check.property.keyTime(vk+1));
+                var keyTimeDeltaFrames=Math.abs(actualKeyTime-check.keys[vk].time)*frameRate;
+                if(!isFinite(keyTimeDeltaFrames) || keyTimeDeltaFrames>0.01) {
+                    throw new Error(profileLabel+" "+check.channel+" key "+(vk+1)+" time differed by "+keyTimeDeltaFrames+" frames.");
+                }
+                if(!OBSIDIAN_keyframeValueMatches(check.property.keyValue(vk+1),check.keys[vk].value)) {
+                    throw new Error(profileLabel+" "+check.channel+" key "+(vk+1)+" value did not match the requested value.");
+                }
+            }
         }
     } catch (caught) { error=caught; }
     if(error) {
