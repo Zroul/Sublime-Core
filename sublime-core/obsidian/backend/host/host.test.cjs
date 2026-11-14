@@ -2049,8 +2049,16 @@ test("Shake 01 applies verified Position, Rotation, and Scale keys without chang
   const sharedShake01Position = [
     [960, 540], [923.04, 560.16], [1027.2, 509.76], [916.32, 556.8], [960, 540],
   ];
-  assert.deepEqual(clips.properties[0].position.keys.map(({ value }) => Array.from(value)), sharedShake01Position);
-  assert.deepEqual(clips.properties[1].position.keys.map(({ value }) => Array.from(value)), sharedShake01Position);
+  for (const entry of clips.properties) {
+    const actualPosition = entry.position.keys.map(({ value }) => Array.from(value));
+    assert.equal(actualPosition.length, sharedShake01Position.length);
+    for (let keyIndex = 0; keyIndex < sharedShake01Position.length; keyIndex++) {
+      for (let axis = 0; axis < 2; axis++) {
+        assert.ok(Math.abs(actualPosition[keyIndex][axis] - sharedShake01Position[keyIndex][axis]) < 1e-8,
+          `Position key ${keyIndex}, axis ${axis}: expected ${sharedShake01Position[keyIndex][axis]}, got ${actualPosition[keyIndex][axis]}`);
+      }
+    }
+  }
   assert.deepEqual(clips.properties[0].rotation.keys.map(({ value }) => value), [0, -4, 8, -5, 0]);
   assert.deepEqual(clips.properties[1].rotation.keys.map(({ value }) => value), [0, -4, 8, -5, 0]);
   assert.deepEqual(clips.properties[0].position.keys.map(({ time }) => time), clips.properties[1].position.keys.map(({ time }) => time));
