@@ -2430,7 +2430,7 @@ function OBSIDIAN_shakeTransition(outgoingDuration, incomingDuration, profile) {
     if (!comp || layers.length !== 2) return "REJECTED|Open a composition and select exactly two overlapping clips.";
     var profileId = String(profile || "shake_01");
     if (profileId !== "shake_01" && profileId !== "shake_02") return "REJECTED|Unsupported shake profile.";
-    var profileLabel = profileId === "shake_02" ? "Shake 02" : ""+profileLabel+"";
+    var profileLabel = profileId === "shake_02" ? "Shake 02" : "Shake 01";
     var intensity = profileId === "shake_02"
         ? { position: 28, rotation: [0, 3.4, -2.4, 0.9, 0], scale: [1, 1.045, 0.975, 1.015, 1] }
         : { position: 12, rotation: [0, 1.2, -1.2, 0.55, 0], scale: [1, 1.015, 0.99, 1.008, 1] };
