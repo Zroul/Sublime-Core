@@ -2548,7 +2548,7 @@ function OBSIDIAN_shakeTransition(outgoingDuration, incomingDuration, profile) {
                 if (typeof track.property.setTemporalEaseAtKey==="function" && typeof KeyframeEase!=="undefined") {
                     /* AE spatial Position uses one temporal-ease dimension even when
                        its value vector reads back as [x, y, z]. Rotation is scalar;
-                       2D Scale uses two temporal-ease dimensions. */
+                       Scale follows its actual value vector length. */
                     var dims=track.easeDimensions || 1, ein=[],eout=[];
                     for(var ei=0;ei<dims;ei++){ein.push(new KeyframeEase(0,65));eout.push(new KeyframeEase(0,65));}
                     track.property.setTemporalEaseAtKey(ix,ein,eout);
