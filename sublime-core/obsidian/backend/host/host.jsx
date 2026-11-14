@@ -2431,9 +2431,12 @@ function OBSIDIAN_shakeTransition(outgoingDuration, incomingDuration, profile) {
     var profileId = String(profile || "shake_01");
     if (profileId !== "shake_01" && profileId !== "shake_02") return "REJECTED|Unsupported shake profile.";
     var profileLabel = profileId === "shake_02" ? "Shake 02" : "Shake 01";
+    /* Amplitude is proportional to comp width so the presets remain visible
+       on HD, 4K, and other common edit formats. Shake 01 is a strong rhythmic
+       hit; Shake 02 is a deliberately aggressive impact. */
     var intensity = profileId === "shake_02"
-        ? { position: 28, rotation: [0, 3.4, -2.4, 0.9, 0], scale: [1, 1.045, 0.975, 1.015, 1] }
-        : { position: 12, rotation: [0, 1.2, -1.2, 0.55, 0], scale: [1, 1.015, 0.99, 1.008, 1] };
+        ? { position: Number(comp.width) * 0.055, rotation: [0, 11, -8.5, 4, 0], scale: [1, 1.20, 0.88, 1.08, 1] }
+        : { position: Number(comp.width) * 0.03, rotation: [0, 5.5, -4.2, 2.1, 0], scale: [1, 1.09, 0.93, 1.04, 1] };
     var outgoing = Number(layers[0].inPoint) < Number(layers[1].inPoint) ? layers[0] : layers[1];
     var incoming = outgoing === layers[0] ? layers[1] : layers[0];
     if (Math.abs(Number(outgoing.inPoint) - Number(incoming.inPoint)) < 0.000001 / Number(comp.frameRate || 1))
