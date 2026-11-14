@@ -2473,10 +2473,11 @@ function OBSIDIAN_shakeTransition(outgoingDuration, incomingDuration, profile) {
                 if (spec.n === "Position") {
                     var positionTypeIsTwoD = false, positionTypeIsThreeD = false;
                     try {
-                        positionTypeIsTwoD = typeof PropertyValueType !== "undefined" &&
-                            prop.propertyValueType === PropertyValueType.TwoD;
-                        positionTypeIsThreeD = typeof PropertyValueType !== "undefined" &&
-                            prop.propertyValueType === PropertyValueType.ThreeD;
+                        var positionValueType = prop.propertyValueType;
+                        positionTypeIsTwoD = (typeof PropertyValueType !== "undefined" &&
+                            positionValueType === PropertyValueType.TwoD) || String(positionValueType) === "6413";
+                        positionTypeIsThreeD = (typeof PropertyValueType !== "undefined" &&
+                            positionValueType === PropertyValueType.ThreeD) || String(positionValueType) === "6414";
                     } catch (ignoredPositionType) {}
                     var positionIsUnified2D = !layer.threeDLayer && !prop.dimensionsSeparated &&
                         !positionTypeIsThreeD &&
