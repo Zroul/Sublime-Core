@@ -1939,6 +1939,46 @@ function makeShakeClips(context, outgoingOutPoint = 3, incomingInPoint = 2) {
   return { outgoing, incoming, properties };
 }
 
+test("Shake 02 applies a stronger impact profile while preserving clip timing and hidden Scale dimensions", () => {
+  const { context, undoEvents } = makeContext();
+  const clips = makeShakeClips(context);
+  for (const entry of clips.properties) entry.scale.property.value = [100, 100, 73];
+
+  const result = context.OBSIDIAN_shakeTransition(0.4, 0.65, "shake_02");
+  assert.match(result, /^OK\\|Applied and verified Shake 02/);
+  const outgoing = clips.properties[0];
+  const incoming = clips.properties[1];
+  assert.deepEqual(outgoing.position.keys.map(({ value }) => Array.from(value)), [
+    [960, 540], [988, 524.6], [932, 555.4], [972.6, 532.3], [960, 540],
+  ]);
+  assert.deepEqual(incoming.position.keys.map(({ value }) => Array.from(value)), [
+    [960, 540], [932, 555.4], [988, 524.6], [947.4, 547.7], [960, 540],
+  ]);
+  assert.deepEqual(outgoing.rotation.keys.map(({ value }) => value), [0, 3.4, -2.4, 0.9, 0]);
+  assert.deepEqual(incoming.rotation.keys.map(({ value }) => value), [0, -3.4, 2.4, -0.9, 0]);
+  assert.deepEqual(outgoing.scale.keys.map(({ value }) => Array.from(value)), [
+    [100, 100, 73], [104.5, 104.5, 73], [97.5, 97.5, 73], [101.5, 101.5, 73], [100, 100, 73],
+  ]);
+  assert.equal(clips.outgoing.inPoint, 0);
+  assert.equal(clips.outgoing.outPoint, 3);
+  assert.equal(clips.incoming.inPoint, 2);
+  assert.equal(clips.incoming.outPoint, 5);
+  assert.deepEqual(undoEvents.map(([kind]) => kind), ["begin", "end"]);
+});
+
+test("Shake 02 rolls back every generated transform key when a write fails", () => {
+  const { context, undoEvents } = makeContext();
+  const clips = makeShakeClips(context);
+  const transform = clips.outgoing.property("ADBE Transform Group");
+  const failing = enableAnimationProperty(transform.property("ADBE Rotation"), { throwBeforeSetAt: 3 });
+  clips.properties[0].rotation = failing;
+
+  const result = context.OBSIDIAN_shakeTransition(0.4, 0.4, "shake_02");
+  assert.match(result, /^ERROR\\|Shake 02 failed; generated keyframes were removed/);
+  for (const entry of clips.properties) for (const track of Object.values(entry)) assert.equal(track.keys.length, 0);
+  assert.deepEqual(undoEvents.map(([kind]) => kind), ["begin", "end"]);
+});
+
 test("Shake 01 supplies AE temporal-ease arrays by property type, not Position vector length", () => {
   const { context } = makeContext();
   const clips = makeShakeClips(context);
