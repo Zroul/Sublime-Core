@@ -2529,7 +2529,7 @@ function OBSIDIAN_shakeTransition(outgoingDuration, incomingDuration, profile) {
             keys:keys,
             originalValue:t.kind==="vector"?t.base.slice(0):t.base,
             channel:t.channel,
-            easeDimensions:t.channel==="Position" || t.channel==="Rotation" ? 1 : 2
+            easeDimensions:t.channel==="Position" || t.channel==="Rotation" ? 1 : (t.base && typeof t.base.length==="number" ? t.base.length : 1)
         });
     }
     var error=null, undoOpen=false;
