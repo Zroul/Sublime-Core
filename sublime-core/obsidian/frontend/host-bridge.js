@@ -82,7 +82,7 @@
             return;
           }
 
-          finish({ status: "failed", message: "After Effects returned an unrecognized result.", raw: response });
+          finish({ status: "failed", message: "After Effects returned an unrecognized result: " + response.slice(0, 500), raw: response });
         });
       } catch (error) {
         finish({
