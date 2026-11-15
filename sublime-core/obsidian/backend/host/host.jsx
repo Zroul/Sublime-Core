@@ -2718,7 +2718,7 @@ function OBSIDIAN_pullInSequence() {
             "ERROR|PULL IN failed and rollback could not be verified. Use After Effects Undo and inspect both clips.";
     }
     if(undoOpen)app.endUndoGroup();
-    return "OK|Applied and verified PULL IN to both clips: slow scale build, six-frame zoom hit, continued incoming build, shaped temporal Bezier velocity, and native motion blur. Clip timing and layer count were unchanged.";
+    return "OK|Applied and verified PULL IN to both clips: slow scale build, six-frame zoom-and-opacity handoff, continued incoming build, shaped temporal Bezier velocity, and native motion blur. Clip timing and layer count were unchanged.";
 }
 
 function OBSIDIAN_shakeTransition(outgoingDuration, incomingDuration, profile) {
