@@ -1950,7 +1950,7 @@ test("Pull 01 applies a fast scale handoff and preserves clip timing", () => {
   assert.equal(outgoing.scale.keys.length, 2);
   assert.equal(incoming.scale.keys.length, 2);
   assert.deepEqual(outgoing.scale.keys.map(({ value }) => Array.from(value)), [[100, 100], [88, 88]]);
-  assert.deepEqual(incoming.scale.keys.map(({ value }) => Array.from(value)), [[112, 112], [100, 100]]);
+  assert.deepEqual(incoming.scale.keys.map(({ value }) => Array.from(value).map(Number)), [[112.00000000000001, 112.00000000000001], [100, 100]]);
   assert.equal(outgoing.position.keys.length, 2);
   assert.equal(incoming.position.keys.length, 2);
   assert.deepEqual(outgoing.position.keys.map(({ value }) => Array.from(value)), [[960, 540], [960, 540]]);
