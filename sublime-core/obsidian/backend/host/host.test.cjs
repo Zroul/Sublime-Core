@@ -2133,6 +2133,21 @@ test("WHIP PAN RIGHT adds mirrored Motion Tile and animated Directional Blur to 
   assert.deepEqual(undoEvents.map(([kind]) => kind), ["begin", "end"]);
 });
 
+test("WHIP PAN RIGHT accepts AE 2D Position read-back with a preserved third component", () => {
+  const { context } = makeContext();
+  const clips = makeShakeClips(context);
+  for (const entry of clips.properties) {
+    entry.position.property.propertyValueType = context.PropertyValueType.TwoD;
+    entry.position.property.value = [960, 540, 73];
+  }
+  const result = context.OBSIDIAN_executePlan("whip_pan_right", 0.2, "", 0.2);
+  assert.match(result, /^OK\\|Applied and verified WHIP PAN RIGHT/);
+  for (const entry of clips.properties) {
+    assert.equal(entry.position.keys.length, 3);
+    assert.ok(entry.position.keys.every(({ value }) => value[2] === 73));
+  }
+});
+
 test("WHIP PAN RIGHT rejects an existing Position key inside its window without adding effects", () => {
   const { context } = makeContext();
   const clips = makeShakeClips(context);
