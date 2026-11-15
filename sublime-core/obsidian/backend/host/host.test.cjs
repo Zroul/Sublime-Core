@@ -1987,9 +1987,9 @@ test("Pull 01 rollback removes generated keys but retains pre-existing animation
   const { context, undoEvents } = makeContext();
   const clips = makeShakeClips(context);
   const transform = clips.outgoing.property("ADBE Transform Group");
-  const failing = enableAnimationProperty(transform.property("ADBE Scale"), { throwBeforeSetAt: 3 });
-  failing.setValueAtTime(0.5, [108, 108]);
-  clips.properties[0].scale = failing;
+  const failingProperty = transform.property("ADBE Scale");
+  const failing = enableAnimationProperty(failingProperty, { throwBeforeSetAt: 3 });
+  failingProperty.setValueAtTime(0.5, [108, 108]);
   const result = context.OBSIDIAN_executePlan("pull_transition", 0.2, "", 0.2);
   assert.match(result, /^ERROR\\|Pull 01 failed; generated keyframes were removed/);
   assert.equal(failing.keys.length, 1);
@@ -2246,9 +2246,9 @@ test("Shake 01 rollback removes only generated keys and retains earlier animatio
   const { context, undoEvents } = makeContext();
   const clips = makeShakeClips(context);
   const transform = clips.outgoing.property("ADBE Transform Group");
-  const failing = enableAnimationProperty(transform.property("ADBE Position"), { throwBeforeSetAt: 4 });
-  failing.setValueAtTime(0.5, [900, 500]);
-  clips.properties[0].position = failing;
+  const failingProperty = transform.property("ADBE Position");
+  const failing = enableAnimationProperty(failingProperty, { throwBeforeSetAt: 4 });
+  failingProperty.setValueAtTime(0.5, [900, 500]);
   const result = context.OBSIDIAN_shakeTransition(0.4, 0.4, "shake_01");
   assert.match(result, /^ERROR\\|Shake 01 failed; generated keyframes were removed/);
   assert.equal(failing.keys.length, 1);
