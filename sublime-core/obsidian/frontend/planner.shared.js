@@ -23,6 +23,7 @@
     crossfade: true,
     shake_transition: true,
     pull_transition: true,
+    whip_pan_right: true,
     apply_recipe: true,
     set_brightness_contrast: true,
     fade_in: true,
@@ -172,6 +173,17 @@
       return result("shake_transition",
         { value: outgoingDuration, secondaryValue: incomingDuration, profile: "shake_0" + shakeNumber },
         "Apply " + shakeLabel + " to exactly two selected overlapping 2D clips. Clip timing is preserved and generated keys are rolled back if verification fails.");
+    }
+
+
+    var whipMatch=command.match(/\\bwhip\\s+pan\\s+right\\s+outgoing\\s+(\\d+(?:\\.\\d+)?)\\s+incoming\\s+(\\d+(?:\\.\\d+)?)/);
+    if(/\\bwhip\\s+pan\\s+right\\b/.test(command)){
+      if(!whipMatch)return {status:"needs_clarification",question:"Set WHIP PAN RIGHT outgoing and incoming durations in seconds."};
+      var whipOut=Number(whipMatch[1]),whipIn=Number(whipMatch[2]);
+      if(!isFinite(whipOut)||!isFinite(whipIn)||whipOut<0.1||whipOut>1||whipIn<0.1||whipIn>1)
+        return {status:"needs_clarification",question:"Each WHIP PAN duration must be between 0.1 and 1 second."};
+      return result("whip_pan_right",{value:whipOut,secondaryValue:whipIn},
+        "Apply WHIP PAN RIGHT to exactly two selected overlapping 2D clips using native Motion Tile mirror edges, animated Directional Blur, matched Position movement, and native layer motion blur. Clip timing is preserved and generated changes are rolled back if verification fails.");
     }
 
     var pullMatch = command.match(/\bpull\s*0?1\s+outgoing\s+(\d+(?:\.\d+)?)\s+incoming\s+(\d+(?:\.\d+)?)/);
