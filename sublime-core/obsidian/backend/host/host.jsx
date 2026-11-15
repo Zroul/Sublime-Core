@@ -2765,14 +2765,14 @@ function OBSIDIAN_whipPanRight(outgoingDuration, incomingDuration) {
         for(var wi=0;wi<prepared.length;wi++){
             var entry=prepared[wi],effectsGroup=entry.layer.property("ADBE Effect Parade");
             var tile=effectsGroup.addProperty("ADBE Tile");
-            addedEffects.push({layer:entry.layer,effect:tile});
+            addedEffects.push({layer:entry.layer,matchName:"ADBE Tile"});
             var tileWidth=tile.property("ADBE Tile-0002"),tileHeight=tile.property("ADBE Tile-0003");
             var outputWidth=tile.property("ADBE Tile-0004"),outputHeight=tile.property("ADBE Tile-0005"),mirror=tile.property("ADBE Tile-0006");
             if(!tileWidth||!tileHeight||!outputWidth||!outputHeight||!mirror)throw Error("Motion Tile parameters could not be resolved.");
             tileWidth.setValue(300);tileHeight.setValue(300);outputWidth.setValue(300);outputHeight.setValue(300);mirror.setValue(1);
             effectsGroup=entry.layer.property("ADBE Effect Parade");
             var blur=effectsGroup.addProperty("ADBE Motion Blur");
-            addedEffects.push({layer:entry.layer,effect:blur});
+            addedEffects.push({layer:entry.layer,matchName:"ADBE Motion Blur"});
             var blurLength=blur.property(1),blurDirection=blur.property(2);
             if(!blurLength||!blurDirection||typeof blurLength.setValueAtTime!=="function")throw Error("Directional Blur parameters could not be resolved.");
             blurDirection.setValue(0);
@@ -2819,7 +2819,16 @@ function OBSIDIAN_whipPanRight(outgoingDuration, incomingDuration) {
             try{if(!OBSIDIAN_transitionRollbackTrack({property:restore.position,keys:restore.keys,snapshot:restore.snapshot,originalValue:restore.base},frameRate))rollbackOK=false;}catch(ignoredPos){rollbackOK=false;}
             restore.layer.motionBlur=restore.originalMotionBlur;
         }
-        for(var re=addedEffects.length-1;re>=0;re--)try{addedEffects[re].effect.remove();}catch(ignoredEffect){rollbackOK=false;}
+        for(var re=0;re<prepared.length;re++)try{
+            var effectGroup=prepared[re].layer.property("ADBE Effect Parade");
+            for(var effectIndex=Number(effectGroup.numProperties||0);effectIndex>=1;effectIndex--){
+                var currentEffect=effectGroup.property(effectIndex);
+                if(currentEffect&&(currentEffect.matchName==="ADBE Tile"||currentEffect.matchName==="ADBE Motion Blur")){
+                    try{currentEffect.remove();}catch(removeError){rollbackOK=false;}
+                    effectGroup=prepared[re].layer.property("ADBE Effect Parade");
+                }
+            }
+        }catch(ignoredEffect){rollbackOK=false;}
         if(undoOpen)try{app.endUndoGroup();}catch(ignoredEnd){}
         return rollbackOK?"ERROR|WHIP PAN failed; generated keys and effects were removed. "+OBSIDIAN_cleanText(error):
             "ERROR|WHIP PAN failed and rollback could not be verified. Use After Effects Undo and inspect both clips.";
