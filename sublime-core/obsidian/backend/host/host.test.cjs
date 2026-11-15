@@ -2038,35 +2038,38 @@ test("PULL IN sequence preserves pre-existing incoming Scale and Opacity animati
   assert.equal(clips.incoming.motionBlur, blurBefore);
 });
 
-test("PULL IN sequence requires the incoming clip above the outgoing clip", () => {
-  const { context } = makeContext();
+test("PULL IN single-clip action no longer requires or inspects a second clip", () => {
+  const { context, undoEvents } = makeContext();
   const clips = makeShakeClips(context);
-  clips.outgoing.index = 1;
-  clips.incoming.index = 2;
-  assert.match(context.OBSIDIAN_executePlan("pull_in_sequence", null, "", null),
-    /^REJECTED\|Place the incoming clip above the outgoing clip/);
-  for (const entry of clips.properties) assert.equal(entry.scale.keys.length, 0);
+  context.app.project.activeItem.selectedLayers = [clips.outgoing];
+  clips.incoming.index = 1;
+  const result = context.OBSIDIAN_executePlan("pull_in_sequence", null, "", null);
+  assert.match(result, /^OK\|Applied and verified single-clip PULL IN/);
+  assert.equal(clips.properties[0].scale.keys.length, 4);
+  assert.equal(clips.properties[1].scale.keys.length, 0);
+  assert.equal(clips.incoming.motionBlur, false);
+  assert.equal(clips.outgoing.inPoint, 0);
+  assert.equal(clips.outgoing.outPoint, 3);
+  assert.deepEqual(undoEvents.map(([kind]) => kind), ["begin", "end"]);
 });
 
-test("PULL IN applies a smooth full-clip Scale move and enables native layer motion blur", () => {
+test("PULL IN creates a four-key slow-build and sharp final scale hit on one clip", () => {
   const { context, undoEvents } = makeContext();
   const clips = makeShakeClips(context);
   context.app.project.activeItem.selectedLayers = [clips.outgoing];
   const scale = clips.properties[0].scale;
   const result = context.OBSIDIAN_executePlan("pull_in_clip", null, "", null);
-  assert.match(result, /^OK\|Applied and verified PULL IN on one clip/);
-  assert.equal(scale.keys.length, 2);
-  const scaleValues = scale.keys.map(({ value }) => Array.from(value));
-  assert.deepEqual(scaleValues[0], [100, 100]);
-  assert.ok(scaleValues[1].every((value) => Math.abs(value - 112) < 1e-9));
-  const scaleTimes = scale.keys.map(({ time }) => time);
-  assert.ok(Math.abs(scaleTimes[0]) < 1e-9);
-  assert.ok(Math.abs(scaleTimes[1] - (89 / 30)) < 1e-9);
+  assert.match(result, /^OK\|Applied and verified single-clip PULL IN/);
+  assert.equal(scale.keys.length, 4);
+  assert.deepEqual(scale.keys.map(({ value }) => Array.from(value)), [[100, 100], [103, 103], [106, 106], [128, 128]]);
+  const times = scale.keys.map(({ time }) => time);
+  assert.ok(Math.abs(times[0]) < 1e-9);
+  assert.ok(Math.abs(times[1] - (55 / 30)) < 1e-9);
+  assert.ok(Math.abs(times[2] - (83 / 30)) < 1e-9);
+  assert.ok(Math.abs(times[3] - (89 / 30)) < 1e-9);
   assert.ok(scale.keys.every(({ interpolation }) =>
     interpolation && interpolation.incoming === "bezier" && interpolation.outgoing === "bezier"));
-  assert.ok(scale.keys.every(({ easeIn, easeOut }) =>
-    easeIn && easeOut && easeIn.every((ease) => ease.influence === 65) &&
-    easeOut.every((ease) => ease.influence === 65)));
+  assert.equal(scale.keys[2].easeOut[0].speed, 120);
   assert.equal(clips.outgoing.motionBlur, true);
   assert.equal(clips.outgoing.inPoint, 0);
   assert.equal(clips.outgoing.outPoint, 3);
@@ -2082,7 +2085,7 @@ test("PULL IN preserves Scale keyframes outside the clip edit window", () => {
   scale.property.valueAtTime = () => [100, 100];
   const result = context.OBSIDIAN_executePlan("pull_in_clip", null, "", null);
   assert.match(result, /^OK\|Applied and verified PULL IN/);
-  assert.equal(scale.keys.length, 3);
+  assert.equal(scale.keys.length, 5);
   assert.deepEqual(keyframeSnapshots(scale.keys).find((key) => key.time === -0.5),
     { time: -0.5, value: [96, 96] });
 });
