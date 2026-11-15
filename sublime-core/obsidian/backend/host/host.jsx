@@ -2431,6 +2431,108 @@ function OBSIDIAN_transitionWindowConflict(p,start,end,rate){for(var i=1;i<=Numb
 function OBSIDIAN_transitionRestoreKeys(p,snapshot,rate){for(var i=0;i<snapshot.length;i++){var x=snapshot[i],k=OBSIDIAN_transitionFindKey(p,x.time,rate);if(!k)throw Error("An existing keyframe could not be located after insertion.");if(x.inType!==undefined)p.setInterpolationTypeAtKey(k,x.inType,x.outType);if(x.inEase&&x.outEase&&p.setTemporalEaseAtKey)p.setTemporalEaseAtKey(k,x.inEase,x.outEase);if(x.inTangent&&x.outTangent&&p.setSpatialTangentsAtKey)p.setSpatialTangentsAtKey(k,x.inTangent,x.outTangent);if(x.temporalContinuous!==undefined&&p.setTemporalContinuousAtKey)p.setTemporalContinuousAtKey(k,x.temporalContinuous);if(x.temporalAuto!==undefined&&p.setTemporalAutoBezierAtKey)p.setTemporalAutoBezierAtKey(k,x.temporalAuto);if(x.spatialContinuous!==undefined&&p.setSpatialContinuousAtKey)p.setSpatialContinuousAtKey(k,x.spatialContinuous);if(x.spatialAuto!==undefined&&p.setSpatialAutoBezierAtKey)p.setSpatialAutoBezierAtKey(k,x.spatialAuto);if(!OBSIDIAN_keyframeValueMatches(p.keyValue(k),x.value))throw Error("An existing keyframe value changed.");}}
 function OBSIDIAN_transitionRollbackTrack(track,rate){for(var i=track.keys.length-1;i>=0;i--){var k=OBSIDIAN_transitionFindKey(track.property,track.keys[i].time,rate);if(k)track.property.removeKey(k);}OBSIDIAN_transitionRestoreKeys(track.property,track.snapshot,rate);if(!track.snapshot.length){var original=track.originalValue!==undefined?track.originalValue:track.original;track.property.setValue(original&&typeof original.length==="number"?original.slice(0):original);}return Number(track.property.numKeys)===track.snapshot.length;}
 
+/* Single-clip PULL IN: full-clip Scale move with native layer motion blur. */
+function OBSIDIAN_pullInClip() {
+    var comp = OBSIDIAN_getActiveComp();
+    var layers = OBSIDIAN_getSelectedLayers();
+    if (!comp || layers.length !== 1)
+        return "REJECTED|Select exactly one 2D footage or precomposition clip for PULL IN.";
+    var layer = layers[0];
+    if (!(layer instanceof AVLayer) || !layer.source || layer.adjustmentLayer || layer.nullLayer)
+        return "REJECTED|PULL IN applies only to footage or precomposition clips.";
+    if (layer.locked) return "REJECTED|Unlock '" + OBSIDIAN_cleanText(layer.name) + "' before applying PULL IN.";
+    if (layer.threeDLayer) return "REJECTED|PULL IN v1 supports 2D clips only; no changes were made.";
+    if (typeof layer.motionBlur !== "boolean")
+        return "REJECTED|This clip does not expose the native After Effects motion-blur switch.";
+    var frameRate = Number(comp.frameRate);
+    if (!isFinite(frameRate) || frameRate <= 0)
+        return "REJECTED|Composition frame rate is unavailable.";
+    var inPoint = Number(layer.inPoint), outPoint = Number(layer.outPoint);
+    if (!isFinite(inPoint) || !isFinite(outPoint) || outPoint <= inPoint)
+        return "REJECTED|The selected clip has invalid timing.";
+    var startFrame = Math.ceil(inPoint * frameRate - 0.000001);
+    var endFrame = Math.ceil(outPoint * frameRate - 0.000001) - 1;
+    if (endFrame - startFrame < 1)
+        return "REJECTED|PULL IN needs a clip that spans at least two composition frames.";
+    var startTime = startFrame / frameRate, endTime = endFrame / frameRate;
+    var transform = layer.property("ADBE Transform Group");
+    var scale = transform ? transform.property("ADBE Scale") : null;
+    if (!scale || typeof scale.setValue !== "function" || typeof scale.setValueAtTime !== "function" ||
+        typeof scale.removeKey !== "function" || typeof scale.keyTime !== "function" ||
+        typeof scale.keyValue !== "function" || typeof scale.setInterpolationTypeAtKey !== "function" ||
+        typeof scale.setTemporalEaseAtKey !== "function" || scale.expressionEnabled)
+        return "REJECTED|PULL IN requires an editable Scale property without an expression.";
+    var scaleLength = scale.value && typeof scale.value.length === "number" ? scale.value.length : 0;
+    if (scaleLength !== 2 && !(scaleLength === 3 && !layer.threeDLayer))
+        return "REJECTED|PULL IN requires a supported unified 2D Scale property.";
+    if (OBSIDIAN_transitionWindowConflict(scale, startTime, endTime, frameRate))
+        return "REJECTED|A pre-existing Scale keyframe is inside this clip's PULL IN window. Move it outside the clip edit window; existing animation was preserved.";
+    var startBase = typeof scale.valueAtTime === "function" ? scale.valueAtTime(startTime, false) : scale.value;
+    var endBase = typeof scale.valueAtTime === "function" ? scale.valueAtTime(endTime, false) : scale.value;
+    if (!startBase || !endBase || !isFinite(Number(startBase[0])) || !isFinite(Number(startBase[1])) ||
+        !isFinite(Number(endBase[0])) || !isFinite(Number(endBase[1])) ||
+        (scaleLength === 3 && (!isFinite(Number(startBase[2])) || !isFinite(Number(endBase[2])))))
+        return "REJECTED|The selected clip has non-numeric Scale values.";
+    var startValue = [Number(startBase[0]), Number(startBase[1])];
+    var endValue = [Number(endBase[0]) * 1.12, Number(endBase[1]) * 1.12];
+    if (scaleLength === 3) {
+        startValue.push(Number(startBase[2]));
+        endValue.push(Number(endBase[2]));
+    }
+    var track = {
+        property: scale,
+        keys: [{ time: startTime, value: startValue }, { time: endTime, value: endValue }],
+        snapshot: OBSIDIAN_transitionSnapshot(scale),
+        originalValue: scale.value && typeof scale.value.length === "number" ? scale.value.slice(0) : scale.value
+    };
+    var originalMotionBlur = layer.motionBlur;
+    var undoOpen = false, failure = null;
+    try {
+        app.beginUndoGroup("OBSIDIAN - PULL IN"); undoOpen = true;
+        scale.setValueAtTime(startTime, startValue);
+        scale.setValueAtTime(endTime, endValue);
+        for (var i = 0; i < track.keys.length; i++) {
+            var keyIndex = OBSIDIAN_transitionFindKey(scale, track.keys[i].time, frameRate);
+            if (!keyIndex) throw Error("A generated Scale keyframe could not be located.");
+            scale.setInterpolationTypeAtKey(keyIndex, KeyframeInterpolationType.BEZIER, KeyframeInterpolationType.BEZIER);
+            var easeIn = [], easeOut = [];
+            for (var d = 0; d < scaleLength; d++) {
+                easeIn.push(new KeyframeEase(0, 65));
+                easeOut.push(new KeyframeEase(0, 65));
+            }
+            scale.setTemporalEaseAtKey(keyIndex, easeIn, easeOut);
+        }
+        layer.motionBlur = true;
+        OBSIDIAN_transitionRestoreKeys(scale, track.snapshot, frameRate);
+        for (var v = 0; v < track.keys.length; v++) {
+            var verifyIndex = OBSIDIAN_transitionFindKey(scale, track.keys[v].time, frameRate);
+            if (!verifyIndex || !OBSIDIAN_keyframeValueMatches(scale.keyValue(verifyIndex), track.keys[v].value))
+                throw Error("Generated Scale keyframe verification failed.");
+            if (scale.keyInInterpolationType(verifyIndex) !== KeyframeInterpolationType.BEZIER ||
+                scale.keyOutInterpolationType(verifyIndex) !== KeyframeInterpolationType.BEZIER)
+                throw Error("Generated Scale keyframe easing verification failed.");
+        }
+        if (layer.motionBlur !== true) throw Error("Native layer motion blur could not be enabled.");
+    } catch (error) {
+        failure = error;
+    }
+    if (failure) {
+        var rollbackOk = true;
+        try { rollbackOk = OBSIDIAN_transitionRollbackTrack(track, frameRate); }
+        catch (rollbackError) { rollbackOk = false; }
+        try {
+            layer.motionBlur = originalMotionBlur;
+            if (layer.motionBlur !== originalMotionBlur) rollbackOk = false;
+        } catch (blurRollbackError) { rollbackOk = false; }
+        if (!rollbackOk)
+            return "ERROR|PULL IN failed and rollback could not be verified. Use After Effects Undo and inspect the selected clip.";
+        if (undoOpen) app.endUndoGroup();
+        return "ERROR|PULL IN failed; generated keyframes were removed and the original clip settings were restored. " + OBSIDIAN_cleanText(failure.message);
+    }
+    if (undoOpen) app.endUndoGroup();
+    return "OK|Applied and verified PULL IN on one clip: Scale increases by 12% from its first visible frame to its last, with Bezier easing and native layer motion blur enabled. Clip timing and layer count were unchanged.";
+}
+
 function OBSIDIAN_shakeTransition(outgoingDuration, incomingDuration, profile) {
     var comp = OBSIDIAN_getActiveComp();
     var layers = OBSIDIAN_getSelectedLayers();
@@ -2811,6 +2913,7 @@ function OBSIDIAN_executePlan(action, value, profile, secondaryValue) {
     if (action === "crossfade") return OBSIDIAN_crossfade();
     if (action === "shake_transition") return OBSIDIAN_shakeTransition(value, secondaryValue, profile);
     if (action === "pull_transition") return OBSIDIAN_pullTransition(value, secondaryValue);
+    if (action === "pull_in_clip") return OBSIDIAN_pullInClip();
     if (action === "apply_recipe") return OBSIDIAN_applyRecipe(profile);
 
     if (action === "add_glow") {
