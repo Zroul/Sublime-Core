@@ -1960,86 +1960,81 @@ function makeShakeClips(context, outgoingOutPoint = 3, incomingInPoint = 2) {
 
 
 
-test("PULL IN sequence creates a slow build, six-frame zoom hit, and continued incoming build", () => {
+test("PULL IN sequence edits only the outgoing clip and leaves the incoming clip untouched", () => {
   const { context, undoEvents } = makeContext();
   const clips = makeShakeClips(context);
   clips.incoming.index = 1;
   clips.outgoing.index = 2;
-  const opacityProperty = clips.incoming.property("ADBE Transform Group").property("ADBE Opacity");
-  const opacity = enableAnimationProperty(opacityProperty);
-  clips.properties[1].opacity = opacity;
+  const incomingScale = clips.properties[1].scale;
+  const incomingOpacityProperty = clips.incoming.property("ADBE Transform Group").property("ADBE Opacity");
+  const incomingOpacity = enableAnimationProperty(incomingOpacityProperty);
+  clips.properties[1].opacity = incomingOpacity;
+  const incomingMotionBlur = clips.incoming.motionBlur;
+  const incomingTiming = { inPoint: clips.incoming.inPoint, outPoint: clips.incoming.outPoint };
   const result = context.OBSIDIAN_executePlan("pull_in_sequence", null, "", null);
-  assert.match(result, /^OK\|Applied and verified PULL IN to both clips/);
+  assert.match(result, /^OK\\|Applied and verified the PULL IN handoff on the outgoing clip only/);
   const outgoing = clips.properties[0].scale;
-  const incoming = clips.properties[1].scale;
   assert.deepEqual(outgoing.keys.map(({ value }) => Array.from(value)),
     [[100, 100], [103, 103], [106, 106], [128, 128]]);
-  assert.deepEqual(incoming.keys.map(({ value }) => Array.from(value)),
-    [[106, 106], [128, 128], [131, 131], [138, 138]]);
   assert.deepEqual(outgoing.keys.map(({ time }) => time), [0, 1.8, 2, 2 + 6 / 30]);
-  assert.deepEqual(incoming.keys.map(({ time }) => time), [2, 2 + 6 / 30, 2 + 12 / 30, 149 / 30]);
   assert.ok(outgoing.keys.every(({ interpolation }) =>
-    interpolation && interpolation.incoming === "bezier" && interpolation.outgoing === "bezier"));
-  assert.ok(incoming.keys.every(({ interpolation }) =>
     interpolation && interpolation.incoming === "bezier" && interpolation.outgoing === "bezier"));
   assert.equal(outgoing.keys[2].easeOut[0].speed, 120);
   assert.equal(outgoing.keys[2].easeOut[0].influence, 12);
-  assert.equal(incoming.keys[0].easeOut[0].speed, 120);
-  assert.equal(incoming.keys[0].easeOut[0].influence, 12);
-  assert.deepEqual(opacity.keys.map(({ time, value }) => ({ time, value })), [
-    { time: 2, value: 0 }, { time: 2 + 6 / 30, value: 100 },
-  ]);
-  assert.equal(opacity.keys[0].easeOut[0].influence, 15);
-  assert.equal(opacity.keys[1].easeIn[0].influence, 15);
+  assert.equal(incomingScale.keys.length, 0);
+  assert.equal(incomingOpacity.keys.length, 0);
   assert.equal(clips.outgoing.motionBlur, true);
-  assert.equal(clips.incoming.motionBlur, true);
+  assert.equal(clips.incoming.motionBlur, incomingMotionBlur);
+  assert.deepEqual({ inPoint: clips.incoming.inPoint, outPoint: clips.incoming.outPoint }, incomingTiming);
   assert.equal(clips.properties[0].position.keys.length, 0);
   assert.equal(clips.properties[1].position.keys.length, 0);
   assert.equal(clips.outgoing.inPoint, 0);
   assert.equal(clips.outgoing.outPoint, 3);
-  assert.equal(clips.incoming.inPoint, 2);
-  assert.equal(clips.incoming.outPoint, 5);
   assert.deepEqual(undoEvents.map(([kind]) => kind), ["begin", "end"]);
 });
 
-test("PULL IN sequence rejects insufficient overlap and preserves existing Scale keys", () => {
-  const short = makeContext();
-  const shortClips = makeShakeClips(short.context, 2.15, 2);
-  shortClips.incoming.index = 1;
-  shortClips.outgoing.index = 2;
-  assert.match(short.context.OBSIDIAN_executePlan("pull_in_sequence", null, "", null),
-    /^REJECTED\|PULL IN needs at least seven overlap frames/);
-  for (const entry of shortClips.properties) assert.equal(entry.scale.keys.length, 0);
-
-  const animated = makeContext();
-  const clips = makeShakeClips(animated.context);
-  clips.incoming.index = 1;
-  clips.outgoing.index = 2;
-  clips.properties[0].scale.property.setValueAtTime(1, [108, 108]);
-  assert.match(animated.context.OBSIDIAN_executePlan("pull_in_sequence", null, "", null),
-    /^REJECTED\|A pre-existing Scale keyframe is inside/);
-  assert.equal(clips.properties[1].scale.keys.length, 0);
-});
-
-test("PULL IN sequence rolls back both clips when the incoming Scale write fails", () => {
+test("PULL IN sequence rolls back outgoing keys when an outgoing Scale write fails and never touches incoming properties", () => {
   const { context, undoEvents } = makeContext();
   const clips = makeShakeClips(context);
   clips.incoming.index = 1;
   clips.outgoing.index = 2;
-  const property = clips.incoming.property("ADBE Transform Group").property("ADBE Scale");
-  const failing = enableAnimationProperty(property, { throwBeforeSetAt: 2 });
-  clips.properties[1].scale = failing;
-  const opacityProperty = clips.incoming.property("ADBE Transform Group").property("ADBE Opacity");
-  const opacity = enableAnimationProperty(opacityProperty);
-  clips.properties[1].opacity = opacity;
+  const outgoingProperty = clips.outgoing.property("ADBE Transform Group").property("ADBE Scale");
+  const failing = enableAnimationProperty(outgoingProperty, { throwBeforeSetAt: 2 });
+  clips.properties[0].scale = failing;
+  const incomingScale = clips.properties[1].scale;
+  const incomingOpacityProperty = clips.incoming.property("ADBE Transform Group").property("ADBE Opacity");
+  const incomingOpacity = enableAnimationProperty(incomingOpacityProperty);
+  clips.properties[1].opacity = incomingOpacity;
+  const incomingMotionBlur = clips.incoming.motionBlur;
   const result = context.OBSIDIAN_executePlan("pull_in_sequence", null, "", null);
-  assert.match(result, /^ERROR\|PULL IN failed; generated keyframes were removed/);
-  assert.equal(clips.properties[0].scale.keys.length, 0);
+  assert.match(result, /^ERROR\\|PULL IN failed; generated outgoing keyframes were removed/);
   assert.equal(failing.keys.length, 0);
-  assert.equal(opacity.keys.length, 0);
+  assert.equal(incomingScale.keys.length, 0);
+  assert.equal(incomingOpacity.keys.length, 0);
   assert.equal(clips.outgoing.motionBlur, false);
-  assert.equal(clips.incoming.motionBlur, false);
+  assert.equal(clips.incoming.motionBlur, incomingMotionBlur);
   assert.deepEqual(undoEvents.map(([kind]) => kind), ["begin", "end"]);
+});
+
+test("PULL IN sequence preserves pre-existing incoming Scale and Opacity animation", () => {
+  const { context } = makeContext();
+  const clips = makeShakeClips(context);
+  clips.incoming.index = 1;
+  clips.outgoing.index = 2;
+  const incomingScale = clips.properties[1].scale;
+  const incomingOpacityProperty = clips.incoming.property("ADBE Transform Group").property("ADBE Opacity");
+  const incomingOpacity = enableAnimationProperty(incomingOpacityProperty);
+  clips.properties[1].opacity = incomingOpacity;
+  incomingScale.property.setValueAtTime(2.1, [111, 111]);
+  incomingOpacity.property.setValueAtTime(2.1, 75);
+  const scaleBefore = incomingScale.keys.map((key) => ({ time: key.time, value: Array.from(key.value) }));
+  const opacityBefore = incomingOpacity.keys.map((key) => ({ time: key.time, value: key.value }));
+  const blurBefore = clips.incoming.motionBlur;
+  const result = context.OBSIDIAN_executePlan("pull_in_sequence", null, "", null);
+  assert.match(result, /^OK\\|Applied and verified the PULL IN handoff on the outgoing clip only/);
+  assert.deepEqual(incomingScale.keys.map((key) => ({ time: key.time, value: Array.from(key.value) })), scaleBefore);
+  assert.deepEqual(incomingOpacity.keys.map((key) => ({ time: key.time, value: key.value })), opacityBefore);
+  assert.equal(clips.incoming.motionBlur, blurBefore);
 });
 
 test("PULL IN sequence requires the incoming clip above the outgoing clip", () => {
