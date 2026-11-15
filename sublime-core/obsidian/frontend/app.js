@@ -14,6 +14,9 @@ const shake02ApplyButton = document.querySelector("#shake-02-apply");
 const shake02OutgoingDuration = document.querySelector("#shake-02-outgoing");
 const shake02IncomingDuration = document.querySelector("#shake-02-incoming");
 const pull01ApplyButton = document.querySelector("#pull-01-apply");
+const whipPanRightApplyButton = document.querySelector("#whip-pan-right-apply");
+const whipPanRightOutgoingDuration = document.querySelector("#whip-pan-right-outgoing");
+const whipPanRightIncomingDuration = document.querySelector("#whip-pan-right-incoming");
 const pull01OutgoingDuration = document.querySelector("#pull-01-outgoing");
 const pull01IncomingDuration = document.querySelector("#pull-01-incoming");
 const clipEditsOpenButton = document.querySelector("#clip-edits-open");
@@ -120,6 +123,16 @@ shake02ApplyButton.addEventListener("click", () => {
   runAE("shake 02 outgoing " + outgoing.toFixed(2) + " incoming " + incoming.toFixed(2));
 });
 
+
+
+whipPanRightApplyButton.addEventListener("click", () => {
+  const outgoing = Number(whipPanRightOutgoingDuration.value), incoming = Number(whipPanRightIncomingDuration.value);
+  if (!Number.isFinite(outgoing) || !Number.isFinite(incoming) || outgoing < 0.1 || outgoing > 1 || incoming < 0.1 || incoming > 1) {
+    showResult("Each WHIP PAN duration must be between 0.1 and 1 second.", true); return;
+  }
+  setTransitionsPanelOpen(false); resetStatus();
+  runAE("whip pan right outgoing " + outgoing.toFixed(2) + " incoming " + incoming.toFixed(2));
+});
 
 pull01ApplyButton.addEventListener("click", () => {
   const outgoing = Number(pull01OutgoingDuration.value), incoming = Number(pull01IncomingDuration.value);
