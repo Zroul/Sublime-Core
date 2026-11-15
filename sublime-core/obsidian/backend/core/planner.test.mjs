@@ -26,6 +26,20 @@ test("plans Shake 01 and the stronger Shake 02 impact profile with independent d
     assert.equal(isExecutablePlan(invalid), false, request);
   }
 });
+test("plans Pull 01 with independent bounded durations", () => {
+  const plan = planObsidianCommand("pull 01 outgoing 0.20 incoming 0.25");
+  assert.equal(plan.status, "planned");
+  assert.equal(plan.action, "pull_transition");
+  assert.deepEqual(plan.args, { value: 0.2, secondaryValue: 0.25 });
+  assert.equal(isExecutablePlan(plan), true);
+  assert.equal(isExecutablePlan({ ...plan, args: { ...plan.args, secondaryValue: 2.1 } }), false);
+  for (const request of ["pull 01", "pull 01 outgoing 0.05 incoming 0.2", "pull 01 outgoing 0.2 incoming 2.1"]) {
+    const invalid = planObsidianCommand(request);
+    assert.equal(invalid.status, "needs_clarification", request);
+    assert.equal(isExecutablePlan(invalid), false, request);
+  }
+});
+
 test("maps project inspection to a read-only action", () => {
   assert.equal(planObsidianCommand("inspect the active composition").action, "inspect_project");
 });
