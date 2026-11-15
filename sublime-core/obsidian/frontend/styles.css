@@ -1110,3 +1110,53 @@ textarea:focus, input:focus, #command:focus {
 .transitions-panel::-webkit-scrollbar-track { background: rgba(255,255,255,.04); border-radius: 8px; }
 .transitions-panel::-webkit-scrollbar-thumb { background: rgba(var(--aura-accent-rgb), .45); border-radius: 8px; }
 .transitions-panel::-webkit-scrollbar-thumb:hover { background: rgba(var(--aura-accent-rgb), .7); }
+
+
+/* Transition family organization; preset behavior and control IDs stay unchanged. */
+.transition-family {
+  margin-top: 14px;
+  border: 1px solid rgba(var(--aura-accent-rgb), .22);
+  border-radius: 12px;
+  background: rgba(255,255,255,.018);
+  overflow: hidden;
+}
+.transition-family-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 42px;
+  padding: 0 13px;
+  color: var(--aura-text);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: .14em;
+  cursor: pointer;
+  list-style: none;
+  user-select: none;
+}
+.transition-family-heading::-webkit-details-marker { display: none; }
+.transition-family-heading::after {
+  content: "+";
+  margin-left: auto;
+  color: var(--aura-accent);
+  font-size: 17px;
+  font-weight: 400;
+  line-height: 1;
+}
+.transition-family[open] > .transition-family-heading::after { content: "−"; }
+.transition-family-count {
+  margin-left: auto;
+  color: var(--text-muted);
+  font-size: 9px;
+  letter-spacing: .08em;
+}
+.transition-family-content {
+  padding: 0 10px 10px;
+  border-top: 1px solid rgba(255,255,255,.055);
+}
+.transition-family .transition-card {
+  margin-top: 10px;
+  padding: 13px;
+  background: rgba(255,255,255,.025);
+}#aura-theme-toggle { min-width: 72px; text-align: center; text-transform: uppercase; }
