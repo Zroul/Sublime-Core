@@ -2548,6 +2548,7 @@ function OBSIDIAN_pullInSequence() {
     if(isFinite(Number(outgoing.index))&&isFinite(Number(incoming.index))&&Number(incoming.index)>Number(outgoing.index))
         return "REJECTED|Place the incoming clip above the outgoing clip in the After Effects layer stack, then apply PULL IN.";
     var outgoingStartFrame=Math.ceil(Number(outgoing.inPoint)*frameRate-0.000001);
+    if(outgoingStartFrame===0)outgoingStartFrame=0; // Normalize JavaScript negative zero at a zero-time clip boundary.
     var outgoingEndFrame=Math.ceil(Number(outgoing.outPoint)*frameRate-0.000001)-1;
     var incomingStartFrame=Math.ceil(Number(incoming.inPoint)*frameRate-0.000001);
     var incomingEndFrame=Math.ceil(Number(incoming.outPoint)*frameRate-0.000001)-1;
