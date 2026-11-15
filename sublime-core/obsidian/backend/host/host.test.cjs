@@ -1976,8 +1976,8 @@ test("PULL IN sequence creates a slow build, six-frame zoom hit, and continued i
     [[100, 100], [103, 103], [106, 106], [128, 128]]);
   assert.deepEqual(incoming.keys.map(({ value }) => Array.from(value)),
     [[106, 106], [128, 128], [131, 131], [138, 138]]);
-  assert.deepEqual(outgoing.keys.map(({ time }) => time), [0, 1.8, 2, 2 + 5 / 30]);
-  assert.deepEqual(incoming.keys.map(({ time }) => time), [2, 2 + 5 / 30, 2 + 11 / 30, 149 / 30]);
+  assert.deepEqual(outgoing.keys.map(({ time }) => time), [0, 1.8, 2, 2 + 6 / 30]);
+  assert.deepEqual(incoming.keys.map(({ time }) => time), [2, 2 + 6 / 30, 2 + 12 / 30, 149 / 30]);
   assert.ok(outgoing.keys.every(({ interpolation }) =>
     interpolation && interpolation.incoming === "bezier" && interpolation.outgoing === "bezier"));
   assert.ok(incoming.keys.every(({ interpolation }) =>
@@ -1987,7 +1987,7 @@ test("PULL IN sequence creates a slow build, six-frame zoom hit, and continued i
   assert.equal(incoming.keys[0].easeOut[0].speed, 120);
   assert.equal(incoming.keys[0].easeOut[0].influence, 12);
   assert.deepEqual(opacity.keys.map(({ time, value }) => ({ time, value })), [
-    { time: 2, value: 0 }, { time: 2 + 5 / 30, value: 100 },
+    { time: 2, value: 0 }, { time: 2 + 6 / 30, value: 100 },
   ]);
   assert.equal(opacity.keys[0].easeOut[0].influence, 15);
   assert.equal(opacity.keys[1].easeIn[0].influence, 15);
@@ -2008,7 +2008,7 @@ test("PULL IN sequence rejects insufficient overlap and preserves existing Scale
   shortClips.incoming.index = 1;
   shortClips.outgoing.index = 2;
   assert.match(short.context.OBSIDIAN_executePlan("pull_in_sequence", null, "", null),
-    /^REJECTED\|PULL IN needs a six-frame overlap/);
+    /^REJECTED\|PULL IN needs at least seven overlap frames/);
   for (const entry of shortClips.properties) assert.equal(entry.scale.keys.length, 0);
 
   const animated = makeContext();
