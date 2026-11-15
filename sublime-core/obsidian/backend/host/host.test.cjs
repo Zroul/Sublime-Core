@@ -2150,7 +2150,7 @@ test("WHIP PAN RIGHT removes generated effects and restores Position when key in
   const position = clips.outgoing.property("ADBE Transform Group").property("ADBE Position");
   const failing = enableAnimationProperty(position, { throwBeforeSetAt: 1 });
   const result = context.OBSIDIAN_executePlan("whip_pan_right", 0.2, "", 0.2);
-  assert.match(result, /^ERROR\\|WHIP PAN failed; generated keys and effects were removed/);
+  assert.match(result, /^ERROR\|WHIP PAN failed; generated keys and effects were removed/);
   assert.equal(failing.numKeys, 0);
   assert.equal(clips.outgoing.property("ADBE Effect Parade")._children.length, 0);
   assert.equal(clips.incoming.property("ADBE Effect Parade")._children.length, 0);
