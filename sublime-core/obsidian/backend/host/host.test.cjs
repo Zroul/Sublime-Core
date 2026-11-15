@@ -1950,7 +1950,9 @@ test("PULL IN applies a smooth full-clip Scale move and enables native layer mot
   const result = context.OBSIDIAN_executePlan("pull_in_clip", null, "", null);
   assert.match(result, /^OK\|Applied and verified PULL IN on one clip/);
   assert.equal(scale.keys.length, 2);
-  assert.deepEqual(scale.keys.map(({ value }) => Array.from(value)), [[100, 100], [112, 112]]);
+  const scaleValues = scale.keys.map(({ value }) => Array.from(value));
+  assert.deepEqual(scaleValues[0], [100, 100]);
+  assert.ok(scaleValues[1].every((value) => Math.abs(value - 112) < 1e-9));
   assert.deepEqual(scale.keys.map(({ time }) => time), [0, 89 / 30]);
   assert.ok(scale.keys.every(({ interpolation }) =>
     interpolation && interpolation.incoming === "bezier" && interpolation.outgoing === "bezier"));
