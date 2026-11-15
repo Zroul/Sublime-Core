@@ -67,12 +67,19 @@ function propertyGroup(children) {
       if (matchName === "ADBE Glo2") {
         parameters = [scalarProperty(0), scalarProperty(50), scalarProperty(50), scalarProperty(1)];
       } else if (matchName === "ADBE Tile") {
-        parameters = [scalarProperty([960, 540]), scalarProperty(100), scalarProperty(100),
-          scalarProperty(100), scalarProperty(100), scalarProperty(0)];
+        parameters = [
+          Object.assign(scalarProperty([960, 540]), { matchName: "ADBE Tile-0001" }),
+          Object.assign(scalarProperty(100), { matchName: "ADBE Tile-0002" }),
+          Object.assign(scalarProperty(100), { matchName: "ADBE Tile-0003" }),
+          Object.assign(scalarProperty(100), { matchName: "ADBE Tile-0004" }),
+          Object.assign(scalarProperty(100), { matchName: "ADBE Tile-0005" }),
+          Object.assign(scalarProperty(0), { matchName: "ADBE Tile-0006" }),
+        ];
       } else if (matchName === "ADBE Motion Blur") {
         const blurLength = scalarProperty(0);
         enableAnimationProperty(blurLength);
-        parameters = [blurLength, scalarProperty(0)];
+        parameters = [Object.assign(blurLength, { matchName: "ADBE Motion Blur-0001" }),
+          Object.assign(scalarProperty(0), { matchName: "ADBE Motion Blur-0002" })];
       } else {
         parameters = [
           Object.assign(scalarProperty(0), { name: "Brightness", matchName: matchName + "-0001" }),
@@ -84,7 +91,7 @@ function propertyGroup(children) {
         matchName,
         property(key) {
           if (typeof key === "number") return parameters[key - 1] || null;
-          return null;
+          return parameters.find((parameter) => parameter.matchName === key) || null;
         },
         remove() {
           const index = group._children.indexOf(effect);
@@ -2111,9 +2118,9 @@ test("WHIP PAN RIGHT adds mirrored Motion Tile and animated Directional Blur to 
     assert.equal(layer.motionBlur, true);
   }
   assert.deepEqual(clips.properties[0].position.keys.map(({ value }) => Array.from(value)),
-    [[960, 540], [656.64, 540], [-422.4, 540]]);
+    [[960, 540], [655.872, 540], [-422.4, 540]]);
   assert.deepEqual(clips.properties[1].position.keys.map(({ value }) => Array.from(value)),
-    [[2342.4, 540], [1263.36, 540], [960, 540]]);
+    [[2342.4, 540], [1264.128, 540], [960, 540]]);
   assert.equal(clips.outgoing.inPoint, 0);
   assert.equal(clips.outgoing.outPoint, 3);
   assert.equal(clips.incoming.inPoint, 2);
