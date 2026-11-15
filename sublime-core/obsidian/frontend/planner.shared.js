@@ -176,8 +176,8 @@
     }
 
 
-    var whipMatch=command.match(/\\bwhip\\s+pan\\s+right\\s+outgoing\\s+(\\d+(?:\\.\\d+)?)\\s+incoming\\s+(\\d+(?:\\.\\d+)?)/);
-    if(/\\bwhip\\s+pan\\s+right\\b/.test(command)){
+    var whipMatch=command.match(/\bwhip\s+pan\s+right\s+outgoing\s+(\d+(?:\.\d+)?)\s+incoming\s+(\d+(?:\.\d+)?)/);
+    if(/\bwhip\s+pan\s+right\b/.test(command)){
       if(!whipMatch)return {status:"needs_clarification",question:"Set WHIP PAN RIGHT outgoing and incoming durations in seconds."};
       var whipOut=Number(whipMatch[1]),whipIn=Number(whipMatch[2]);
       if(!isFinite(whipOut)||!isFinite(whipIn)||whipOut<0.1||whipOut>1||whipIn<0.1||whipIn>1)
