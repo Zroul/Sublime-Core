@@ -2733,7 +2733,13 @@ function OBSIDIAN_whipPanRight(outgoingDuration, incomingDuration) {
             typeof position.keyValue!=="function"||typeof position.removeKey!=="function"||position.expressionEnabled)
             return "REJECTED|WHIP PAN requires a supported, unified 2D Position property without an expression.";
         var posValue=position.value;
-        if(!posValue||posValue.length!==2||!isFinite(Number(posValue[0]))||!isFinite(Number(posValue[1]))||position.dimensionsSeparated)
+        var positionType=position.propertyValueType;
+        var isTwoDPosition=(typeof PropertyValueType!=="undefined"&&positionType===PropertyValueType.TwoD)||String(positionType)==="6413";
+        var positionLength=posValue&&typeof posValue.length==="number"?posValue.length:0;
+        if(!posValue||(positionLength!==2&&!(positionLength===3&&isTwoDPosition))||
+            !isFinite(Number(posValue[0]))||!isFinite(Number(posValue[1]))||
+            (positionLength===3&&!isFinite(Number(posValue[2])))||position.dimensionsSeparated||
+            (positionLength===3&&!isTwoDPosition))
             return "REJECTED|WHIP PAN requires a unified 2D Position property.";
         if(OBSIDIAN_transitionWindowConflict(position,times[0],times[4],frameRate))
             return "REJECTED|A pre-existing Position keyframe is inside the WHIP PAN window. Existing animation was preserved.";
@@ -2747,6 +2753,7 @@ function OBSIDIAN_whipPanRight(outgoingDuration, incomingDuration) {
         }
         var sampled=typeof position.valueAtTime==="function"?position.valueAtTime(times[0],false):position.value;
         var base=[Number(sampled[0]),Number(sampled[1])];
+        if(positionLength===3)base.push(Number(sampled[2]));
         prepared.push({layer:layer,position:position,base:base,snapshot:OBSIDIAN_transitionSnapshot(position),
             originalMotionBlur:Boolean(layer.motionBlur),keys:li===0?[
                 {time:times[0],value:base.slice(0)},
