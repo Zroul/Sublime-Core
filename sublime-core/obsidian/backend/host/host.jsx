@@ -2559,14 +2559,14 @@ function OBSIDIAN_pullInSequence() {
         return "REJECTED|PULL IN needs at least seven overlap frames and enough outgoing clip duration for its slow build and final six-frame scale hit.";
     var frameDuration=1/frameRate;
     var frames=[outgoingStartFrame,overlapStartFrame-6,outgoingEndFrame-6,outgoingEndFrame];
-    var scaleGroup=outgoing.property("ADBE Transform Group");
-    var scale=scaleGroup?scaleGroup.property("ADBE Scale"):null;
     if(!(outgoing instanceof AVLayer)||!outgoing.source||outgoing.adjustmentLayer||outgoing.nullLayer)
         return "REJECTED|PULL IN applies only to footage or precomposition clips.";
     if(outgoing.locked)return "REJECTED|Unlock '"+OBSIDIAN_cleanText(outgoing.name)+"' before applying PULL IN.";
     if(outgoing.threeDLayer)return "REJECTED|PULL IN v1 supports 2D clips only; no changes were made.";
     if(typeof outgoing.motionBlur!=="boolean")
         return "REJECTED|This clip does not expose the native After Effects motion-blur switch.";
+    var scaleGroup=outgoing.property("ADBE Transform Group");
+    var scale=scaleGroup?scaleGroup.property("ADBE Scale"):null;
     if(!scale||typeof scale.setValueAtTime!=="function"||typeof scale.removeKey!=="function"||
         typeof scale.keyTime!=="function"||typeof scale.keyValue!=="function"||
         typeof scale.setInterpolationTypeAtKey!=="function"||typeof scale.setTemporalEaseAtKey!=="function"||
