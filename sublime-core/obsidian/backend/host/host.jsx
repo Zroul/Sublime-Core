@@ -2532,16 +2532,16 @@ function OBSIDIAN_shakeTransition(outgoingDuration, incomingDuration, profile) {
     for (var ti=0;ti<tracks.length;ti++) {
         var t=tracks[ti], keys=[];
         for (var ki=0;ki<5;ki++) {
-            var value;
+            var value, sampled=typeof t.property.valueAtTime==="function"?t.property.valueAtTime(keyTimes[ki],false):t.base;
             if (t.channel==="Position") {
                 var amp=intensity.position;
-                value=[t.base[0]+amp*positionX[ki],t.base[1]+amp*positionY[ki]];
-                if (t.base.length === 3) value.push(t.base[2]);
-            } else if (t.channel==="Rotation") value=t.base+intensity.rotation[ki];
+                value=[Number(sampled[0])+amp*positionX[ki],Number(sampled[1])+amp*positionY[ki]];
+                if (t.base.length === 3) value.push(Number(sampled[2]));
+            } else if (t.channel==="Rotation") value=Number(sampled)+intensity.rotation[ki];
             else {
                 var factor=intensity.scale[ki];
-                value=[t.base[0]*factor,t.base[1]*factor];
-                if (t.base.length === 3) value.push(t.base[2]);
+                value=[Number(sampled[0])*factor,Number(sampled[1])*factor];
+                if (t.base.length === 3) value.push(Number(sampled[2]));
             }
             keys.push({time:keyTimes[ki],value:value});
         }
