@@ -2042,7 +2042,7 @@ test("Pull 01 applies a fast scale handoff and preserves clip timing", () => {
   const { context, undoEvents } = makeContext();
   const clips = makeShakeClips(context);
   const result = context.OBSIDIAN_executePlan("pull_transition", 0.2, "", 0.2);
-  assert.match(result, /^OK\\|Applied and verified Pull 01/);
+  assert.match(result, /^OK\|Applied and verified Pull 01/);
   const outgoing = clips.properties[0];
   const incoming = clips.properties[1];
   assert.equal(outgoing.scale.keys.length, 2);
@@ -2066,14 +2066,14 @@ test("Pull 01 preserves transform animation outside its transition window", () =
   const short = makeContext();
   const shortClips = makeShakeClips(short.context, 2, 2);
   const rejected = short.context.OBSIDIAN_executePlan("pull_transition", 0.2, "", 0.2);
-  assert.match(rejected, /^REJECTED\\|The selected clips need at least four frames of overlap/);
+  assert.match(rejected, /^REJECTED\|The selected clips need at least four frames of overlap/);
   for (const entry of shortClips.properties) for (const track of Object.values(entry)) assert.equal(track.keys.length, 0);
 
   const animated = makeContext();
   const animatedClips = makeShakeClips(animated.context);
   animatedClips.properties[0].scale.property.setValueAtTime(0.5, [110, 110]);
   const result = animated.context.OBSIDIAN_executePlan("pull_transition", 0.2, "", 0.2);
-  assert.match(result, /^OK\\|Applied and verified Pull 01/);
+  assert.match(result, /^OK\|Applied and verified Pull 01/);
   assert.equal(animatedClips.properties[0].scale.keys.length, 3);
   assert.deepEqual(keyframeSnapshots(animatedClips.properties[0].scale.keys).find((key) => key.time === 0.5),
     { time: 0.5, value: [110, 110] });
@@ -2088,7 +2088,7 @@ test("Pull 01 rollback removes generated keys but retains pre-existing animation
   const failing = enableAnimationProperty(failingProperty, { throwBeforeSetAt: 3 });
   failingProperty.setValueAtTime(0.5, [108, 108]);
   const result = context.OBSIDIAN_executePlan("pull_transition", 0.2, "", 0.2);
-  assert.match(result, /^ERROR\\|Pull 01 failed; generated keyframes were removed/);
+  assert.match(result, /^ERROR\|Pull 01 failed; generated keyframes were removed/);
   assert.equal(failing.keys.length, 1);
   assert.deepEqual(keyframeSnapshots(failing.keys), [{ time: 0.5, value: [108, 108] }]);
   assert.deepEqual(undoEvents.map(([kind]) => kind), ["begin", "end"]);
@@ -2099,7 +2099,7 @@ test("WHIP PAN RIGHT adds mirrored Motion Tile and animated Directional Blur to 
   const { context, undoEvents } = makeContext();
   const clips = makeShakeClips(context);
   const result = context.OBSIDIAN_executePlan("whip_pan_right", 0.2, "", 0.2);
-  assert.match(result, /^OK\\|Applied and verified WHIP PAN RIGHT/);
+  assert.match(result, /^OK\|Applied and verified WHIP PAN RIGHT/);
   for (const layer of [clips.outgoing, clips.incoming]) {
     const effects = layer.property("ADBE Effect Parade")._children;
     assert.equal(effects.length, 2);
@@ -2117,10 +2117,15 @@ test("WHIP PAN RIGHT adds mirrored Motion Tile and animated Directional Blur to 
     assert.equal(blur.property(1).keyValue(3), layer === clips.outgoing ? 110 : 0);
     assert.equal(layer.motionBlur, true);
   }
-  assert.deepEqual(clips.properties[0].position.keys.map(({ value }) => Array.from(value)),
-    [[960, 540], [655.872, 540], [-422.4, 540]]);
-  assert.deepEqual(clips.properties[1].position.keys.map(({ value }) => Array.from(value)),
-    [[2342.4, 540], [1264.128, 540], [960, 540]]);
+  const outgoingPositions = clips.properties[0].position.keys.map(({ value }) => Array.from(value));
+  const incomingPositions = clips.properties[1].position.keys.map(({ value }) => Array.from(value));
+  const expectedOutgoing = [[960, 540], [655.872, 540], [-422.4, 540]];
+  const expectedIncoming = [[2342.4, 540], [1264.128, 540], [960, 540]];
+  for (const [actual, expected] of [[outgoingPositions, expectedOutgoing], [incomingPositions, expectedIncoming]]) {
+    assert.equal(actual.length, expected.length);
+    actual.forEach((value, index) => value.forEach((axis, dimension) =>
+      assert.ok(Math.abs(axis - expected[index][dimension]) < 1e-8)));
+  }
   assert.equal(clips.outgoing.inPoint, 0);
   assert.equal(clips.outgoing.outPoint, 3);
   assert.equal(clips.incoming.inPoint, 2);
@@ -2133,16 +2138,32 @@ test("WHIP PAN RIGHT rejects an existing Position key inside its window without 
   const clips = makeShakeClips(context);
   clips.properties[0].position.property.setValueAtTime(2.5, [930, 540]);
   const result = context.OBSIDIAN_executePlan("whip_pan_right", 0.2, "", 0.2);
-  assert.match(result, /^REJECTED\\|A pre-existing Position keyframe is inside the WHIP PAN window/);
+  assert.match(result, /^REJECTED\|A pre-existing Position keyframe is inside the WHIP PAN window/);
   assert.equal(clips.outgoing.property("ADBE Effect Parade")._children.length, 0);
   assert.equal(clips.incoming.property("ADBE Effect Parade")._children.length, 0);
+});
+
+
+test("WHIP PAN RIGHT removes generated effects and restores Position when key insertion fails", () => {
+  const { context, undoEvents } = makeContext();
+  const clips = makeShakeClips(context);
+  const position = clips.outgoing.property("ADBE Transform Group").property("ADBE Position");
+  const failing = enableAnimationProperty(position, { throwBeforeSetAt: 1 });
+  const result = context.OBSIDIAN_executePlan("whip_pan_right", 0.2, "", 0.2);
+  assert.match(result, /^ERROR\\|WHIP PAN failed; generated keys and effects were removed/);
+  assert.equal(failing.numKeys, 0);
+  assert.equal(clips.outgoing.property("ADBE Effect Parade")._children.length, 0);
+  assert.equal(clips.incoming.property("ADBE Effect Parade")._children.length, 0);
+  assert.equal(clips.outgoing.motionBlur, false);
+  assert.equal(clips.incoming.motionBlur, false);
+  assert.deepEqual(undoEvents.map(([kind]) => kind), ["begin", "end"]);
 });
 
 test("WHIP PAN RIGHT rejects duration pairs that exceed the overlap", () => {
   const { context } = makeContext();
   const clips = makeShakeClips(context);
   const result = context.OBSIDIAN_executePlan("whip_pan_right", 0.5, "", 0.5);
-  assert.match(result, /^REJECTED\\|The selected clips need at least eight overlap frames/);
+  assert.match(result, /^REJECTED\|The selected clips need at least eight overlap frames/);
   assert.equal(clips.outgoing.property("ADBE Effect Parade")._children.length, 0);
 });
 
@@ -2152,7 +2173,7 @@ test("Shake 02 applies a stronger impact profile while preserving clip timing an
   for (const entry of clips.properties) entry.scale.property.value = [100, 100, 73];
 
   const result = context.OBSIDIAN_shakeTransition(0.4, 0.5, "shake_02");
-  assert.match(result, /^OK\\|Applied and verified Shake 02/);
+  assert.match(result, /^OK\|Applied and verified Shake 02/);
   const outgoing = clips.properties[0];
   const incoming = clips.properties[1];
   const sharedShake02Position = [
@@ -2185,7 +2206,7 @@ test("Shake 02 rolls back every generated transform key when a write fails", () 
   clips.properties[0].rotation = failing;
 
   const result = context.OBSIDIAN_shakeTransition(0.4, 0.4, "shake_02");
-  assert.match(result, /^ERROR\\|Shake 02 failed; generated keyframes were removed/);
+  assert.match(result, /^ERROR\|Shake 02 failed; generated keyframes were removed/);
   for (const entry of clips.properties) for (const track of Object.values(entry)) assert.equal(track.keys.length, 0);
   assert.deepEqual(undoEvents.map(([kind]) => kind), ["begin", "end"]);
 });
@@ -2209,7 +2230,7 @@ test("Shake 01 supplies AE temporal-ease arrays by property type, not Position v
   }
 
   const result = context.OBSIDIAN_shakeTransition(0.4, 0.4, "shake_01");
-  assert.match(result, /^OK\\|Applied and verified Shake 01/);
+  assert.match(result, /^OK\|Applied and verified Shake 01/);
   assert.equal(observed.length, 30);
   assert.ok(observed.filter((entry) => entry.channel === "POSITION")
     .every((entry) => entry.inLength === 1 && entry.outLength === 1));
@@ -2233,7 +2254,7 @@ test("Shake 01 supplies three temporal-ease entries when AE exposes 2D Scale as 
     };
   }
   const result = context.OBSIDIAN_shakeTransition(0.4, 0.4, "shake_01");
-  assert.match(result, /^OK\\|Applied and verified Shake 01/);
+  assert.match(result, /^OK\|Applied and verified Shake 01/);
   assert.equal(observed.length, 10);
   assert.ok(observed.every(([incoming, outgoing]) => incoming === 3 && outgoing === 3));
 });
@@ -2243,7 +2264,7 @@ test("Shake 01 applies verified Position, Rotation, and Scale keys without chang
   const clips = makeShakeClips(context);
   const before = clips.properties.map((entry) => Object.values(entry).map((track) => track.keys.length));
   const result = context.OBSIDIAN_shakeTransition(0.4, 0.4, "shake_01");
-  assert.match(result, /^OK\\|Applied and verified Shake 01/);
+  assert.match(result, /^OK\|Applied and verified Shake 01/);
   assert.deepEqual(clips.properties.map((entry) => Object.values(entry).map((track) => track.keys.length)),
     [[5, 5, 5], [5, 5, 5]]);
   assert.deepEqual(before, [[0, 0, 0], [0, 0, 0]]);
@@ -2285,7 +2306,7 @@ test("Shake 01 accepts AE TwoD Position metadata with a three-component read-bac
   }
 
   const result = context.OBSIDIAN_shakeTransition(0.4, 0.4, "shake_01");
-  assert.match(result, /^OK\\|Applied and verified Shake 01/);
+  assert.match(result, /^OK\|Applied and verified Shake 01/);
   for (const entry of clips.properties) {
     assert.equal(entry.position.keys.length, 5);
     assert.ok(entry.position.keys.every(({ value }) => value.length === 3 && value[2] === 0));
@@ -2304,7 +2325,7 @@ test("Shake 01 accepts AE numeric TwoD enum 6413 when host enum globals do not m
   }
 
   const result = context.OBSIDIAN_shakeTransition(0.4, 0.4, "shake_01");
-  assert.match(result, /^OK\\|Applied and verified Shake 01/);
+  assert.match(result, /^OK\|Applied and verified Shake 01/);
   for (const entry of clips.properties) {
     assert.equal(entry.position.keys.length, 5);
     assert.ok(entry.position.keys.every(({ value }) => value.length === 3 && value[2] === 0));
@@ -2349,7 +2370,7 @@ test("Shake 01 supports AE 2D Scale read-back with a preserved third component",
   }
 
   const result = context.OBSIDIAN_shakeTransition(0.4, 0.4, "shake_01");
-  assert.match(result, /^OK\\|Applied and verified Shake 01/);
+  assert.match(result, /^OK\|Applied and verified Shake 01/);
   for (const entry of clips.properties) {
     assert.equal(entry.scale.keys.length, 5);
     assert.ok(entry.scale.keys.every(({ value }) => value.length === 3 && value[2] === 73));
@@ -2374,7 +2395,7 @@ test("Shake 01 rejects clips without overlap before writing transform keys", () 
   const { context } = makeContext();
   const clips = makeShakeClips(context, 2, 2);
   const result = context.OBSIDIAN_shakeTransition(0.4, 0.4, "shake_01");
-  assert.match(result, /^REJECTED\\|The selected clips need at least four frames of overlap/);
+  assert.match(result, /^REJECTED\|The selected clips need at least four frames of overlap/);
   for (const entry of clips.properties) for (const track of Object.values(entry)) assert.equal(track.keys.length, 0);
 });
 
@@ -2383,7 +2404,7 @@ test("Shake 01 adds transition keys after existing animation without deleting it
   const clips = makeShakeClips(context);
   clips.properties[0].scale.property.setValueAtTime(0.5, [110, 110]);
   const result = context.OBSIDIAN_shakeTransition(0.4, 0.4, "shake_01");
-  assert.match(result, /^OK\\|Applied and verified Shake 01/);
+  assert.match(result, /^OK\|Applied and verified Shake 01/);
   const keys = clips.properties[0].scale.keys;
   assert.equal(keys.length, 6);
   assert.deepEqual(keyframeSnapshots(keys).find((key) => key.time === 0.5), { time: 0.5, value: [110, 110] });
@@ -2399,7 +2420,7 @@ test("Shake 01 rollback removes only generated keys and retains earlier animatio
   const failing = enableAnimationProperty(failingProperty, { throwBeforeSetAt: 4 });
   failingProperty.setValueAtTime(0.5, [900, 500]);
   const result = context.OBSIDIAN_shakeTransition(0.4, 0.4, "shake_01");
-  assert.match(result, /^ERROR\\|Shake 01 failed; generated keyframes were removed/);
+  assert.match(result, /^ERROR\|Shake 01 failed; generated keyframes were removed/);
   assert.equal(failing.keys.length, 1);
   assert.deepEqual(keyframeSnapshots(failing.keys), [{ time: 0.5, value: [900, 500] }]);
   for (const layer of [clips.outgoing, clips.incoming]) {
@@ -2415,7 +2436,7 @@ test("Transitions reject keyframes inside the transition window without modifyin
   const shakeClips = makeShakeClips(shake.context);
   shakeClips.properties[0].scale.property.setValueAtTime(2.5, [115, 115]);
   const shakeResult = shake.context.OBSIDIAN_shakeTransition(0.4, 0.4, "shake_01");
-  assert.match(shakeResult, /^REJECTED\\|A pre-existing Scale keyframe is inside the transition window/);
+  assert.match(shakeResult, /^REJECTED\|A pre-existing Scale keyframe is inside the transition window/);
   assert.deepEqual(keyframeSnapshots(shakeClips.properties[0].scale.keys), [{ time: 2.5, value: [115, 115] }]);
   assert.equal(shakeClips.properties[0].position.keys.length, 0);
 
@@ -2423,7 +2444,7 @@ test("Transitions reject keyframes inside the transition window without modifyin
   const pullClips = makeShakeClips(pull.context);
   pullClips.properties[0].position.property.setValueAtTime(2.5, [930, 520]);
   const pullResult = pull.context.OBSIDIAN_executePlan("pull_transition", 0.2, "", 0.2);
-  assert.match(pullResult, /^REJECTED\\|A pre-existing Position keyframe is inside the transition window/);
+  assert.match(pullResult, /^REJECTED\|A pre-existing Position keyframe is inside the transition window/);
   assert.deepEqual(keyframeSnapshots(pullClips.properties[0].position.keys), [{ time: 2.5, value: [930, 520] }]);
   assert.equal(pullClips.properties[0].scale.keys.length, 0);
 });
@@ -2432,7 +2453,7 @@ test("Shake 01 rejects durations outside its supported range", () => {
   const { context } = makeContext();
   const clips = makeShakeClips(context);
   const result = context.OBSIDIAN_shakeTransition(2.1, 0.4, "shake_01");
-  assert.match(result, /^REJECTED\\|Each Shake 01 duration must be between 0.1 and 2 seconds/);
+  assert.match(result, /^REJECTED\|Each Shake 01 duration must be between 0.1 and 2 seconds/);
   for (const entry of clips.properties) for (const track of Object.values(entry)) assert.equal(track.keys.length, 0);
 });
 
@@ -2440,7 +2461,7 @@ test("Shake transition rejects combined durations longer than the overlap withou
   const { context } = makeContext();
   const clips = makeShakeClips(context);
   const result = context.OBSIDIAN_shakeTransition(0.6, 0.5, "shake_01");
-  assert.match(result, /^REJECTED\\|Each duration must be at least four frames and their combined duration cannot exceed the available overlap/);
+  assert.match(result, /^REJECTED\|Each duration must be at least four frames and their combined duration cannot exceed the available overlap/);
   for (const entry of clips.properties) {
     for (const track of Object.values(entry)) assert.equal(track.keys.length, 0);
   }
