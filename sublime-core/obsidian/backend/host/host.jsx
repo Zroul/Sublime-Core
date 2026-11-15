@@ -2696,6 +2696,139 @@ function OBSIDIAN_shakeTransition(outgoingDuration, incomingDuration, profile) {
 }
 
 
+
+function OBSIDIAN_whipPanRight(outgoingDuration, incomingDuration) {
+    var comp=OBSIDIAN_getActiveComp(), layers=OBSIDIAN_getSelectedLayers();
+    if(!comp||layers.length!==2)return "REJECTED|Open a composition and select exactly two overlapping clips.";
+    var frameRate=Number(comp.frameRate);
+    if(!isFinite(frameRate)||frameRate<=0)return "REJECTED|Composition frame rate is unavailable.";
+    var outgoing=Number(layers[0].inPoint)<Number(layers[1].inPoint)?layers[0]:layers[1];
+    var incoming=outgoing===layers[0]?layers[1]:layers[0];
+    if(Math.abs(Number(outgoing.inPoint)-Number(incoming.inPoint))<0.000001/frameRate)return "REJECTED|Cannot identify outgoing and incoming clips because their start times match.";
+    var overlapStart=Math.max(Number(outgoing.inPoint),Number(incoming.inPoint));
+    var overlapEnd=Math.min(Number(outgoing.outPoint),Number(incoming.outPoint));
+    var overlapFrames=Math.floor((overlapEnd-overlapStart)*frameRate+0.000001);
+    outgoingDuration=Number(outgoingDuration);incomingDuration=Number(incomingDuration);
+    if(!isFinite(outgoingDuration)||!isFinite(incomingDuration)||outgoingDuration<0.1||outgoingDuration>1||incomingDuration<0.1||incomingDuration>1)
+        return "REJECTED|Each WHIP PAN duration must be between 0.1 and 1 second.";
+    var outFrames=Math.round(outgoingDuration*frameRate),inFrames=Math.round(incomingDuration*frameRate);
+    if(!isFinite(overlapStart)||!isFinite(overlapEnd)||overlapFrames<8||outFrames<3||inFrames<3||outFrames+inFrames>overlapFrames)
+        return "REJECTED|The selected clips need at least eight overlap frames, and both durations must fit inside that overlap.";
+    var startFrame=Math.round(overlapStart*frameRate)+Math.floor((overlapFrames-outFrames-inFrames)/2);
+    var cutFrame=startFrame+outFrames,endFrame=cutFrame+inFrames;
+    var times=[startFrame/frameRate,Math.round((startFrame+outFrames*0.72))/frameRate,cutFrame/frameRate,
+        Math.round((cutFrame+inFrames*0.28))/frameRate,endFrame/frameRate];
+    var selected=[outgoing,incoming],prepared=[],addedEffects=[],oldMotionBlur=[];
+    var displacement=Number(comp.width)*0.72;
+    if(!isFinite(displacement)||displacement<1)return "REJECTED|Composition dimensions are unavailable.";
+    for(var li=0;li<2;li++){
+        var layer=selected[li];
+        if(!(layer instanceof AVLayer)||!layer.source||layer.adjustmentLayer||layer.nullLayer)
+            return "REJECTED|WHIP PAN applies only to footage or precomposition clips.";
+        if(layer.locked)return "REJECTED|Unlock '"+OBSIDIAN_cleanText(layer.name)+"' before applying WHIP PAN.";
+        if(layer.threeDLayer)return "REJECTED|WHIP PAN v1 supports 2D clips only; no changes were made.";
+        var transform=layer.property("ADBE Transform Group"),position=transform?transform.property("ADBE Position"):null;
+        if(!position||typeof position.setValueAtTime!=="function"||typeof position.keyTime!=="function"||
+            typeof position.keyValue!=="function"||typeof position.removeKey!=="function"||position.expressionEnabled)
+            return "REJECTED|WHIP PAN requires a supported, unified 2D Position property without an expression.";
+        var posValue=position.value;
+        if(!posValue||posValue.length!==2||!isFinite(Number(posValue[0]))||!isFinite(Number(posValue[1]))||position.dimensionsSeparated)
+            return "REJECTED|WHIP PAN requires a unified 2D Position property.";
+        if(OBSIDIAN_transitionWindowConflict(position,times[0],times[4],frameRate))
+            return "REJECTED|A pre-existing Position keyframe is inside the WHIP PAN window. Existing animation was preserved.";
+        var effects=layer.property("ADBE Effect Parade");
+        if(!effects||typeof effects.addProperty!=="function")
+            return "REJECTED|This layer cannot accept the native WHIP PAN effects.";
+        for(var ei=1;ei<=Number(effects.numProperties||0);ei++){
+            var existing=effects.property(ei);
+            if(existing&&(existing.matchName==="ADBE Tile"||existing.matchName==="ADBE Motion Blur"))
+                return "REJECTED|A Motion Tile or Directional Blur effect already exists on '"+OBSIDIAN_cleanText(layer.name)+"'. Remove or adjust it before applying WHIP PAN.";
+        }
+        var sampled=typeof position.valueAtTime==="function"?position.valueAtTime(times[0],false):position.value;
+        var base=[Number(sampled[0]),Number(sampled[1])];
+        prepared.push({layer:layer,position:position,base:base,snapshot:OBSIDIAN_transitionSnapshot(position),
+            originalMotionBlur:Boolean(layer.motionBlur),keys:li===0?[
+                {time:times[0],value:base.slice(0)},
+                {time:times[1],value:[base[0]-displacement*0.22,base[1]]},
+                {time:times[2],value:[base[0]-displacement,base[1]]}
+            ]:[
+                {time:times[2],value:[base[0]+displacement,base[1]]},
+                {time:times[3],value:[base[0]+displacement*0.22,base[1]]},
+                {time:times[4],value:base.slice(0)}
+            ]});
+        oldMotionBlur.push(Boolean(layer.motionBlur));
+    }
+    var error=null,undoOpen=false;
+    try{
+        app.beginUndoGroup("OBSIDIAN - WHIP PAN RIGHT");undoOpen=true;
+        for(var wi=0;wi<prepared.length;wi++){
+            var entry=prepared[wi],effectsGroup=entry.layer.property("ADBE Effect Parade");
+            var tile=effectsGroup.addProperty("ADBE Tile");
+            addedEffects.push({layer:entry.layer,effect:tile});
+            tile.name="OBSIDIAN WHIP PAN - Motion Tile";
+            var tileWidth=tile.property("ADBE Tile-0002"),tileHeight=tile.property("ADBE Tile-0003");
+            var outputWidth=tile.property("ADBE Tile-0004"),outputHeight=tile.property("ADBE Tile-0005"),mirror=tile.property("ADBE Tile-0006");
+            if(!tileWidth||!tileHeight||!outputWidth||!outputHeight||!mirror)throw Error("Motion Tile parameters could not be resolved.");
+            tileWidth.setValue(300);tileHeight.setValue(300);outputWidth.setValue(300);outputHeight.setValue(300);mirror.setValue(1);
+            effectsGroup=entry.layer.property("ADBE Effect Parade");
+            var blur=effectsGroup.addProperty("ADBE Motion Blur");
+            addedEffects.push({layer:entry.layer,effect:blur});
+            blur.name="OBSIDIAN WHIP PAN - Directional Blur";
+            var blurLength=blur.property(1),blurDirection=blur.property(2);
+            if(!blurLength||!blurDirection||typeof blurLength.setValueAtTime!=="function")throw Error("Directional Blur parameters could not be resolved.");
+            blurDirection.setValue(0);
+            entry.blur=blurLength;
+            entry.blurSnapshot=OBSIDIAN_transitionSnapshot(blurLength);
+            entry.layer.motionBlur=true;
+            for(var pk=0;pk<entry.keys.length;pk++)entry.position.setValueAtTime(entry.keys[pk].time,entry.keys[pk].value);
+            var blurKeys=entry.layer===outgoing?[
+                {time:times[0],value:0},{time:times[1],value:42},{time:times[2],value:110}
+            ]:[
+                {time:times[2],value:110},{time:times[3],value:42},{time:times[4],value:0}
+            ];
+            entry.blurKeys=blurKeys;
+            for(var bk=0;bk<blurKeys.length;bk++)entry.blur.setValueAtTime(blurKeys[bk].time,blurKeys[bk].value);
+            var allProps=[{p:entry.position,keys:entry.keys},{p:entry.blur,keys:entry.blurKeys}];
+            for(var ap=0;ap<allProps.length;ap++)for(var ak=0;ak<allProps[ap].keys.length;ak++){
+                var prop=allProps[ap].p,key=allProps[ap].keys[ak],idx=OBSIDIAN_transitionFindKey(prop,key.time,frameRate);
+                if(!idx)throw Error("A WHIP PAN generated key could not be found.");
+                prop.setInterpolationTypeAtKey(idx,KeyframeInterpolationType.BEZIER,KeyframeInterpolationType.BEZIER);
+                if(typeof prop.setTemporalEaseAtKey==="function"&&typeof KeyframeEase!=="undefined")
+                    prop.setTemporalEaseAtKey(idx,[new KeyframeEase(0,ak===1?45:70)],[new KeyframeEase(0,ak===1?45:70)]);
+            }
+        }
+        for(var vi=0;vi<prepared.length;vi++){
+            var check=prepared[vi];
+            OBSIDIAN_transitionRestoreKeys(check.position,check.snapshot,frameRate);
+            if(Number(check.position.numKeys)!==check.snapshot.length+3)throw Error("Position key count verification failed.");
+            for(var vk=0;vk<check.keys.length;vk++){
+                var posIndex=OBSIDIAN_transitionFindKey(check.position,check.keys[vk].time,frameRate);
+                if(!posIndex||!OBSIDIAN_keyframeValueMatches(check.position.keyValue(posIndex),check.keys[vk].value))throw Error("Position key verification failed.");
+            }
+            if(Number(check.blur.numKeys)!==check.blurSnapshot.length+3)throw Error("Directional Blur key count verification failed.");
+            for(var vb=0;vb<check.blurKeys.length;vb++){
+                var blurIndex=OBSIDIAN_transitionFindKey(check.blur,check.blurKeys[vb].time,frameRate);
+                if(!blurIndex||Math.abs(Number(check.blur.keyValue(blurIndex))-check.blurKeys[vb].value)>0.001)throw Error("Directional Blur key verification failed.");
+            }
+            if(!check.layer.motionBlur)throw Error("Native layer motion blur could not be enabled.");
+        }
+    }catch(caught){error=caught;}
+    if(error){
+        var rollbackOK=true;
+        for(var ri=0;ri<prepared.length;ri++){
+            var restore=prepared[ri];
+            try{if(!OBSIDIAN_transitionRollbackTrack({property:restore.position,snapshot:restore.snapshot},frameRate))rollbackOK=false;}catch(ignoredPos){rollbackOK=false;}
+            restore.layer.motionBlur=restore.originalMotionBlur;
+        }
+        for(var re=addedEffects.length-1;re>=0;re--)try{addedEffects[re].effect.remove();}catch(ignoredEffect){rollbackOK=false;}
+        if(undoOpen)try{app.endUndoGroup();}catch(ignoredEnd){}
+        return rollbackOK?"ERROR|WHIP PAN failed; generated keys and effects were removed. "+OBSIDIAN_cleanText(error):
+            "ERROR|WHIP PAN failed and rollback could not be verified. Use After Effects Undo and inspect both clips.";
+    }
+    if(undoOpen)app.endUndoGroup();
+    return "OK|Applied and verified WHIP PAN RIGHT on both clips. Motion Tile mirror edges, Directional Blur, matched right-to-left movement, and native motion blur are enabled; clip timing was unchanged.";
+}
+
 function OBSIDIAN_pullTransition(outgoingDuration, incomingDuration) {
     var comp = OBSIDIAN_getActiveComp();
     var layers = OBSIDIAN_getSelectedLayers();
@@ -2913,6 +3046,7 @@ function OBSIDIAN_executePlan(action, value, profile, secondaryValue) {
     if (action === "crossfade") return OBSIDIAN_crossfade();
     if (action === "shake_transition") return OBSIDIAN_shakeTransition(value, secondaryValue, profile);
     if (action === "pull_transition") return OBSIDIAN_pullTransition(value, secondaryValue);
+    if (action === "whip_pan_right") return OBSIDIAN_whipPanRight(value, secondaryValue);
     if (action === "pull_in_clip") return OBSIDIAN_pullInClip();
     if (action === "apply_recipe") return OBSIDIAN_applyRecipe(profile);
 
