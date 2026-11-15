@@ -2548,180 +2548,100 @@ function OBSIDIAN_pullInSequence() {
     if(isFinite(Number(outgoing.index))&&isFinite(Number(incoming.index))&&Number(incoming.index)>Number(outgoing.index))
         return "REJECTED|Place the incoming clip above the outgoing clip in the After Effects layer stack, then apply PULL IN.";
     var outgoingStartFrame=Math.ceil(Number(outgoing.inPoint)*frameRate-0.000001);
-    if(outgoingStartFrame===0)outgoingStartFrame=0; // Normalize JavaScript negative zero at a zero-time clip boundary.
+    if(outgoingStartFrame===0)outgoingStartFrame=0;
     var outgoingEndFrame=Math.ceil(Number(outgoing.outPoint)*frameRate-0.000001)-1;
     var incomingStartFrame=Math.ceil(Number(incoming.inPoint)*frameRate-0.000001);
     var incomingEndFrame=Math.ceil(Number(incoming.outPoint)*frameRate-0.000001)-1;
     var overlapStartFrame=Math.max(outgoingStartFrame,incomingStartFrame);
     var overlapEndFrame=Math.min(outgoingEndFrame,incomingEndFrame);
-    var overlapFrames=overlapEndFrame-overlapStartFrame+1;
-    var transitionFrames=6;
-    var transitionEndFrame=overlapStartFrame+transitionFrames;
-    var outgoingBuildFrame=overlapStartFrame-6;
-    var incomingBuildFrame=transitionEndFrame+6;
-    if(!isFinite(outgoingEndFrame)||!isFinite(incomingEndFrame)||overlapFrames<transitionFrames+1||
-        outgoingBuildFrame-outgoingStartFrame<6||incomingEndFrame-incomingBuildFrame<6)
-        return "REJECTED|PULL IN needs at least seven overlap frames for its six-frame handoff, plus seven outgoing build frames and seven incoming finish frames.";
+    if(!isFinite(outgoingEndFrame)||!isFinite(incomingEndFrame)||overlapEndFrame-overlapStartFrame+1<7||
+        overlapStartFrame-outgoingStartFrame<6||outgoingEndFrame-overlapStartFrame<6)
+        return "REJECTED|PULL IN needs at least seven overlap frames and enough outgoing clip duration for its slow build and final six-frame scale hit.";
     var frameDuration=1/frameRate;
-    var outgoingTimes=[outgoingStartFrame,outgoingBuildFrame,overlapStartFrame,transitionEndFrame];
-    var incomingTimes=[overlapStartFrame,transitionEndFrame,incomingBuildFrame,incomingEndFrame];
-    var prepared=[],selected=[outgoing,incoming];
-    function scaleValue(base,factor,length){
-        var value=[Number(base[0])*factor,Number(base[1])*factor];
-        if(length===3)value.push(Number(base[2]));
-        return value;
+    var frames=[outgoingStartFrame,overlapStartFrame-6,outgoingEndFrame-6,outgoingEndFrame];
+    var scaleGroup=outgoing.property("ADBE Transform Group");
+    var scale=scaleGroup?scaleGroup.property("ADBE Scale"):null;
+    if(!(outgoing instanceof AVLayer)||!outgoing.source||outgoing.adjustmentLayer||outgoing.nullLayer)
+        return "REJECTED|PULL IN applies only to footage or precomposition clips.";
+    if(outgoing.locked)return "REJECTED|Unlock '"+OBSIDIAN_cleanText(outgoing.name)+"' before applying PULL IN.";
+    if(outgoing.threeDLayer)return "REJECTED|PULL IN v1 supports 2D clips only; no changes were made.";
+    if(typeof outgoing.motionBlur!=="boolean")
+        return "REJECTED|This clip does not expose the native After Effects motion-blur switch.";
+    if(!scale||typeof scale.setValueAtTime!=="function"||typeof scale.removeKey!=="function"||
+        typeof scale.keyTime!=="function"||typeof scale.keyValue!=="function"||
+        typeof scale.setInterpolationTypeAtKey!=="function"||typeof scale.setTemporalEaseAtKey!=="function"||
+        scale.expressionEnabled)
+        return "REJECTED|PULL IN requires an editable outgoing Scale property without an expression.";
+    var scaleLength=scale.value&&typeof scale.value.length==="number"?scale.value.length:0;
+    if(scaleLength!==2&&!(scaleLength===3&&!outgoing.threeDLayer))
+        return "REJECTED|PULL IN requires a supported unified 2D Scale property.";
+    var firstTime=frames[0]*frameDuration,lastTime=frames[3]*frameDuration;
+    if(OBSIDIAN_transitionWindowConflict(scale,firstTime,lastTime,frameRate))
+        return "REJECTED|A pre-existing Scale keyframe is inside the outgoing clip's PULL IN window. Existing animation was preserved.";
+    var sample=typeof scale.valueAtTime==="function"?scale.valueAtTime(firstTime,false):scale.value;
+    if(!sample||!isFinite(Number(sample[0]))||!isFinite(Number(sample[1]))||
+        (scaleLength===3&&!isFinite(Number(sample[2]))))
+        return "REJECTED|The outgoing clip has non-numeric Scale values.";
+    var base=[Number(sample[0]),Number(sample[1])];
+    if(scaleLength===3)base.push(Number(sample[2]));
+    var factors=[1,1.03,1.06,1.28],keys=[];
+    for(var ki=0;ki<frames.length;ki++){
+        var value=[base[0]*factors[ki],base[1]*factors[ki]];
+        if(scaleLength===3)value.push(base[2]);
+        keys.push({time:frames[ki]*frameDuration,value:value});
     }
-    function easeArray(length,speed,influence){
-        var result=[];
-        for(var i=0;i<length;i++)result.push(new KeyframeEase(speed,influence));
-        return result;
-    }
-    for(var li=0;li<selected.length;li++){
-        var layer=selected[li];
-        if(!(layer instanceof AVLayer)||!layer.source||layer.adjustmentLayer||layer.nullLayer)
-            return "REJECTED|PULL IN applies only to footage or precomposition clips.";
-        if(layer.locked)return "REJECTED|Unlock '"+OBSIDIAN_cleanText(layer.name)+"' before applying PULL IN.";
-        if(layer.threeDLayer)return "REJECTED|PULL IN v1 supports 2D clips only; no changes were made.";
-        if(typeof layer.motionBlur!=="boolean")return "REJECTED|This clip does not expose the native After Effects motion-blur switch.";
-        var transform=layer.property("ADBE Transform Group"),scale=transform?transform.property("ADBE Scale"):null;
-        if(!scale||typeof scale.setValueAtTime!=="function"||typeof scale.removeKey!=="function"||
-            typeof scale.keyTime!=="function"||typeof scale.keyValue!=="function"||
-            typeof scale.setInterpolationTypeAtKey!=="function"||typeof scale.setTemporalEaseAtKey!=="function"||
-            scale.expressionEnabled)
-            return "REJECTED|PULL IN requires an editable unified Scale property without an expression.";
-        var scaleLength=scale.value&&typeof scale.value.length==="number"?scale.value.length:0;
-        if(scaleLength!==2&&!(scaleLength===3&&!layer.threeDLayer))
-            return "REJECTED|PULL IN requires a supported 2D Scale property.";
-        var firstFrame=layer===outgoing?outgoingStartFrame:incomingStartFrame;
-        var lastFrame=layer===outgoing?outgoingEndFrame:incomingEndFrame;
-        var firstTime=firstFrame*frameDuration,lastTime=lastFrame*frameDuration;
-        if(OBSIDIAN_transitionWindowConflict(scale,firstTime,lastTime,frameRate))
-            return "REJECTED|A pre-existing Scale keyframe is inside '"+OBSIDIAN_cleanText(layer.name)+"'s PULL IN window. Existing animation was preserved.";
-        var sampleFrame=layer===outgoing?outgoingStartFrame:overlapStartFrame;
-        var sample=typeof scale.valueAtTime==="function"?scale.valueAtTime(sampleFrame*frameDuration,false):scale.value;
-        if(!sample||!isFinite(Number(sample[0]))||!isFinite(Number(sample[1]))||
-            (scaleLength===3&&!isFinite(Number(sample[2]))))
-            return "REJECTED|A selected clip has non-numeric Scale values.";
-        var base=[Number(sample[0]),Number(sample[1])];
-        if(scaleLength===3)base.push(Number(sample[2]));
-        var frames=layer===outgoing?outgoingTimes:incomingTimes;
-        var factors=layer===outgoing?[1,1.03,1.06,1.28]:[1.06,1.28,1.31,1.38];
-        var keys=[];
-        for(var ki=0;ki<frames.length;ki++)keys.push({time:frames[ki]*frameDuration,value:scaleValue(base,factors[ki],scaleLength)});
-        var easeSpecs=layer===outgoing?[
-            {inSpeed:0,inInfluence:65,outSpeed:0.5,outInfluence:82},
-            {inSpeed:2.5,inInfluence:60,outSpeed:8,outInfluence:24},
-            {inSpeed:18,inInfluence:18,outSpeed:120,outInfluence:12},
-            {inSpeed:10,inInfluence:12,outSpeed:0,outInfluence:65}
-        ]:[
-            {inSpeed:18,inInfluence:12,outSpeed:120,outInfluence:12},
-            {inSpeed:10,inInfluence:12,outSpeed:1.5,outInfluence:82},
-            {inSpeed:1.5,inInfluence:70,outSpeed:8,outInfluence:24},
-            {inSpeed:18,inInfluence:18,outSpeed:0,outInfluence:65}
-        ];
-        var opacityTrack=null;
-        if(layer===incoming){
-            var opacity=transform.property("ADBE Opacity");
-            if(!opacity||typeof opacity.setValueAtTime!=="function"||typeof opacity.removeKey!=="function"||
-                typeof opacity.keyTime!=="function"||typeof opacity.keyValue!=="function"||
-                typeof opacity.setInterpolationTypeAtKey!=="function"||typeof opacity.setTemporalEaseAtKey!=="function"||
-                opacity.expressionEnabled)
-                return "REJECTED|PULL IN requires an editable incoming Opacity property without an expression.";
-            var opacitySample=typeof opacity.valueAtTime==="function"?opacity.valueAtTime(overlapStartFrame*frameDuration,false):opacity.value;
-            var opacityBase=Number(opacitySample);
-            if(!isFinite(opacityBase)||opacityBase<0||opacityBase>100)
-                return "REJECTED|Incoming clip Opacity must be between 0 and 100.";
-            var opacityStartTime=overlapStartFrame*frameDuration,opacityEndTime=transitionEndFrame*frameDuration;
-            if(OBSIDIAN_transitionWindowConflict(opacity,opacityStartTime,opacityEndTime,frameRate))
-                return "REJECTED|A pre-existing Opacity keyframe is inside the six-frame PULL IN handoff. Existing animation was preserved.";
-            opacityTrack={property:opacity,keys:[
-                {time:opacityStartTime,value:0},{time:opacityEndTime,value:opacityBase}
-            ],snapshot:OBSIDIAN_transitionSnapshot(opacity),
-                originalValue:opacity.value,base:opacityBase};
-        }
-        prepared.push({layer:layer,property:scale,keys:keys,snapshot:OBSIDIAN_transitionSnapshot(scale),
-            originalValue:scale.value&&typeof scale.value.length==="number"?scale.value.slice(0):scale.value,
-            originalMotionBlur:layer.motionBlur,easeSpecs:easeSpecs,scaleLength:scaleLength,opacityTrack:opacityTrack});
-    }
-    var undoOpen=false,error=null;
+    var easeSpecs=[
+        {inSpeed:0,inInfluence:65,outSpeed:0.5,outInfluence:82},
+        {inSpeed:2.5,inInfluence:60,outSpeed:8,outInfluence:24},
+        {inSpeed:18,inInfluence:18,outSpeed:120,outInfluence:12},
+        {inSpeed:10,inInfluence:12,outSpeed:0,outInfluence:65}
+    ];
+    var snapshot=OBSIDIAN_transitionSnapshot(scale);
+    var originalValue=scale.value&&typeof scale.value.length==="number"?scale.value.slice(0):scale.value;
+    var originalMotionBlur=outgoing.motionBlur,undoOpen=false,error=null;
     try{
         app.beginUndoGroup("OBSIDIAN - PULL IN");undoOpen=true;
-        for(var wi=0;wi<prepared.length;wi++){
-            var entry=prepared[wi];
-            for(var wk=0;wk<entry.keys.length;wk++){
-                entry.property.setValueAtTime(entry.keys[wk].time,entry.keys[wk].value);
-                var index=OBSIDIAN_transitionFindKey(entry.property,entry.keys[wk].time,frameRate);
-                if(!index)throw Error("A generated Scale keyframe could not be located.");
-                entry.property.setInterpolationTypeAtKey(index,KeyframeInterpolationType.BEZIER,KeyframeInterpolationType.BEZIER);
-                var ease=entry.easeSpecs[wk];
-                entry.property.setTemporalEaseAtKey(index,
-                    easeArray(entry.scaleLength,ease.inSpeed,ease.inInfluence),
-                    easeArray(entry.scaleLength,ease.outSpeed,ease.outInfluence));
+        for(var wk=0;wk<keys.length;wk++){
+            scale.setValueAtTime(keys[wk].time,keys[wk].value);
+            var index=OBSIDIAN_transitionFindKey(scale,keys[wk].time,frameRate);
+            if(!index)throw Error("A generated outgoing Scale keyframe could not be located.");
+            scale.setInterpolationTypeAtKey(index,KeyframeInterpolationType.BEZIER,KeyframeInterpolationType.BEZIER);
+            var ease=easeSpecs[wk],easeIn=[],easeOut=[];
+            for(var d=0;d<scaleLength;d++){
+                easeIn.push(new KeyframeEase(ease.inSpeed,ease.inInfluence));
+                easeOut.push(new KeyframeEase(ease.outSpeed,ease.outInfluence));
             }
-            if(entry.opacityTrack){
-                var opacityTrack=entry.opacityTrack;
-                for(var oi=0;oi<opacityTrack.keys.length;oi++){
-                    opacityTrack.property.setValueAtTime(opacityTrack.keys[oi].time,opacityTrack.keys[oi].value);
-                    var opacityIndex=OBSIDIAN_transitionFindKey(opacityTrack.property,opacityTrack.keys[oi].time,frameRate);
-                    if(!opacityIndex)throw Error("A generated incoming Opacity keyframe could not be located.");
-                    opacityTrack.property.setInterpolationTypeAtKey(opacityIndex,KeyframeInterpolationType.BEZIER,KeyframeInterpolationType.BEZIER);
-                    opacityTrack.property.setTemporalEaseAtKey(opacityIndex,[new KeyframeEase(0,15)],[new KeyframeEase(0,15)]);
-                }
-            }
-            entry.layer.motionBlur=true;
+            scale.setTemporalEaseAtKey(index,easeIn,easeOut);
         }
-        for(var vi=0;vi<prepared.length;vi++){
-            var check=prepared[vi];
-            OBSIDIAN_transitionRestoreKeys(check.property,check.snapshot,frameRate);
-            if(Number(check.property.numKeys)!==check.snapshot.length+4)throw Error("Scale key count verification failed.");
-            for(var vk=0;vk<check.keys.length;vk++){
-                var generated=OBSIDIAN_transitionFindKey(check.property,check.keys[vk].time,frameRate);
-                if(!generated||!OBSIDIAN_keyframeValueMatches(check.property.keyValue(generated),check.keys[vk].value))
-                    throw Error("Generated Scale keyframe verification failed.");
-                if(check.property.keyInInterpolationType(generated)!==KeyframeInterpolationType.BEZIER||
-                    check.property.keyOutInterpolationType(generated)!==KeyframeInterpolationType.BEZIER)
-                    throw Error("Generated temporal Bezier interpolation could not be verified.");
-            }
-            if(check.opacityTrack){
-                var opacityCheck=check.opacityTrack;
-                OBSIDIAN_transitionRestoreKeys(opacityCheck.property,opacityCheck.snapshot,frameRate);
-                if(Number(opacityCheck.property.numKeys)!==opacityCheck.snapshot.length+2)
-                    throw Error("Incoming Opacity key count verification failed.");
-                for(var opv=0;opv<opacityCheck.keys.length;opv++){
-                    var opacityGenerated=OBSIDIAN_transitionFindKey(opacityCheck.property,opacityCheck.keys[opv].time,frameRate);
-                    if(!opacityGenerated||Math.abs(Number(opacityCheck.property.keyValue(opacityGenerated))-opacityCheck.keys[opv].value)>0.001)
-                        throw Error("Incoming Opacity keyframe verification failed.");
-                    if(opacityCheck.property.keyInInterpolationType(opacityGenerated)!==KeyframeInterpolationType.BEZIER||
-                        opacityCheck.property.keyOutInterpolationType(opacityGenerated)!==KeyframeInterpolationType.BEZIER)
-                        throw Error("Incoming Opacity Bezier interpolation could not be verified.");
-                }
-            }
-            if(check.layer.motionBlur!==true)throw Error("Native layer motion blur could not be enabled.");
+        outgoing.motionBlur=true;
+        OBSIDIAN_transitionRestoreKeys(scale,snapshot,frameRate);
+        if(Number(scale.numKeys)!==snapshot.length+4)throw Error("Outgoing Scale key count verification failed.");
+        for(var vk=0;vk<keys.length;vk++){
+            var generated=OBSIDIAN_transitionFindKey(scale,keys[vk].time,frameRate);
+            if(!generated||!OBSIDIAN_keyframeValueMatches(scale.keyValue(generated),keys[vk].value))
+                throw Error("Generated outgoing Scale keyframe verification failed.");
+            if(scale.keyInInterpolationType(generated)!==KeyframeInterpolationType.BEZIER||
+                scale.keyOutInterpolationType(generated)!==KeyframeInterpolationType.BEZIER)
+                throw Error("Generated outgoing Bezier interpolation could not be verified.");
         }
+        if(outgoing.motionBlur!==true)throw Error("Native outgoing layer motion blur could not be enabled.");
+        /* Incoming layer is intentionally read-only: no Scale, Opacity, effects,
+           motion-blur switch, timing, or other property is modified. */
     }catch(caught){error=caught;}
     if(error){
         var rollbackOK=true;
-        for(var ri=0;ri<prepared.length;ri++){
-            var restore=prepared[ri];
-            try{if(!OBSIDIAN_transitionRollbackTrack({property:restore.property,keys:restore.keys,
-                snapshot:restore.snapshot,originalValue:restore.originalValue},frameRate))rollbackOK=false;}
-            catch(ignoredRollback){rollbackOK=false;}
-            if(restore.opacityTrack)try{
-                var opacityRestore=restore.opacityTrack;
-                if(!OBSIDIAN_transitionRollbackTrack({property:opacityRestore.property,keys:opacityRestore.keys,
-                    snapshot:opacityRestore.snapshot,originalValue:opacityRestore.originalValue},frameRate))rollbackOK=false;
-            }catch(ignoredOpacityRollback){rollbackOK=false;}
-            try{restore.layer.motionBlur=restore.originalMotionBlur;if(restore.layer.motionBlur!==restore.originalMotionBlur)rollbackOK=false;}
-            catch(ignoredBlur){rollbackOK=false;}
-        }
+        try{rollbackOK=OBSIDIAN_transitionRollbackTrack({property:scale,keys:keys,snapshot:snapshot,originalValue:originalValue},frameRate);}
+        catch(ignoredRollback){rollbackOK=false;}
+        try{outgoing.motionBlur=originalMotionBlur;if(outgoing.motionBlur!==originalMotionBlur)rollbackOK=false;}
+        catch(ignoredBlur){rollbackOK=false;}
         if(undoOpen)try{app.endUndoGroup();}catch(ignoredEnd){}
-        return rollbackOK?"ERROR|PULL IN failed; generated keyframes were removed and original clip settings were restored. "+OBSIDIAN_cleanText(error):
-            "ERROR|PULL IN failed and rollback could not be verified. Use After Effects Undo and inspect both clips.";
+        return rollbackOK
+            ?"ERROR|PULL IN failed; generated outgoing keyframes were removed and original outgoing settings were restored. "+OBSIDIAN_cleanText(error)
+            :"ERROR|PULL IN failed and rollback could not be verified. Use After Effects Undo and inspect the outgoing clip.";
     }
     if(undoOpen)app.endUndoGroup();
-    return "OK|Applied and verified PULL IN to both clips: slow scale build, six-frame zoom-and-opacity handoff, continued incoming build, shaped temporal Bezier velocity, and native motion blur. Clip timing and layer count were unchanged.";
+    return "OK|Applied and verified the PULL IN handoff on the outgoing clip only: restrained build followed by a sharp final scale hit with shaped Bezier velocity. The incoming clip was not modified; its Scale, Opacity, effects, motion blur, and timing remain untouched.";
 }
-
 function OBSIDIAN_shakeTransition(outgoingDuration, incomingDuration, profile) {
     var comp = OBSIDIAN_getActiveComp();
     var layers = OBSIDIAN_getSelectedLayers();
