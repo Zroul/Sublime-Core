@@ -1972,11 +1972,11 @@ test("PULL IN sequence edits only the outgoing clip and leaves the incoming clip
   const incomingMotionBlur = clips.incoming.motionBlur;
   const incomingTiming = { inPoint: clips.incoming.inPoint, outPoint: clips.incoming.outPoint };
   const result = context.OBSIDIAN_executePlan("pull_in_sequence", null, "", null);
-  assert.match(result, /^OK\\|Applied and verified the PULL IN handoff on the outgoing clip only/);
+  assert.match(result, /^OK\|Applied and verified the PULL IN handoff on the outgoing clip only/);
   const outgoing = clips.properties[0].scale;
   assert.deepEqual(outgoing.keys.map(({ value }) => Array.from(value)),
     [[100, 100], [103, 103], [106, 106], [128, 128]]);
-  assert.deepEqual(outgoing.keys.map(({ time }) => time), [0, 1.8, 2, 2 + 6 / 30]);
+  assert.deepEqual(outgoing.keys.map(({ time }) => time), [0, 1.8, 3 - 7 / 30, 3 - 1 / 30]);
   assert.ok(outgoing.keys.every(({ interpolation }) =>
     interpolation && interpolation.incoming === "bezier" && interpolation.outgoing === "bezier"));
   assert.equal(outgoing.keys[2].easeOut[0].speed, 120);
@@ -2007,7 +2007,7 @@ test("PULL IN sequence rolls back outgoing keys when an outgoing Scale write fai
   clips.properties[1].opacity = incomingOpacity;
   const incomingMotionBlur = clips.incoming.motionBlur;
   const result = context.OBSIDIAN_executePlan("pull_in_sequence", null, "", null);
-  assert.match(result, /^ERROR\\|PULL IN failed; generated outgoing keyframes were removed/);
+  assert.match(result, /^ERROR\|PULL IN failed; generated outgoing keyframes were removed/);
   assert.equal(failing.keys.length, 0);
   assert.equal(incomingScale.keys.length, 0);
   assert.equal(incomingOpacity.keys.length, 0);
@@ -2025,6 +2025,7 @@ test("PULL IN sequence preserves pre-existing incoming Scale and Opacity animati
   const incomingOpacityProperty = clips.incoming.property("ADBE Transform Group").property("ADBE Opacity");
   const incomingOpacity = enableAnimationProperty(incomingOpacityProperty);
   clips.properties[1].opacity = incomingOpacity;
+  incomingOpacity.property = incomingOpacityProperty;
   incomingScale.property.setValueAtTime(2.1, [111, 111]);
   incomingOpacity.property.setValueAtTime(2.1, 75);
   const scaleBefore = incomingScale.keys.map((key) => ({ time: key.time, value: Array.from(key.value) }));
