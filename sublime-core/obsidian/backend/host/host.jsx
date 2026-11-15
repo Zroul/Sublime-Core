@@ -2555,12 +2555,12 @@ function OBSIDIAN_pullInSequence() {
     var overlapEndFrame=Math.min(outgoingEndFrame,incomingEndFrame);
     var overlapFrames=overlapEndFrame-overlapStartFrame+1;
     var transitionFrames=6;
-    var transitionEndFrame=overlapStartFrame+transitionFrames-1;
+    var transitionEndFrame=overlapStartFrame+transitionFrames;
     var outgoingBuildFrame=overlapStartFrame-6;
     var incomingBuildFrame=transitionEndFrame+6;
-    if(!isFinite(outgoingEndFrame)||!isFinite(incomingEndFrame)||overlapFrames<transitionFrames||
+    if(!isFinite(outgoingEndFrame)||!isFinite(incomingEndFrame)||overlapFrames<transitionFrames+1||
         outgoingBuildFrame-outgoingStartFrame<1||incomingEndFrame-incomingBuildFrame<1)
-        return "REJECTED|PULL IN needs a six-frame overlap, at least seven outgoing build frames, and seven incoming finish frames.";
+        return "REJECTED|PULL IN needs at least seven overlap frames for its six-frame handoff, plus seven outgoing build frames and seven incoming finish frames.";
     var frameDuration=1/frameRate;
     var outgoingTimes=[outgoingStartFrame,outgoingBuildFrame,overlapStartFrame,transitionEndFrame];
     var incomingTimes=[overlapStartFrame,transitionEndFrame,incomingBuildFrame,incomingEndFrame];
