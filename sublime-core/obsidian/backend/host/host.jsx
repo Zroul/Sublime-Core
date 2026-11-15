@@ -2610,6 +2610,178 @@ function OBSIDIAN_shakeTransition(outgoingDuration, incomingDuration, profile) {
     return "OK|Applied and verified "+profileLabel+" on both clips. Clip timing and layer count were unchanged.";
 }
 
+
+function OBSIDIAN_pullTransition(outgoingDuration, incomingDuration) {
+    var comp = OBSIDIAN_getActiveComp();
+    var layers = OBSIDIAN_getSelectedLayers();
+    if (!comp || layers.length !== 2) return "REJECTED|Open a composition and select exactly two overlapping clips.";
+    var frameRate = Number(comp.frameRate);
+    if (!isFinite(frameRate) || frameRate <= 0) return "REJECTED|Composition frame rate is unavailable.";
+    var outgoing = Number(layers[0].inPoint) < Number(layers[1].inPoint) ? layers[0] : layers[1];
+    var incoming = outgoing === layers[0] ? layers[1] : layers[0];
+    if (Math.abs(Number(outgoing.inPoint) - Number(incoming.inPoint)) < 0.000001 / frameRate)
+        return "REJECTED|Cannot identify outgoing and incoming clips because their start times match.";
+    var overlapStart = Math.max(Number(outgoing.inPoint), Number(incoming.inPoint));
+    var overlapEnd = Math.min(Number(outgoing.outPoint), Number(incoming.outPoint));
+    var overlapFrames = Math.floor((overlapEnd - overlapStart) * frameRate + 0.000001);
+    if (!isFinite(overlapStart) || !isFinite(overlapEnd) || overlapFrames < 4)
+        return "REJECTED|The selected clips need at least four frames of overlap for Pull 01.";
+    outgoingDuration = Number(outgoingDuration);
+    incomingDuration = Number(incomingDuration);
+    if (!isFinite(outgoingDuration) || !isFinite(incomingDuration) ||
+        outgoingDuration < 0.1 || outgoingDuration > 2 || incomingDuration < 0.1 || incomingDuration > 2)
+        return "REJECTED|Each Pull 01 duration must be between 0.1 and 2 seconds.";
+    var outgoingFrames = Math.round(outgoingDuration * frameRate);
+    var incomingFrames = Math.round(incomingDuration * frameRate);
+    if (outgoingFrames < 4 || incomingFrames < 4 || outgoingFrames + incomingFrames > overlapFrames)
+        return "REJECTED|Each duration must be at least four frames and their combined duration cannot exceed the available overlap.";
+
+    var selected = [outgoing, incoming], prepared = [];
+    for (var li = 0; li < selected.length; li++) {
+        var layer = selected[li];
+        if (!(layer instanceof AVLayer) || !layer.source || layer.adjustmentLayer || layer.nullLayer)
+            return "REJECTED|Pull 01 applies only to footage or precomposition clips.";
+        if (layer.locked) return "REJECTED|Unlock '" + OBSIDIAN_cleanText(layer.name) + "' before applying Pull 01.";
+        if (layer.threeDLayer) return "REJECTED|Pull 01 v1 supports 2D clips only; no changes were made.";
+        var transform = layer.property("ADBE Transform Group");
+        var position = transform ? transform.property("ADBE Position") : null;
+        var scale = transform ? transform.property("ADBE Scale") : null;
+        var specs = [{property:position,channel:"Position"},{property:scale,channel:"Scale"}];
+        var layerTracks = {};
+        for (var pi = 0; pi < specs.length; pi++) {
+            var spec = specs[pi], prop = spec.property;
+            if (!prop || typeof prop.setValue !== "function" || typeof prop.setValueAtTime !== "function" ||
+                typeof prop.removeKey !== "function" || typeof prop.keyTime !== "function" ||
+                typeof prop.keyValue !== "function" || typeof prop.setInterpolationTypeAtKey !== "function" ||
+                Number(prop.numKeys) !== 0 || prop.expressionEnabled)
+                return "REJECTED|Existing transform keyframes, expressions, or unsupported properties were preserved.";
+            var vectorLength = prop.value && typeof prop.value.length === "number" ? prop.value.length : 0;
+            if (vectorLength !== 2 && !(vectorLength === 3 && !layer.threeDLayer))
+                return "REJECTED|Pull 01 requires supported unified 2D Position and Scale properties.";
+            if (!isFinite(Number(prop.value[0])) || !isFinite(Number(prop.value[1])) ||
+                (vectorLength === 3 && !isFinite(Number(prop.value[2]))))
+                return "REJECTED|A selected clip has non-numeric transform values.";
+            if (spec.channel === "Position") {
+                var typeIsTwoD = false, typeIsThreeD = false;
+                try {
+                    var valueType = prop.propertyValueType;
+                    typeIsTwoD = (typeof PropertyValueType !== "undefined" && valueType === PropertyValueType.TwoD) || String(valueType) === "6413";
+                    typeIsThreeD = (typeof PropertyValueType !== "undefined" && valueType === PropertyValueType.ThreeD) || String(valueType) === "6414";
+                } catch (ignoredType) {}
+                if (prop.dimensionsSeparated || typeIsThreeD || (vectorLength === 3 && !typeIsTwoD))
+                    return "REJECTED|Pull 01 requires a unified 2D Position property; no changes were made.";
+            }
+            layerTracks[spec.channel] = {
+                property:prop,
+                original:[Number(prop.value[0]),Number(prop.value[1])].concat(vectorLength === 3 ? [Number(prop.value[2])] : []),
+                easeDimensions:spec.channel === "Position" ? 1 : vectorLength
+            };
+        }
+        prepared.push({layer:layer,tracks:layerTracks});
+    }
+
+    var frameDuration = 1 / frameRate;
+    var overlapStartFrame = Math.round(overlapStart * frameRate);
+    var unusedOverlapFrames = overlapFrames - outgoingFrames - incomingFrames;
+    var transitionStartFrame = overlapStartFrame + Math.floor(unusedOverlapFrames / 2);
+    var impactFrame = transitionStartFrame + outgoingFrames;
+    var transitionEndFrame = impactFrame + incomingFrames;
+    var startTime = transitionStartFrame * frameDuration;
+    var impactTime = impactFrame * frameDuration;
+    var endTime = transitionEndFrame * frameDuration;
+    var driftDistance = Math.min(Number(comp.width), Number(comp.height)) * 0.008;
+
+    for (var pi2 = 0; pi2 < prepared.length; pi2++) {
+        var entry = prepared[pi2], isOutgoing = entry.layer === outgoing;
+        var positionTrack = entry.tracks.Position, scaleTrack = entry.tracks.Scale;
+        var px = positionTrack.original[0], py = positionTrack.original[1];
+        var dx = px - Number(comp.width) / 2, dy = py - Number(comp.height) / 2;
+        var distance = Math.sqrt(dx * dx + dy * dy);
+        var offsetX = distance > 0.001 ? dx / distance * driftDistance : 0;
+        var offsetY = distance > 0.001 ? dy / distance * driftDistance : 0;
+        var positionStart = positionTrack.original.slice(0);
+        var positionEnd = positionTrack.original.slice(0);
+        var scaleStart = scaleTrack.original.slice(0);
+        var scaleEnd = scaleTrack.original.slice(0);
+        if (isOutgoing) {
+            positionEnd[0] += offsetX; positionEnd[1] += offsetY;
+            scaleEnd[0] *= 0.88; scaleEnd[1] *= 0.88;
+        } else {
+            positionStart[0] += offsetX; positionStart[1] += offsetY;
+            scaleStart[0] *= 1.12; scaleStart[1] *= 1.12;
+        }
+        entry.tracks.Position.keys = isOutgoing
+            ? [{time:startTime,value:positionTrack.original.slice(0)},{time:impactTime,value:positionEnd}]
+            : [{time:impactTime,value:positionStart},{time:endTime,value:positionTrack.original.slice(0)}];
+        entry.tracks.Scale.keys = isOutgoing
+            ? [{time:startTime,value:scaleTrack.original.slice(0)},{time:impactTime,value:scaleEnd}]
+            : [{time:impactTime,value:scaleStart},{time:endTime,value:scaleTrack.original.slice(0)}];
+    }
+
+    var error = null, undoOpen = false;
+    try {
+        app.beginUndoGroup("OBSIDIAN - Pull 01 Transition"); undoOpen = true;
+        for (var wi = 0; wi < prepared.length; wi++) {
+            var channels = ["Position","Scale"];
+            for (var ci = 0; ci < channels.length; ci++) {
+                var track = prepared[wi].tracks[channels[ci]];
+                for (var ki = 0; ki < 2; ki++) track.property.setValueAtTime(track.keys[ki].time, track.keys[ki].value);
+                for (var kf = 1; kf <= 2; kf++) {
+                    track.property.setInterpolationTypeAtKey(kf, KeyframeInterpolationType.BEZIER, KeyframeInterpolationType.BEZIER);
+                    if (typeof track.property.setTemporalEaseAtKey === "function" && typeof KeyframeEase !== "undefined") {
+                        var easeIn = [], easeOut = [];
+                        for (var ei = 0; ei < track.easeDimensions; ei++) {
+                            easeIn.push(new KeyframeEase(0, 75));
+                            easeOut.push(new KeyframeEase(0, 75));
+                        }
+                        track.property.setTemporalEaseAtKey(kf, easeIn, easeOut);
+                    }
+                }
+            }
+        }
+        for (var vi = 0; vi < prepared.length; vi++) {
+            var verifyChannels = ["Position","Scale"];
+            for (var vci = 0; vci < verifyChannels.length; vci++) {
+                var check = prepared[vi].tracks[verifyChannels[vci]];
+                if (Number(check.property.numKeys) !== 2)
+                    throw new Error(check.channel + " expected 2 keys but AE reported " + Number(check.property.numKeys) + ".");
+                for (var vk = 0; vk < 2; vk++) {
+                    var deltaFrames = Math.abs(Number(check.property.keyTime(vk + 1)) - check.keys[vk].time) * frameRate;
+                    if (!isFinite(deltaFrames) || deltaFrames > 0.01)
+                        throw new Error(check.channel + " key " + (vk + 1) + " time differed by " + deltaFrames + " frames.");
+                    if (!OBSIDIAN_keyframeValueMatches(check.property.keyValue(vk + 1), check.keys[vk].value))
+                        throw new Error(check.channel + " key " + (vk + 1) + " value did not match the requested value.");
+                }
+            }
+        }
+    } catch (caught) { error = caught; }
+
+    if (error) {
+        var restored = 0;
+        for (var ri = 0; ri < prepared.length; ri++) {
+            var restoredLayer = true, restoreChannels = ["Position","Scale"];
+            for (var rci = 0; rci < restoreChannels.length; rci++) try {
+                var restoreTrack = prepared[ri].tracks[restoreChannels[rci]];
+                var restoreProperty = restoreTrack.property;
+                var keyCount = Number(restoreProperty.numKeys);
+                if (!isFinite(keyCount) || keyCount > 2) { restoredLayer = false; continue; }
+                for (var rk = keyCount; rk >= 1; rk--) restoreProperty.removeKey(rk);
+                var original = restoreTrack.original.slice(0);
+                restoreProperty.setValue(original);
+                if (Number(restoreProperty.numKeys) !== 0 || !OBSIDIAN_keyframeValueMatches(restoreProperty.value, original))
+                    restoredLayer = false;
+            } catch (ignoredRestore) { restoredLayer = false; }
+            if (restoredLayer) restored++;
+        }
+        if (undoOpen) try { app.endUndoGroup(); } catch (ignoredEnd) {}
+        return restored === prepared.length
+            ? "ERROR|Pull 01 failed; generated keyframes were removed. " + OBSIDIAN_cleanText(error)
+            : "ERROR|Pull 01 failed and rollback could not be verified. Use After Effects Undo and inspect both clips.";
+    }
+    if (undoOpen) app.endUndoGroup();
+    return "OK|Applied and verified Pull 01 on both clips. Clip timing and layer count were unchanged.";
+}
+
 /**
  * Execute only typed actions produced by the frontend planner.
  * Never parse free-form natural language inside ExtendScript.
@@ -2662,6 +2834,7 @@ function OBSIDIAN_executePlan(action, value, profile, secondaryValue) {
     if (action === "slide_up") return OBSIDIAN_slideUp();
     if (action === "crossfade") return OBSIDIAN_crossfade();
     if (action === "shake_transition") return OBSIDIAN_shakeTransition(value, secondaryValue, profile);
+    if (action === "pull_transition") return OBSIDIAN_pullTransition(value, secondaryValue);
     if (action === "apply_recipe") return OBSIDIAN_applyRecipe(profile);
 
     if (action === "add_glow") {
