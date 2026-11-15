@@ -1921,6 +1921,7 @@ function makeShakeClips(context, outgoingOutPoint = 3, incomingInPoint = 2) {
     layer.outPoint = outPoint;
     layer.threeDLayer = false;
     layer.locked = false;
+    layer.motionBlur = false;
   }
   const properties = [];
   for (const layer of [outgoing, incoming]) {
@@ -1940,6 +1941,81 @@ function makeShakeClips(context, outgoingOutPoint = 3, incomingInPoint = 2) {
   return { outgoing, incoming, properties };
 }
 
+
+test("PULL IN applies a smooth full-clip Scale move and enables native layer motion blur", () => {
+  const { context, undoEvents } = makeContext();
+  const clips = makeShakeClips(context);
+  context.app.project.activeItem.selectedLayers = [clips.outgoing];
+  const scale = clips.properties[0].scale;
+  const result = context.OBSIDIAN_executePlan("pull_in_clip", null, "", null);
+  assert.match(result, /^OK\|Applied and verified PULL IN on one clip/);
+  assert.equal(scale.keys.length, 2);
+  assert.deepEqual(scale.keys.map(({ value }) => Array.from(value)), [[100, 100], [112, 112]]);
+  assert.deepEqual(scale.keys.map(({ time }) => time), [0, 89 / 30]);
+  assert.ok(scale.keys.every(({ interpolation }) =>
+    interpolation && interpolation.incoming === "bezier" && interpolation.outgoing === "bezier"));
+  assert.ok(scale.keys.every(({ easeIn, easeOut }) =>
+    easeIn && easeOut && easeIn.every((ease) => ease.influence === 65) &&
+    easeOut.every((ease) => ease.influence === 65)));
+  assert.equal(clips.outgoing.motionBlur, true);
+  assert.equal(clips.outgoing.inPoint, 0);
+  assert.equal(clips.outgoing.outPoint, 3);
+  assert.deepEqual(undoEvents.map(([kind]) => kind), ["begin", "end"]);
+});
+
+test("PULL IN preserves Scale keyframes outside the clip edit window", () => {
+  const { context } = makeContext();
+  const clips = makeShakeClips(context);
+  context.app.project.activeItem.selectedLayers = [clips.outgoing];
+  const scale = clips.properties[0].scale;
+  scale.property.setValueAtTime(-0.5, [96, 96]);
+  scale.property.valueAtTime = () => [100, 100];
+  const result = context.OBSIDIAN_executePlan("pull_in_clip", null, "", null);
+  assert.match(result, /^OK\|Applied and verified PULL IN/);
+  assert.equal(scale.keys.length, 3);
+  assert.deepEqual(keyframeSnapshots(scale.keys).find((key) => key.time === -0.5),
+    { time: -0.5, value: [96, 96] });
+});
+
+test("PULL IN rejects an existing Scale key inside the edit window without changing the clip", () => {
+  const { context } = makeContext();
+  const clips = makeShakeClips(context);
+  context.app.project.activeItem.selectedLayers = [clips.outgoing];
+  const scale = clips.properties[0].scale;
+  scale.property.setValueAtTime(1, [108, 108]);
+  const result = context.OBSIDIAN_executePlan("pull_in_clip", null, "", null);
+  assert.match(result, /^REJECTED\|A pre-existing Scale keyframe is inside this clip's PULL IN window/);
+  assert.equal(scale.keys.length, 1);
+  assert.equal(clips.outgoing.motionBlur, false);
+});
+
+test("PULL IN rolls back generated keys and motion blur if key insertion fails", () => {
+  const { context, undoEvents } = makeContext();
+  const clips = makeShakeClips(context);
+  context.app.project.activeItem.selectedLayers = [clips.outgoing];
+  const property = clips.outgoing.property("ADBE Transform Group").property("ADBE Scale");
+  const failing = enableAnimationProperty(property, { throwBeforeSetAt: 2 });
+  clips.properties[0].scale = failing;
+  const result = context.OBSIDIAN_executePlan("pull_in_clip", null, "", null);
+  assert.match(result, /^ERROR\|PULL IN failed; generated keyframes were removed/);
+  assert.equal(failing.keys.length, 0);
+  assert.deepEqual(Array.from(property.value), [100, 100]);
+  assert.equal(clips.outgoing.motionBlur, false);
+  assert.deepEqual(undoEvents.map(([kind]) => kind), ["begin", "end"]);
+});
+
+test("PULL IN requires exactly one selected 2D footage or precomposition clip", () => {
+  const multiple = makeContext();
+  makeShakeClips(multiple.context);
+  assert.match(multiple.context.OBSIDIAN_executePlan("pull_in_clip", null, "", null),
+    /^REJECTED\|Select exactly one 2D footage or precomposition clip/);
+  const threeD = makeContext();
+  const clips = makeShakeClips(threeD.context);
+  threeD.context.app.project.activeItem.selectedLayers = [clips.outgoing];
+  clips.outgoing.threeDLayer = true;
+  assert.match(threeD.context.OBSIDIAN_executePlan("pull_in_clip", null, "", null),
+    /^REJECTED\|PULL IN v1 supports 2D clips only/);
+});
 
 test("Pull 01 applies a fast scale handoff and preserves clip timing", () => {
   const { context, undoEvents } = makeContext();
