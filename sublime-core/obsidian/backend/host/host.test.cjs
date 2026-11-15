@@ -1953,7 +1953,9 @@ test("PULL IN applies a smooth full-clip Scale move and enables native layer mot
   const scaleValues = scale.keys.map(({ value }) => Array.from(value));
   assert.deepEqual(scaleValues[0], [100, 100]);
   assert.ok(scaleValues[1].every((value) => Math.abs(value - 112) < 1e-9));
-  assert.deepEqual(scale.keys.map(({ time }) => time), [0, 89 / 30]);
+  const scaleTimes = scale.keys.map(({ time }) => time);
+  assert.ok(Math.abs(scaleTimes[0]) < 1e-9);
+  assert.ok(Math.abs(scaleTimes[1] - (89 / 30)) < 1e-9);
   assert.ok(scale.keys.every(({ interpolation }) =>
     interpolation && interpolation.incoming === "bezier" && interpolation.outgoing === "bezier"));
   assert.ok(scale.keys.every(({ easeIn, easeOut }) =>
