@@ -1965,6 +1965,9 @@ test("PULL IN sequence creates a slow build, six-frame zoom hit, and continued i
   const clips = makeShakeClips(context);
   clips.incoming.index = 1;
   clips.outgoing.index = 2;
+  const opacityProperty = clips.incoming.property("ADBE Transform Group").property("ADBE Opacity");
+  const opacity = enableAnimationProperty(opacityProperty);
+  clips.properties[1].opacity = opacity;
   const result = context.OBSIDIAN_executePlan("pull_in_sequence", null, "", null);
   assert.match(result, /^OK\|Applied and verified PULL IN to both clips/);
   const outgoing = clips.properties[0].scale;
@@ -1983,6 +1986,11 @@ test("PULL IN sequence creates a slow build, six-frame zoom hit, and continued i
   assert.equal(outgoing.keys[2].easeOut[0].influence, 12);
   assert.equal(incoming.keys[0].easeOut[0].speed, 120);
   assert.equal(incoming.keys[0].easeOut[0].influence, 12);
+  assert.deepEqual(opacity.keys.map(({ time, value }) => ({ time, value })), [
+    { time: 2, value: 0 }, { time: 2 + 5 / 30, value: 100 },
+  ]);
+  assert.equal(opacity.keys[0].easeOut[0].influence, 15);
+  assert.equal(opacity.keys[1].easeIn[0].influence, 15);
   assert.equal(clips.outgoing.motionBlur, true);
   assert.equal(clips.incoming.motionBlur, true);
   assert.equal(clips.properties[0].position.keys.length, 0);
@@ -2021,10 +2029,14 @@ test("PULL IN sequence rolls back both clips when the incoming Scale write fails
   const property = clips.incoming.property("ADBE Transform Group").property("ADBE Scale");
   const failing = enableAnimationProperty(property, { throwBeforeSetAt: 2 });
   clips.properties[1].scale = failing;
+  const opacityProperty = clips.incoming.property("ADBE Transform Group").property("ADBE Opacity");
+  const opacity = enableAnimationProperty(opacityProperty);
+  clips.properties[1].opacity = opacity;
   const result = context.OBSIDIAN_executePlan("pull_in_sequence", null, "", null);
   assert.match(result, /^ERROR\|PULL IN failed; generated keyframes were removed/);
   assert.equal(clips.properties[0].scale.keys.length, 0);
   assert.equal(failing.keys.length, 0);
+  assert.equal(opacity.keys.length, 0);
   assert.equal(clips.outgoing.motionBlur, false);
   assert.equal(clips.incoming.motionBlur, false);
   assert.deepEqual(undoEvents.map(([kind]) => kind), ["begin", "end"]);
