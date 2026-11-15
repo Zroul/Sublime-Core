@@ -22,6 +22,7 @@
     slide_up: true,
     crossfade: true,
     shake_transition: true,
+    pull_transition: true,
     apply_recipe: true,
     set_brightness_contrast: true,
     fade_in: true,
@@ -171,6 +172,17 @@
       return result("shake_transition",
         { value: outgoingDuration, secondaryValue: incomingDuration, profile: "shake_0" + shakeNumber },
         "Apply " + shakeLabel + " to exactly two selected overlapping 2D clips. Clip timing is preserved and generated keys are rolled back if verification fails.");
+    }
+
+    var pullMatch = command.match(/\bpull\s*0?1\s+outgoing\s+(\d+(?:\.\d+)?)\s+incoming\s+(\d+(?:\.\d+)?)/);
+    if (/\bpull\s*0?1\b/.test(command)) {
+      if (!pullMatch) return { status: "needs_clarification", question: "Set Pull 01 outgoing and incoming durations in seconds." };
+      var pullOutgoing = Number(pullMatch[1]), pullIncoming = Number(pullMatch[2]);
+      if (!isFinite(pullOutgoing) || !isFinite(pullIncoming) || pullOutgoing < 0.1 || pullOutgoing > 2 || pullIncoming < 0.1 || pullIncoming > 2)
+        return { status: "needs_clarification", question: "Each Pull 01 duration must be between 0.1 and 2 seconds; available overlap is checked in After Effects." };
+      return result("pull_transition",
+        { value: pullOutgoing, secondaryValue: pullIncoming },
+        "Apply Pull 01 as a fast zoom handoff to exactly two selected overlapping 2D clips. Clip timing is preserved and generated keys are rolled back if verification fails.");
     }
 
     if (/\bcross[\s-]*fade\b/.test(command)) {
@@ -486,6 +498,13 @@
     if (plan.action === "apply_recipe") {
       var creativeRecipes = root.OBSIDIANCreativeRecipes;
       return Boolean(plan.args && creativeRecipes && creativeRecipes.isExecutableRecipe(plan.args.recipeId));
+    }
+    if (plan.action === "pull_transition") {
+      return Boolean(plan.args &&
+        typeof plan.args.value === "number" && isFinite(plan.args.value) &&
+        typeof plan.args.secondaryValue === "number" && isFinite(plan.args.secondaryValue) &&
+        plan.args.value >= 0.1 && plan.args.value <= 2 &&
+        plan.args.secondaryValue >= 0.1 && plan.args.secondaryValue <= 2);
     }
     if (plan.action === "shake_transition") {
       return Boolean(plan.args && (plan.args.profile === "shake_01" || plan.args.profile === "shake_02") &&
