@@ -27,6 +27,7 @@
       </div>
       <div class="topbar-actions">
         <button id="transitions-open" class="captions-open transitions-open" type="button" aria-label="Open transitions panel" aria-expanded="false" aria-controls="transitions-panel" title="Apply clip transitions"><span aria-hidden="true">↔</span><span>Transitions</span></button>
+        <button id="clip-edits-open" class="captions-open transitions-open clip-edits-open" type="button" aria-label="Open clip edits panel" aria-expanded="false" aria-controls="clip-edits-panel" title="Apply single-clip motion edits"><span aria-hidden="true">⌁</span><span>Clip Edits</span></button>
         <button id="captions-open" class="captions-open" type="button" aria-label="Open caption workspace" title="Open caption workspace">
           <span class="captions-icon" aria-hidden="true">CC</span><span>Captions</span>
         </button>
@@ -127,6 +128,21 @@
               <label for="pull-01-outgoing">Outgoing <span>seconds</span><input id="pull-01-outgoing" type="number" min="0.1" max="2" step="0.05" value="0.20"></label>
               <label for="pull-01-incoming">Incoming <span>seconds</span><input id="pull-01-incoming" type="number" min="0.1" max="2" step="0.05" value="0.20"></label>
             </div><button id="pull-01-apply" class="transition-apply" type="button">APPLY PULL 01</button>
+          </div>
+        </div>
+      </details>
+    </section>
+
+    <section id="clip-edits-panel" class="transitions-panel clip-edits-panel hidden" role="dialog" aria-modal="true" aria-labelledby="clip-edits-title">
+      <header class="transitions-header"><div><p class="transitions-eyebrow">OBSIDIAN MOTION</p><h2 id="clip-edits-title">Clip Edits</h2></div>
+        <button id="clip-edits-close" class="icon-button" type="button" aria-label="Close clip edits panel">×</button></header>
+      <details class="transition-family">
+        <summary class="transition-family-heading"><span>PULL IN</span><span class="transition-family-count">01</span></summary>
+        <div class="transition-family-content">
+          <div class="transition-card">
+            <div class="transition-card-heading"><span>SMOOTH ZOOM</span><span class="transition-tier">SINGLE CLIP</span></div>
+            <p class="transition-description">Scale +12% · Bezier easing · Native layer motion blur</p>
+            <button id="pull-in-apply" class="transition-apply" type="button">APPLY PULL IN</button>
           </div>
         </div>
       </details>
