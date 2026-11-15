@@ -1160,3 +1160,8 @@ textarea:focus, input:focus, #command:focus {
   padding: 13px;
   background: rgba(255,255,255,.025);
 }#aura-theme-toggle { min-width: 72px; text-align: center; text-transform: uppercase; }
+
+/* The single-clip editor reuses the compact motion-panel system. */
+.clip-edits-open { gap: 7px; }
+.clip-edits-panel { max-width: 520px; }
+.clip-edits-panel .transition-family { margin-top: 16px; }
