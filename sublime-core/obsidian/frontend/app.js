@@ -16,6 +16,10 @@ const shake02IncomingDuration = document.querySelector("#shake-02-incoming");
 const pull01ApplyButton = document.querySelector("#pull-01-apply");
 const pull01OutgoingDuration = document.querySelector("#pull-01-outgoing");
 const pull01IncomingDuration = document.querySelector("#pull-01-incoming");
+const clipEditsOpenButton = document.querySelector("#clip-edits-open");
+const clipEditsPanel = document.querySelector("#clip-edits-panel");
+const clipEditsCloseButton = document.querySelector("#clip-edits-close");
+const pullInApplyButton = document.querySelector("#pull-in-apply");
 const captionWorkspace = document.querySelector("#caption-workspace");
 const captionsCloseButton = document.querySelector("#captions-close");
 const captionsCancelButton = document.querySelector("#captions-cancel");
@@ -83,6 +87,22 @@ function setTransitionsPanelOpen(open) {
 }
 transitionsOpenButton.addEventListener("click", () => setTransitionsPanelOpen(true));
 transitionsCloseButton.addEventListener("click", () => setTransitionsPanelOpen(false));
+
+function setClipEditsPanelOpen(open) {
+  const isOpen = Boolean(open);
+  clipEditsPanel.classList.toggle("hidden", !isOpen);
+  clipEditsOpenButton.setAttribute("aria-expanded", String(isOpen));
+  if (isOpen) clipEditsCloseButton.focus();
+  else clipEditsOpenButton.focus();
+}
+clipEditsOpenButton.addEventListener("click", () => setClipEditsPanelOpen(true));
+clipEditsCloseButton.addEventListener("click", () => setClipEditsPanelOpen(false));
+pullInApplyButton.addEventListener("click", () => {
+  setClipEditsPanelOpen(false);
+  resetStatus();
+  applyClipEdit("pull_in_clip");
+});
+
 shake01ApplyButton.addEventListener("click", () => {
   const outgoing = Number(shake01OutgoingDuration.value), incoming = Number(shake01IncomingDuration.value);
   if (!Number.isFinite(outgoing) || !Number.isFinite(incoming) || outgoing < 0.1 || outgoing > 2 || incoming < 0.1 || incoming > 2) {
@@ -794,6 +814,28 @@ function evalHostAction(action, value) {
   return executeHostOperation(expression, action === "create_captions"
     ? window.OBSIDIANHostBridge.CAPTION_CREATION_TIMEOUT_MS
     : undefined);
+}
+
+function applyClipEdit(action) {
+  if (commandInFlight || proposalInFlight || activeCaptionRun) {
+    showResult("An OBSIDIAN request is still running. Wait for its result before applying another edit.", true);
+    return;
+  }
+  commandInFlight = true;
+  setProgress("implementing");
+  evalHostAction(action, null).then((hostResult) => {
+    const isError = hostResult.status !== "verified";
+    const timeoutNote = hostResult.status === "timed_out"
+      ? " The edit may have completed; inspect the selected clip in After Effects before retrying."
+      : "";
+    setProgress(isError ? "failed" : "completed");
+    showResult(hostResult.message + timeoutNote, isError, hostResult.status === "timed_out" ? "warning" : undefined);
+  }).catch((error) => {
+    setProgress("failed");
+    showResult("After Effects clip edit failed: " + (error && error.message ? error.message : String(error)), true);
+  }).finally(() => {
+    commandInFlight = false;
+  });
 }
 
 async function transcribeSelectedFootage() {
