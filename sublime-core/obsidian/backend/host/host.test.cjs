@@ -2141,7 +2141,7 @@ test("WHIP PAN RIGHT accepts AE 2D Position read-back with a preserved third com
     entry.position.property.value = [960, 540, 73];
   }
   const result = context.OBSIDIAN_executePlan("whip_pan_right", 0.2, "", 0.2);
-  assert.match(result, /^OK\\|Applied and verified WHIP PAN RIGHT/);
+  assert.match(result, /^OK\|Applied and verified WHIP PAN RIGHT/);
   for (const entry of clips.properties) {
     assert.equal(entry.position.keys.length, 3);
     assert.ok(entry.position.keys.every(({ value }) => value[2] === 73));
