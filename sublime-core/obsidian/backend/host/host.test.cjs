@@ -59,18 +59,28 @@ function propertyGroup(children) {
       return this._children.find((item) => item.matchName === key || item.name === key) || null;
     },
     canAddProperty(matchName) {
-      return matchName === "ADBE Glo2" || matchName === "ADBE Brightness & Contrast 2";
+      return matchName === "ADBE Glo2" || matchName === "ADBE Brightness & Contrast 2" || matchName === "ADBE Tile" || matchName === "ADBE Motion Blur";
     },
     addProperty(matchName) {
       const group = this;
-      const parameters = matchName === "ADBE Glo2"
-        ? [scalarProperty(0), scalarProperty(50), scalarProperty(50), scalarProperty(1)]
-        : [
-            Object.assign(scalarProperty(0), { name: "Brightness", matchName: matchName + "-0001" }),
-            Object.assign(scalarProperty(0), { name: "Contrast", matchName: matchName + "-0002" }),
-          ];
+      let parameters;
+      if (matchName === "ADBE Glo2") {
+        parameters = [scalarProperty(0), scalarProperty(50), scalarProperty(50), scalarProperty(1)];
+      } else if (matchName === "ADBE Tile") {
+        parameters = [scalarProperty([960, 540]), scalarProperty(100), scalarProperty(100),
+          scalarProperty(100), scalarProperty(100), scalarProperty(0)];
+      } else if (matchName === "ADBE Motion Blur") {
+        const blurLength = scalarProperty(0);
+        enableAnimationProperty(blurLength);
+        parameters = [blurLength, scalarProperty(0)];
+      } else {
+        parameters = [
+          Object.assign(scalarProperty(0), { name: "Brightness", matchName: matchName + "-0001" }),
+          Object.assign(scalarProperty(0), { name: "Contrast", matchName: matchName + "-0002" }),
+        ];
+      }
       const effect = {
-        name: matchName === "ADBE Glo2" ? "Glow" : "Brightness & Contrast",
+        name: matchName === "ADBE Glo2" ? "Glow" : matchName === "ADBE Tile" ? "Motion Tile" : matchName === "ADBE Motion Blur" ? "Directional Blur" : "Brightness & Contrast",
         matchName,
         property(key) {
           if (typeof key === "number") return parameters[key - 1] || null;
@@ -2075,6 +2085,58 @@ test("Pull 01 rollback removes generated keys but retains pre-existing animation
   assert.equal(failing.keys.length, 1);
   assert.deepEqual(keyframeSnapshots(failing.keys), [{ time: 0.5, value: [108, 108] }]);
   assert.deepEqual(undoEvents.map(([kind]) => kind), ["begin", "end"]);
+});
+
+
+test("WHIP PAN RIGHT adds mirrored Motion Tile and animated Directional Blur to both clips", () => {
+  const { context, undoEvents } = makeContext();
+  const clips = makeShakeClips(context);
+  const result = context.OBSIDIAN_executePlan("whip_pan_right", 0.2, "", 0.2);
+  assert.match(result, /^OK\\|Applied and verified WHIP PAN RIGHT/);
+  for (const layer of [clips.outgoing, clips.incoming]) {
+    const effects = layer.property("ADBE Effect Parade")._children;
+    assert.equal(effects.length, 2);
+    const tile = effects.find((effect) => effect.matchName === "ADBE Tile");
+    const blur = effects.find((effect) => effect.matchName === "ADBE Motion Blur");
+    assert.ok(tile);
+    assert.ok(blur);
+    assert.equal(tile.property(2).value, 300);
+    assert.equal(tile.property(3).value, 300);
+    assert.equal(tile.property(4).value, 300);
+    assert.equal(tile.property(5).value, 300);
+    assert.equal(tile.property(6).value, 1);
+    assert.equal(blur.property(1).numKeys, 3);
+    assert.equal(blur.property(1).keyValue(2), 42);
+    assert.equal(blur.property(1).keyValue(3), layer === clips.outgoing ? 110 : 0);
+    assert.equal(layer.motionBlur, true);
+  }
+  assert.deepEqual(clips.properties[0].position.keys.map(({ value }) => Array.from(value)),
+    [[960, 540], [656.64, 540], [-422.4, 540]]);
+  assert.deepEqual(clips.properties[1].position.keys.map(({ value }) => Array.from(value)),
+    [[2342.4, 540], [1263.36, 540], [960, 540]]);
+  assert.equal(clips.outgoing.inPoint, 0);
+  assert.equal(clips.outgoing.outPoint, 3);
+  assert.equal(clips.incoming.inPoint, 2);
+  assert.equal(clips.incoming.outPoint, 5);
+  assert.deepEqual(undoEvents.map(([kind]) => kind), ["begin", "end"]);
+});
+
+test("WHIP PAN RIGHT rejects an existing Position key inside its window without adding effects", () => {
+  const { context } = makeContext();
+  const clips = makeShakeClips(context);
+  clips.properties[0].position.property.setValueAtTime(2.5, [930, 540]);
+  const result = context.OBSIDIAN_executePlan("whip_pan_right", 0.2, "", 0.2);
+  assert.match(result, /^REJECTED\\|A pre-existing Position keyframe is inside the WHIP PAN window/);
+  assert.equal(clips.outgoing.property("ADBE Effect Parade")._children.length, 0);
+  assert.equal(clips.incoming.property("ADBE Effect Parade")._children.length, 0);
+});
+
+test("WHIP PAN RIGHT rejects duration pairs that exceed the overlap", () => {
+  const { context } = makeContext();
+  const clips = makeShakeClips(context);
+  const result = context.OBSIDIAN_executePlan("whip_pan_right", 0.5, "", 0.5);
+  assert.match(result, /^REJECTED\\|The selected clips need at least eight overlap frames/);
+  assert.equal(clips.outgoing.property("ADBE Effect Parade")._children.length, 0);
 });
 
 test("Shake 02 applies a stronger impact profile while preserving clip timing and hidden Scale dimensions", () => {
