@@ -1966,7 +1966,7 @@ test("PULL IN sequence creates a slow build, six-frame zoom hit, and continued i
   clips.incoming.index = 1;
   clips.outgoing.index = 2;
   const result = context.OBSIDIAN_executePlan("pull_in_sequence", null, "", null);
-  assert.match(result, /^OK\\|Applied and verified PULL IN to both clips/);
+  assert.match(result, /^OK\|Applied and verified PULL IN to both clips/);
   const outgoing = clips.properties[0].scale;
   const incoming = clips.properties[1].scale;
   assert.deepEqual(outgoing.keys.map(({ value }) => Array.from(value)),
@@ -2000,7 +2000,7 @@ test("PULL IN sequence rejects insufficient overlap and preserves existing Scale
   shortClips.incoming.index = 1;
   shortClips.outgoing.index = 2;
   assert.match(short.context.OBSIDIAN_executePlan("pull_in_sequence", null, "", null),
-    /^REJECTED\\|PULL IN needs a six-frame overlap/);
+    /^REJECTED\|PULL IN needs a six-frame overlap/);
   for (const entry of shortClips.properties) assert.equal(entry.scale.keys.length, 0);
 
   const animated = makeContext();
@@ -2009,7 +2009,7 @@ test("PULL IN sequence rejects insufficient overlap and preserves existing Scale
   clips.outgoing.index = 2;
   clips.properties[0].scale.property.setValueAtTime(1, [108, 108]);
   assert.match(animated.context.OBSIDIAN_executePlan("pull_in_sequence", null, "", null),
-    /^REJECTED\\|A pre-existing Scale keyframe is inside/);
+    /^REJECTED\|A pre-existing Scale keyframe is inside/);
   assert.equal(clips.properties[1].scale.keys.length, 0);
 });
 
@@ -2022,7 +2022,7 @@ test("PULL IN sequence rolls back both clips when the incoming Scale write fails
   const failing = enableAnimationProperty(property, { throwBeforeSetAt: 2 });
   clips.properties[1].scale = failing;
   const result = context.OBSIDIAN_executePlan("pull_in_sequence", null, "", null);
-  assert.match(result, /^ERROR\\|PULL IN failed; generated keyframes were removed/);
+  assert.match(result, /^ERROR\|PULL IN failed; generated keyframes were removed/);
   assert.equal(clips.properties[0].scale.keys.length, 0);
   assert.equal(failing.keys.length, 0);
   assert.equal(clips.outgoing.motionBlur, false);
@@ -2036,7 +2036,7 @@ test("PULL IN sequence requires the incoming clip above the outgoing clip", () =
   clips.outgoing.index = 1;
   clips.incoming.index = 2;
   assert.match(context.OBSIDIAN_executePlan("pull_in_sequence", null, "", null),
-    /^REJECTED\\|Place the incoming clip above the outgoing clip/);
+    /^REJECTED\|Place the incoming clip above the outgoing clip/);
   for (const entry of clips.properties) assert.equal(entry.scale.keys.length, 0);
 });
 
