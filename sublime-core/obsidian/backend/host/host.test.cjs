@@ -1939,6 +1939,60 @@ function makeShakeClips(context, outgoingOutPoint = 3, incomingInPoint = 2) {
   return { outgoing, incoming, properties };
 }
 
+
+test("Pull 01 applies a fast scale handoff and preserves clip timing", () => {
+  const { context, undoEvents } = makeContext();
+  const clips = makeShakeClips(context);
+  const result = context.OBSIDIAN_executePlan("pull_transition", 0.2, "", 0.2);
+  assert.match(result, /^OK\\|Applied and verified Pull 01/);
+  const outgoing = clips.properties[0];
+  const incoming = clips.properties[1];
+  assert.equal(outgoing.scale.keys.length, 2);
+  assert.equal(incoming.scale.keys.length, 2);
+  assert.deepEqual(outgoing.scale.keys.map(({ value }) => Array.from(value)), [[100, 100], [88, 88]]);
+  assert.deepEqual(incoming.scale.keys.map(({ value }) => Array.from(value)), [[112, 112], [100, 100]]);
+  assert.equal(outgoing.position.keys.length, 2);
+  assert.equal(incoming.position.keys.length, 2);
+  assert.deepEqual(outgoing.position.keys.map(({ value }) => Array.from(value)), [[960, 540], [960, 540]]);
+  assert.deepEqual(incoming.position.keys.map(({ value }) => Array.from(value)), [[960, 540], [960, 540]]);
+  assert.equal(clips.outgoing.inPoint, 0);
+  assert.equal(clips.outgoing.outPoint, 3);
+  assert.equal(clips.incoming.inPoint, 2);
+  assert.equal(clips.incoming.outPoint, 5);
+  assert.deepEqual(undoEvents.map(([kind]) => kind), ["begin", "end"]);
+});
+
+test("Pull 01 rejects insufficient overlap and preserves existing transform animation", () => {
+  const short = makeContext();
+  const shortClips = makeShakeClips(short.context, 2, 2);
+  const rejected = short.context.OBSIDIAN_executePlan("pull_transition", 0.2, "", 0.2);
+  assert.match(rejected, /^REJECTED\\|The selected clips need at least four frames of overlap/);
+  for (const entry of shortClips.properties) for (const track of Object.values(entry)) assert.equal(track.keys.length, 0);
+
+  const animated = makeContext();
+  const animatedClips = makeShakeClips(animated.context);
+  animatedClips.properties[0].scale.property.setValueAtTime(0.5, [110, 110]);
+  const preserved = animated.context.OBSIDIAN_executePlan("pull_transition", 0.2, "", 0.2);
+  assert.match(preserved, /^REJECTED\\|Existing transform keyframes/);
+  assert.equal(animatedClips.properties[0].scale.keys.length, 1);
+  assert.equal(animatedClips.properties[0].position.keys.length, 0);
+});
+
+test("Pull 01 rolls back generated Position and Scale keys when a write fails", () => {
+  const { context, undoEvents } = makeContext();
+  const clips = makeShakeClips(context);
+  const transform = clips.outgoing.property("ADBE Transform Group");
+  const failing = enableAnimationProperty(transform.property("ADBE Scale"), { throwBeforeSetAt: 2 });
+  clips.properties[0].scale = failing;
+  const result = context.OBSIDIAN_executePlan("pull_transition", 0.2, "", 0.2);
+  assert.match(result, /^ERROR\\|Pull 01 failed; generated keyframes were removed/);
+  for (const entry of clips.properties) {
+    assert.equal(entry.position.keys.length, 0);
+    assert.equal(entry.scale.keys.length, 0);
+  }
+  assert.deepEqual(undoEvents.map(([kind]) => kind), ["begin", "end"]);
+});
+
 test("Shake 02 applies a stronger impact profile while preserving clip timing and hidden Scale dimensions", () => {
   const { context, undoEvents } = makeContext();
   const clips = makeShakeClips(context);
