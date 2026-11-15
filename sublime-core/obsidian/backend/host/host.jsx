@@ -2618,9 +2618,29 @@ function OBSIDIAN_pullInSequence() {
             {inSpeed:1.5,inInfluence:70,outSpeed:8,outInfluence:24},
             {inSpeed:18,inInfluence:18,outSpeed:0,outInfluence:65}
         ];
+        var opacityTrack=null;
+        if(layer===incoming){
+            var opacity=transform.property("ADBE Opacity");
+            if(!opacity||typeof opacity.setValueAtTime!=="function"||typeof opacity.removeKey!=="function"||
+                typeof opacity.keyTime!=="function"||typeof opacity.keyValue!=="function"||
+                typeof opacity.setInterpolationTypeAtKey!=="function"||typeof opacity.setTemporalEaseAtKey!=="function"||
+                opacity.expressionEnabled)
+                return "REJECTED|PULL IN requires an editable incoming Opacity property without an expression.";
+            var opacitySample=typeof opacity.valueAtTime==="function"?opacity.valueAtTime(overlapStartFrame*frameDuration,false):opacity.value;
+            var opacityBase=Number(opacitySample);
+            if(!isFinite(opacityBase)||opacityBase<0||opacityBase>100)
+                return "REJECTED|Incoming clip Opacity must be between 0 and 100.";
+            var opacityStartTime=overlapStartFrame*frameDuration,opacityEndTime=transitionEndFrame*frameDuration;
+            if(OBSIDIAN_transitionWindowConflict(opacity,opacityStartTime,opacityEndTime,frameRate))
+                return "REJECTED|A pre-existing Opacity keyframe is inside the six-frame PULL IN handoff. Existing animation was preserved.";
+            opacityTrack={property:opacity,keys:[
+                {time:opacityStartTime,value:0},{time:opacityEndTime,value:opacityBase}
+            ],snapshot:OBSIDIAN_transitionSnapshot(opacity),
+                originalValue:opacity.value,base:opacityBase};
+        }
         prepared.push({layer:layer,property:scale,keys:keys,snapshot:OBSIDIAN_transitionSnapshot(scale),
             originalValue:scale.value&&typeof scale.value.length==="number"?scale.value.slice(0):scale.value,
-            originalMotionBlur:layer.motionBlur,easeSpecs:easeSpecs,scaleLength:scaleLength});
+            originalMotionBlur:layer.motionBlur,easeSpecs:easeSpecs,scaleLength:scaleLength,opacityTrack:opacityTrack});
     }
     var undoOpen=false,error=null;
     try{
@@ -2637,6 +2657,16 @@ function OBSIDIAN_pullInSequence() {
                     easeArray(entry.scaleLength,ease.inSpeed,ease.inInfluence),
                     easeArray(entry.scaleLength,ease.outSpeed,ease.outInfluence));
             }
+            if(entry.opacityTrack){
+                var opacityTrack=entry.opacityTrack;
+                for(var oi=0;oi<opacityTrack.keys.length;oi++){
+                    opacityTrack.property.setValueAtTime(opacityTrack.keys[oi].time,opacityTrack.keys[oi].value);
+                    var opacityIndex=OBSIDIAN_transitionFindKey(opacityTrack.property,opacityTrack.keys[oi].time,frameRate);
+                    if(!opacityIndex)throw Error("A generated incoming Opacity keyframe could not be located.");
+                    opacityTrack.property.setInterpolationTypeAtKey(opacityIndex,KeyframeInterpolationType.BEZIER,KeyframeInterpolationType.BEZIER);
+                    opacityTrack.property.setTemporalEaseAtKey(opacityIndex,[new KeyframeEase(0,15)],[new KeyframeEase(0,15)]);
+                }
+            }
             entry.layer.motionBlur=true;
         }
         for(var vi=0;vi<prepared.length;vi++){
@@ -2651,6 +2681,20 @@ function OBSIDIAN_pullInSequence() {
                     check.property.keyOutInterpolationType(generated)!==KeyframeInterpolationType.BEZIER)
                     throw Error("Generated temporal Bezier interpolation could not be verified.");
             }
+            if(check.opacityTrack){
+                var opacityCheck=check.opacityTrack;
+                OBSIDIAN_transitionRestoreKeys(opacityCheck.property,opacityCheck.snapshot,frameRate);
+                if(Number(opacityCheck.property.numKeys)!==opacityCheck.snapshot.length+2)
+                    throw Error("Incoming Opacity key count verification failed.");
+                for(var opv=0;opv<opacityCheck.keys.length;opv++){
+                    var opacityGenerated=OBSIDIAN_transitionFindKey(opacityCheck.property,opacityCheck.keys[opv].time,frameRate);
+                    if(!opacityGenerated||Math.abs(Number(opacityCheck.property.keyValue(opacityGenerated))-opacityCheck.keys[opv].value)>0.001)
+                        throw Error("Incoming Opacity keyframe verification failed.");
+                    if(opacityCheck.property.keyInInterpolationType(opacityGenerated)!==KeyframeInterpolationType.BEZIER||
+                        opacityCheck.property.keyOutInterpolationType(opacityGenerated)!==KeyframeInterpolationType.BEZIER)
+                        throw Error("Incoming Opacity Bezier interpolation could not be verified.");
+                }
+            }
             if(check.layer.motionBlur!==true)throw Error("Native layer motion blur could not be enabled.");
         }
     }catch(caught){error=caught;}
@@ -2661,6 +2705,11 @@ function OBSIDIAN_pullInSequence() {
             try{if(!OBSIDIAN_transitionRollbackTrack({property:restore.property,keys:restore.keys,
                 snapshot:restore.snapshot,originalValue:restore.originalValue},frameRate))rollbackOK=false;}
             catch(ignoredRollback){rollbackOK=false;}
+            if(restore.opacityTrack)try{
+                var opacityRestore=restore.opacityTrack;
+                if(!OBSIDIAN_transitionRollbackTrack({property:opacityRestore.property,keys:opacityRestore.keys,
+                    snapshot:opacityRestore.snapshot,originalValue:opacityRestore.originalValue},frameRate))rollbackOK=false;
+            }catch(ignoredOpacityRollback){rollbackOK=false;}
             try{restore.layer.motionBlur=restore.originalMotionBlur;if(restore.layer.motionBlur!==restore.originalMotionBlur)rollbackOK=false;}
             catch(ignoredBlur){rollbackOK=false;}
         }
