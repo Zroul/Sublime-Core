@@ -2781,7 +2781,7 @@ function OBSIDIAN_whipPanRight(outgoingDuration, incomingDuration) {
             var tileWidth=tile.property("ADBE Tile-0002"),tileHeight=tile.property("ADBE Tile-0003");
             var outputWidth=tile.property("ADBE Tile-0004"),outputHeight=tile.property("ADBE Tile-0005"),mirror=tile.property("ADBE Tile-0006");
             if(!tileWidth||!tileHeight||!outputWidth||!outputHeight||!mirror)throw Error("Motion Tile parameters could not be resolved.");
-            tileWidth.setValue(300);tileHeight.setValue(300);outputWidth.setValue(300);outputHeight.setValue(300);mirror.setValue(1);
+            tileWidth.setValue(100);tileHeight.setValue(100);outputWidth.setValue(100);outputHeight.setValue(100);mirror.setValue(1);
             effectsGroup=entry.layer.property("ADBE Effect Parade");
             var blur=effectsGroup.addProperty("ADBE Motion Blur");
             addedEffects.push({layer:entry.layer,matchName:"ADBE Motion Blur"});
