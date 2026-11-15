@@ -2107,10 +2107,10 @@ test("WHIP PAN RIGHT adds mirrored Motion Tile and animated Directional Blur to 
     const blur = effects.find((effect) => effect.matchName === "ADBE Motion Blur");
     assert.ok(tile);
     assert.ok(blur);
-    assert.equal(tile.property(2).value, 300);
-    assert.equal(tile.property(3).value, 300);
-    assert.equal(tile.property(4).value, 300);
-    assert.equal(tile.property(5).value, 300);
+    assert.equal(tile.property(2).value, 100);
+    assert.equal(tile.property(3).value, 100);
+    assert.equal(tile.property(4).value, 100);
+    assert.equal(tile.property(5).value, 100);
     assert.equal(tile.property(6).value, 1);
     assert.equal(blur.property(1).numKeys, 3);
     assert.equal(blur.property(1).keyValue(2), 42);
