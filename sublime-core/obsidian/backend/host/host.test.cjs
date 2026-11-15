@@ -2253,9 +2253,10 @@ test("Shake 01 rollback removes only generated keys and retains earlier animatio
   assert.match(result, /^ERROR\\|Shake 01 failed; generated keyframes were removed/);
   assert.equal(failing.keys.length, 1);
   assert.deepEqual(keyframeSnapshots(failing.keys), [{ time: 0.5, value: [900, 500] }]);
+  assert.deepEqual(clips.outgoing.property("ADBE Transform Group").property("ADBE Position").value, [900, 500]);
+  assert.deepEqual(clips.incoming.property("ADBE Transform Group").property("ADBE Position").value, [960, 540]);
   for (const layer of [clips.outgoing, clips.incoming]) {
     const transform = layer.property("ADBE Transform Group");
-    assert.deepEqual(transform.property("ADBE Position").value, [960, 540]);
     assert.equal(transform.property("ADBE Rotation").value, 0);
     assert.deepEqual(transform.property("ADBE Scale").value, [100, 100]);
   }
