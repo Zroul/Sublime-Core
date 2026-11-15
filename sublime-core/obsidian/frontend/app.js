@@ -13,6 +13,9 @@ const shake01IncomingDuration = document.querySelector("#shake-01-incoming");
 const shake02ApplyButton = document.querySelector("#shake-02-apply");
 const shake02OutgoingDuration = document.querySelector("#shake-02-outgoing");
 const shake02IncomingDuration = document.querySelector("#shake-02-incoming");
+const pull01ApplyButton = document.querySelector("#pull-01-apply");
+const pull01OutgoingDuration = document.querySelector("#pull-01-outgoing");
+const pull01IncomingDuration = document.querySelector("#pull-01-incoming");
 const captionWorkspace = document.querySelector("#caption-workspace");
 const captionsCloseButton = document.querySelector("#captions-close");
 const captionsCancelButton = document.querySelector("#captions-cancel");
@@ -95,6 +98,16 @@ shake02ApplyButton.addEventListener("click", () => {
   }
   setTransitionsPanelOpen(false); resetStatus();
   runAE("shake 02 outgoing " + outgoing.toFixed(2) + " incoming " + incoming.toFixed(2));
+});
+
+
+pull01ApplyButton.addEventListener("click", () => {
+  const outgoing = Number(pull01OutgoingDuration.value), incoming = Number(pull01IncomingDuration.value);
+  if (!Number.isFinite(outgoing) || !Number.isFinite(incoming) || outgoing < 0.1 || outgoing > 2 || incoming < 0.1 || incoming > 2) {
+    showResult("Each transition duration must be between 0.1 and 2 seconds.", true); return;
+  }
+  setTransitionsPanelOpen(false); resetStatus();
+  runAE("pull 01 outgoing " + outgoing.toFixed(2) + " incoming " + incoming.toFixed(2));
 });
 
 let commandInFlight = false;
