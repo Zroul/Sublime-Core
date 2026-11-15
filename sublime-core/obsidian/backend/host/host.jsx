@@ -2728,6 +2728,7 @@ function OBSIDIAN_whipPanRight(outgoingDuration, incomingDuration) {
         if(layer.locked)return "REJECTED|Unlock '"+OBSIDIAN_cleanText(layer.name)+"' before applying WHIP PAN.";
         if(layer.threeDLayer)return "REJECTED|WHIP PAN v1 supports 2D clips only; no changes were made.";
         var transform=layer.property("ADBE Transform Group"),position=transform?transform.property("ADBE Position"):null;
+        if(typeof layer.motionBlur!=="boolean")return "REJECTED|This clip does not expose the native After Effects motion-blur switch.";
         if(!position||typeof position.setValueAtTime!=="function"||typeof position.keyTime!=="function"||
             typeof position.keyValue!=="function"||typeof position.removeKey!=="function"||position.expressionEnabled)
             return "REJECTED|WHIP PAN requires a supported, unified 2D Position property without an expression.";
@@ -2765,7 +2766,6 @@ function OBSIDIAN_whipPanRight(outgoingDuration, incomingDuration) {
             var entry=prepared[wi],effectsGroup=entry.layer.property("ADBE Effect Parade");
             var tile=effectsGroup.addProperty("ADBE Tile");
             addedEffects.push({layer:entry.layer,effect:tile});
-            tile.name="OBSIDIAN WHIP PAN - Motion Tile";
             var tileWidth=tile.property("ADBE Tile-0002"),tileHeight=tile.property("ADBE Tile-0003");
             var outputWidth=tile.property("ADBE Tile-0004"),outputHeight=tile.property("ADBE Tile-0005"),mirror=tile.property("ADBE Tile-0006");
             if(!tileWidth||!tileHeight||!outputWidth||!outputHeight||!mirror)throw Error("Motion Tile parameters could not be resolved.");
@@ -2773,7 +2773,6 @@ function OBSIDIAN_whipPanRight(outgoingDuration, incomingDuration) {
             effectsGroup=entry.layer.property("ADBE Effect Parade");
             var blur=effectsGroup.addProperty("ADBE Motion Blur");
             addedEffects.push({layer:entry.layer,effect:blur});
-            blur.name="OBSIDIAN WHIP PAN - Directional Blur";
             var blurLength=blur.property(1),blurDirection=blur.property(2);
             if(!blurLength||!blurDirection||typeof blurLength.setValueAtTime!=="function")throw Error("Directional Blur parameters could not be resolved.");
             blurDirection.setValue(0);
@@ -2817,7 +2816,7 @@ function OBSIDIAN_whipPanRight(outgoingDuration, incomingDuration) {
         var rollbackOK=true;
         for(var ri=0;ri<prepared.length;ri++){
             var restore=prepared[ri];
-            try{if(!OBSIDIAN_transitionRollbackTrack({property:restore.position,snapshot:restore.snapshot},frameRate))rollbackOK=false;}catch(ignoredPos){rollbackOK=false;}
+            try{if(!OBSIDIAN_transitionRollbackTrack({property:restore.position,keys:restore.keys,snapshot:restore.snapshot,originalValue:restore.base},frameRate))rollbackOK=false;}catch(ignoredPos){rollbackOK=false;}
             restore.layer.motionBlur=restore.originalMotionBlur;
         }
         for(var re=addedEffects.length-1;re>=0;re--)try{addedEffects[re].effect.remove();}catch(ignoredEffect){rollbackOK=false;}
