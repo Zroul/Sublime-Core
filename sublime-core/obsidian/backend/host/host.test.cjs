@@ -2151,7 +2151,7 @@ test("WHIP PAN RIGHT removes generated effects and restores Position when key in
   const failing = enableAnimationProperty(position, { throwBeforeSetAt: 1 });
   const result = context.OBSIDIAN_executePlan("whip_pan_right", 0.2, "", 0.2);
   assert.match(result, /^ERROR\|WHIP PAN failed; generated keys and effects were removed/);
-  assert.equal(failing.numKeys, 0);
+  assert.equal(failing.keys.length, 0);
   assert.equal(clips.outgoing.property("ADBE Effect Parade")._children.length, 0);
   assert.equal(clips.incoming.property("ADBE Effect Parade")._children.length, 0);
   assert.equal(clips.outgoing.motionBlur, false);
@@ -2162,7 +2162,7 @@ test("WHIP PAN RIGHT removes generated effects and restores Position when key in
 test("WHIP PAN RIGHT rejects duration pairs that exceed the overlap", () => {
   const { context } = makeContext();
   const clips = makeShakeClips(context);
-  const result = context.OBSIDIAN_executePlan("whip_pan_right", 0.5, "", 0.5);
+  const result = context.OBSIDIAN_executePlan("whip_pan_right", 0.6, "", 0.6);
   assert.match(result, /^REJECTED\|The selected clips need at least eight overlap frames/);
   assert.equal(clips.outgoing.property("ADBE Effect Parade")._children.length, 0);
 });
