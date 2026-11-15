@@ -1983,18 +1983,17 @@ test("Pull 01 preserves transform animation outside its transition window", () =
   assert.equal(animatedClips.properties[0].position.keys.length, 2);
 });
 
-test("Pull 01 rolls back generated Position and Scale keys when a write fails", () => {
+test("Pull 01 rollback removes generated keys but retains pre-existing animation", () => {
   const { context, undoEvents } = makeContext();
   const clips = makeShakeClips(context);
   const transform = clips.outgoing.property("ADBE Transform Group");
-  const failing = enableAnimationProperty(transform.property("ADBE Scale"), { throwBeforeSetAt: 2 });
+  const failing = enableAnimationProperty(transform.property("ADBE Scale"), { throwBeforeSetAt: 3 });
+  failing.setValueAtTime(0.5, [108, 108]);
   clips.properties[0].scale = failing;
   const result = context.OBSIDIAN_executePlan("pull_transition", 0.2, "", 0.2);
   assert.match(result, /^ERROR\\|Pull 01 failed; generated keyframes were removed/);
-  for (const entry of clips.properties) {
-    assert.equal(entry.position.keys.length, 0);
-    assert.equal(entry.scale.keys.length, 0);
-  }
+  assert.equal(failing.keys.length, 1);
+  assert.deepEqual(keyframeSnapshots(failing.keys), [{ time: 0.5, value: [108, 108] }]);
   assert.deepEqual(undoEvents.map(([kind]) => kind), ["begin", "end"]);
 });
 
@@ -2243,15 +2242,17 @@ test("Shake 01 adds transition keys after existing animation without deleting it
   assert.equal(clips.properties[1].position.keys.length, 5);
 });
 
-test("Shake 01 rolls back every generated key when a transform write fails", () => {
+test("Shake 01 rollback removes only generated keys and retains earlier animation", () => {
   const { context, undoEvents } = makeContext();
   const clips = makeShakeClips(context);
   const transform = clips.outgoing.property("ADBE Transform Group");
-  const failing = enableAnimationProperty(transform.property("ADBE Position"), { throwBeforeSetAt: 3 });
+  const failing = enableAnimationProperty(transform.property("ADBE Position"), { throwBeforeSetAt: 4 });
+  failing.setValueAtTime(0.5, [900, 500]);
   clips.properties[0].position = failing;
   const result = context.OBSIDIAN_shakeTransition(0.4, 0.4, "shake_01");
   assert.match(result, /^ERROR\\|Shake 01 failed; generated keyframes were removed/);
-  for (const entry of clips.properties) for (const track of Object.values(entry)) assert.equal(track.keys.length, 0);
+  assert.equal(failing.keys.length, 1);
+  assert.deepEqual(keyframeSnapshots(failing.keys), [{ time: 0.5, value: [900, 500] }]);
   for (const layer of [clips.outgoing, clips.incoming]) {
     const transform = layer.property("ADBE Transform Group");
     assert.deepEqual(transform.property("ADBE Position").value, [960, 540]);
@@ -2259,6 +2260,24 @@ test("Shake 01 rolls back every generated key when a transform write fails", () 
     assert.deepEqual(transform.property("ADBE Scale").value, [100, 100]);
   }
   assert.deepEqual(undoEvents.map(([kind]) => kind), ["begin", "end"]);
+});
+
+test("Transitions reject keyframes inside the transition window without modifying them", () => {
+  const shake = makeContext();
+  const shakeClips = makeShakeClips(shake.context);
+  shakeClips.properties[0].scale.property.setValueAtTime(2.5, [115, 115]);
+  const shakeResult = shake.context.OBSIDIAN_shakeTransition(0.4, 0.4, "shake_01");
+  assert.match(shakeResult, /^REJECTED\\|A pre-existing Scale keyframe is inside the transition window/);
+  assert.deepEqual(keyframeSnapshots(shakeClips.properties[0].scale.keys), [{ time: 2.5, value: [115, 115] }]);
+  assert.equal(shakeClips.properties[0].position.keys.length, 0);
+
+  const pull = makeContext();
+  const pullClips = makeShakeClips(pull.context);
+  pullClips.properties[0].position.property.setValueAtTime(2.5, [930, 520]);
+  const pullResult = pull.context.OBSIDIAN_executePlan("pull_transition", 0.2, "", 0.2);
+  assert.match(pullResult, /^REJECTED\\|A pre-existing Position keyframe is inside the transition window/);
+  assert.deepEqual(keyframeSnapshots(pullClips.properties[0].position.keys), [{ time: 2.5, value: [930, 520] }]);
+  assert.equal(pullClips.properties[0].scale.keys.length, 0);
 });
 
 test("Shake 01 rejects durations outside its supported range", () => {
