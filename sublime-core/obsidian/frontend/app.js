@@ -103,7 +103,7 @@ clipEditsCloseButton.addEventListener("click", () => setClipEditsPanelOpen(false
 pullInApplyButton.addEventListener("click", () => {
   setClipEditsPanelOpen(false);
   resetStatus();
-  applyClipEdit("pull_in_clip");
+  applyClipEdit("pull_in_sequence");
 });
 
 shake01ApplyButton.addEventListener("click", () => {
