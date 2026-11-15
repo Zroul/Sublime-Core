@@ -24,6 +24,7 @@
     shake_transition: true,
     pull_transition: true,
     whip_pan_right: true,
+    pull_in_sequence: true,
     apply_recipe: true,
     set_brightness_contrast: true,
     fade_in: true,
