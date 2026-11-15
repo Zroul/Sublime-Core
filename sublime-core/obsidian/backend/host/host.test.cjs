@@ -279,6 +279,7 @@ function enableAnimationProperty(property, faults = {}) {
   Object.defineProperty(property, "numKeys", { configurable: true, get() { return keys.length; } });
   property._animationKeys = keys;
   property.setValue = function (value) { this.value = Array.isArray(value) ? Array.from(value) : value; };
+  property.valueAtTime = function () { return Array.isArray(this.value) ? Array.from(this.value) : this.value; };
   property.setValueAtTime = function (time, value) {
     setCalls++;
     if (faults.throwBeforeSetAt === setCalls) throw new Error("mock failure before key write");
@@ -1964,7 +1965,7 @@ test("Pull 01 applies a fast scale handoff and preserves clip timing", () => {
   assert.deepEqual(undoEvents.map(([kind]) => kind), ["begin", "end"]);
 });
 
-test("Pull 01 rejects insufficient overlap and preserves existing transform animation", () => {
+test("Pull 01 preserves transform animation outside its transition window", () => {
   const short = makeContext();
   const shortClips = makeShakeClips(short.context, 2, 2);
   const rejected = short.context.OBSIDIAN_executePlan("pull_transition", 0.2, "", 0.2);
@@ -1974,10 +1975,12 @@ test("Pull 01 rejects insufficient overlap and preserves existing transform anim
   const animated = makeContext();
   const animatedClips = makeShakeClips(animated.context);
   animatedClips.properties[0].scale.property.setValueAtTime(0.5, [110, 110]);
-  const preserved = animated.context.OBSIDIAN_executePlan("pull_transition", 0.2, "", 0.2);
-  assert.match(preserved, /^REJECTED\\|Existing transform keyframes/);
-  assert.equal(animatedClips.properties[0].scale.keys.length, 1);
-  assert.equal(animatedClips.properties[0].position.keys.length, 0);
+  const result = animated.context.OBSIDIAN_executePlan("pull_transition", 0.2, "", 0.2);
+  assert.match(result, /^OK\\|Applied and verified Pull 01/);
+  assert.equal(animatedClips.properties[0].scale.keys.length, 3);
+  assert.deepEqual(keyframeSnapshots(animatedClips.properties[0].scale.keys).find((key) => key.time === 0.5),
+    { time: 0.5, value: [110, 110] });
+  assert.equal(animatedClips.properties[0].position.keys.length, 2);
 });
 
 test("Pull 01 rolls back generated Position and Scale keys when a write fails", () => {
@@ -2227,15 +2230,17 @@ test("Shake 01 rejects clips without overlap before writing transform keys", () 
   for (const entry of clips.properties) for (const track of Object.values(entry)) assert.equal(track.keys.length, 0);
 });
 
-test("Shake 01 preserves pre-existing transform animation", () => {
+test("Shake 01 adds transition keys after existing animation without deleting it", () => {
   const { context } = makeContext();
   const clips = makeShakeClips(context);
   clips.properties[0].scale.property.setValueAtTime(0.5, [110, 110]);
   const result = context.OBSIDIAN_shakeTransition(0.4, 0.4, "shake_01");
-  assert.match(result, /^REJECTED\\|Existing transform keyframes/);
-  assert.equal(clips.properties[0].scale.keys.length, 1);
-  assert.equal(clips.properties[0].position.keys.length, 0);
-  assert.equal(clips.properties[1].position.keys.length, 0);
+  assert.match(result, /^OK\\|Applied and verified Shake 01/);
+  const keys = clips.properties[0].scale.keys;
+  assert.equal(keys.length, 6);
+  assert.deepEqual(keyframeSnapshots(keys).find((key) => key.time === 0.5), { time: 0.5, value: [110, 110] });
+  assert.equal(clips.properties[0].position.keys.length, 5);
+  assert.equal(clips.properties[1].position.keys.length, 5);
 });
 
 test("Shake 01 rolls back every generated key when a transform write fails", () => {
