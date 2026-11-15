@@ -2424,6 +2424,13 @@ function OBSIDIAN_shakePositionDiagnostic(layer) {
         " layer3D=" + String(Boolean(layer && layer.threeDLayer)) + " value=" + valueText;
 }
 
+/* Safe transition insertion helpers. Existing keys outside the window are retained. */
+function OBSIDIAN_transitionFindKey(p,t,rate){for(var i=1;i<=Number(p.numKeys);i++)if(Math.abs(Number(p.keyTime(i))-t)*rate<=0.01)return i;return 0;}
+function OBSIDIAN_transitionSnapshot(p){var out=[];for(var i=1;i<=Number(p.numKeys);i++){var x={time:Number(p.keyTime(i)),value:p.keyValue(i)};try{x.inType=p.keyInInterpolationType(i);x.outType=p.keyOutInterpolationType(i);}catch(e){}try{x.inEase=p.keyInTemporalEase(i);x.outEase=p.keyOutTemporalEase(i);}catch(e){}try{x.inTangent=p.keyInSpatialTangent(i);x.outTangent=p.keyOutSpatialTangent(i);}catch(e){}try{x.temporalContinuous=p.keyTemporalContinuous(i);x.temporalAuto=p.keyTemporalAutoBezier(i);x.spatialContinuous=p.keySpatialContinuous(i);x.spatialAuto=p.keySpatialAutoBezier(i);}catch(e){}out.push(x);}return out;}
+function OBSIDIAN_transitionWindowConflict(p,start,end,rate){for(var i=1;i<=Number(p.numKeys);i++){var t=Number(p.keyTime(i));if(t>=start-0.01/rate&&t<=end+0.01/rate)return true;}return false;}
+function OBSIDIAN_transitionRestoreKeys(p,snapshot,rate){for(var i=0;i<snapshot.length;i++){var x=snapshot[i],k=OBSIDIAN_transitionFindKey(p,x.time,rate);if(!k)throw Error("An existing keyframe could not be located after insertion.");if(x.inType!==undefined)p.setInterpolationTypeAtKey(k,x.inType,x.outType);if(x.inEase&&x.outEase&&p.setTemporalEaseAtKey)p.setTemporalEaseAtKey(k,x.inEase,x.outEase);if(x.inTangent&&x.outTangent&&p.setSpatialTangentsAtKey)p.setSpatialTangentsAtKey(k,x.inTangent,x.outTangent);if(x.temporalContinuous!==undefined&&p.setTemporalContinuousAtKey)p.setTemporalContinuousAtKey(k,x.temporalContinuous);if(x.temporalAuto!==undefined&&p.setTemporalAutoBezierAtKey)p.setTemporalAutoBezierAtKey(k,x.temporalAuto);if(x.spatialContinuous!==undefined&&p.setSpatialContinuousAtKey)p.setSpatialContinuousAtKey(k,x.spatialContinuous);if(x.spatialAuto!==undefined&&p.setSpatialAutoBezierAtKey)p.setSpatialAutoBezierAtKey(k,x.spatialAuto);if(!OBSIDIAN_keyframeValueMatches(p.keyValue(k),x.value))throw Error("An existing keyframe value changed.");}}
+function OBSIDIAN_transitionRollbackTrack(track,rate){for(var i=track.keys.length-1;i>=0;i--){var k=OBSIDIAN_transitionFindKey(track.property,track.keys[i].time,rate);if(k)track.property.removeKey(k);}OBSIDIAN_transitionRestoreKeys(track.property,track.snapshot,rate);return Number(track.property.numKeys)===track.snapshot.length;}
+
 function OBSIDIAN_shakeTransition(outgoingDuration, incomingDuration, profile) {
     var comp = OBSIDIAN_getActiveComp();
     var layers = OBSIDIAN_getSelectedLayers();
@@ -2457,6 +2464,13 @@ function OBSIDIAN_shakeTransition(outgoingDuration, incomingDuration, profile) {
     var incomingFrames = Math.round(incomingDuration * frameRate);
     if (outgoingFrames < 4 || incomingFrames < 4 || outgoingFrames + incomingFrames > overlapFrames)
         return "REJECTED|Each duration must be at least four frames and their combined duration cannot exceed the available overlap.";
+    var overlapStartFrame=Math.round(overlapStart*frameRate);
+    var unusedOverlapFrames=overlapFrames-outgoingFrames-incomingFrames;
+    var transitionStartFrame=overlapStartFrame+Math.floor(unusedOverlapFrames/2);
+    var impactFrame=transitionStartFrame+outgoingFrames;
+    var keyFrames=[transitionStartFrame,transitionStartFrame+Math.round(outgoingFrames/2),impactFrame,impactFrame+Math.round(incomingFrames/2),impactFrame+incomingFrames];
+    var keyTimes=[];
+    for(var kt=0;kt<keyFrames.length;kt++)keyTimes.push(keyFrames[kt]/frameRate);
     var selected = [outgoing, incoming], tracks = [];
     for (var li = 0; li < selected.length; li++) {
         var layer = selected[li];
@@ -2473,8 +2487,8 @@ function OBSIDIAN_shakeTransition(outgoingDuration, incomingDuration, profile) {
             var spec = properties[pi], prop = spec.p;
             if (!prop || typeof prop.setValue !== "function" || typeof prop.setValueAtTime !== "function" || typeof prop.removeKey !== "function" ||
                 typeof prop.keyTime !== "function" || typeof prop.keyValue !== "function" ||
-                typeof prop.setInterpolationTypeAtKey !== "function" || Number(prop.numKeys) !== 0 || prop.expressionEnabled)
-                return "REJECTED|Existing transform keyframes, expressions, or unsupported properties were preserved.";
+                typeof prop.setInterpolationTypeAtKey !== "function" || prop.expressionEnabled)
+                return "REJECTED|Expressions or unsupported transform properties were preserved; expression-driven transforms are not supported.";
             if (spec.k === "vector") {
                 var vectorLength = prop.value && typeof prop.value.length === "number" ? prop.value.length : 0;
                 if (spec.n === "Position") {
@@ -2504,33 +2518,16 @@ function OBSIDIAN_shakeTransition(outgoingDuration, incomingDuration, profile) {
                     (vectorLength === 3 && !isFinite(Number(prop.value[2]))))
                     return "REJECTED|A selected clip has non-numeric transform values.";
             } else if (!isFinite(Number(prop.value))) return "REJECTED|A selected clip has a non-numeric Rotation value.";
-            var baseValue = spec.k === "vector"
-                ? ((spec.n === "Scale" && vectorLength === 3) ||
-                   (spec.n === "Position" && vectorLength === 3)
-                    ? [Number(prop.value[0]), Number(prop.value[1]), Number(prop.value[2])]
-                    : [Number(prop.value[0]), Number(prop.value[1])])
-                : Number(prop.value);
-            tracks.push({property:prop,kind:spec.k,channel:spec.n,base:baseValue});
+            if(OBSIDIAN_transitionWindowConflict(prop,keyTimes[0],keyTimes[4],frameRate))
+                return "REJECTED|A pre-existing "+spec.n+" keyframe is inside the transition window. Move it outside the window; existing animation was preserved.";
+            var sampledBase=typeof prop.valueAtTime==="function"?prop.valueAtTime(keyTimes[0],false):prop.value;
+            var baseValue=spec.k==="vector"?(sampledBase&&sampledBase.length===3?[Number(sampledBase[0]),Number(sampledBase[1]),Number(sampledBase[2])]:[Number(sampledBase[0]),Number(sampledBase[1])]):Number(sampledBase);
+            tracks.push({property:prop,kind:spec.k,channel:spec.n,base:baseValue,snapshot:OBSIDIAN_transitionSnapshot(prop)});
         }
     }
     /* Center the complete transition window in the overlap. Both clips receive
        the exact same absolute key times and motion offsets, so the transition
        behaves as one camera move instead of two opposing clip animations. */
-    var overlapStartFrame=Math.round(overlapStart*frameRate);
-    var unusedOverlapFrames=overlapFrames-outgoingFrames-incomingFrames;
-    var transitionStartFrame=overlapStartFrame+Math.floor(unusedOverlapFrames/2);
-    var impactFrame=transitionStartFrame+outgoingFrames;
-    var keyFrames=[
-        transitionStartFrame,
-        transitionStartFrame+Math.round(outgoingFrames/2),
-        impactFrame,
-        impactFrame+Math.round(incomingFrames/2),
-        impactFrame+incomingFrames
-    ];
-    var keyTimes=[];
-    for (var keyTimeIndex=0;keyTimeIndex<keyFrames.length;keyTimeIndex++) {
-        keyTimes.push(keyFrames[keyTimeIndex]*frameDuration);
-    }
     var positionX=[0,-0.55,1,-0.65,0], positionY=[0,0.3,-0.45,0.25,0], prepared=[];
     for (var ti=0;ti<tracks.length;ti++) {
         var t=tracks[ti], keys=[];
@@ -2552,6 +2549,7 @@ function OBSIDIAN_shakeTransition(outgoingDuration, incomingDuration, profile) {
             property:t.property,
             keys:keys,
             originalValue:t.kind==="vector"?t.base.slice(0):t.base,
+            snapshot:t.snapshot,
             channel:t.channel,
             easeDimensions:t.channel==="Position" || t.channel==="Rotation" ? 1 : (t.base && typeof t.base.length==="number" ? t.base.length : 1)
         });
@@ -2561,46 +2559,31 @@ function OBSIDIAN_shakeTransition(outgoingDuration, incomingDuration, profile) {
         app.beginUndoGroup("OBSIDIAN - "+profileLabel+" Transition"); undoOpen=true;
         for (var wi=0;wi<prepared.length;wi++) {
             var track=prepared[wi];
-            for (var wk=0;wk<5;wk++) track.property.setValueAtTime(track.keys[wk].time,track.keys[wk].value);
-            for (var ix=1;ix<=5;ix++) {
-                track.property.setInterpolationTypeAtKey(ix,KeyframeInterpolationType.BEZIER,KeyframeInterpolationType.BEZIER);
+            for(var wk=0;wk<5;wk++)track.property.setValueAtTime(track.keys[wk].time,track.keys[wk].value);
+            for(var ix=0;ix<5;ix++){
+                var generatedIndex=OBSIDIAN_transitionFindKey(track.property,track.keys[ix].time,frameRate);
+                if(!generatedIndex)throw Error(track.channel+" generated key could not be found.");
+                track.property.setInterpolationTypeAtKey(generatedIndex,KeyframeInterpolationType.BEZIER,KeyframeInterpolationType.BEZIER);
                 if (typeof track.property.setTemporalEaseAtKey==="function" && typeof KeyframeEase!=="undefined") {
                     /* AE spatial Position uses one temporal-ease dimension even when
                        its value vector reads back as [x, y, z]. Rotation is scalar;
                        Scale follows its actual value vector length. */
                     var dims=track.easeDimensions || 1, ein=[],eout=[];
                     for(var ei=0;ei<dims;ei++){ein.push(new KeyframeEase(0,65));eout.push(new KeyframeEase(0,65));}
-                    track.property.setTemporalEaseAtKey(ix,ein,eout);
+                    track.property.setTemporalEaseAtKey(generatedIndex,ein,eout);
                 }
             }
         }
         for (var vi=0;vi<prepared.length;vi++) {
-            var check=prepared[vi], actualKeyCount=Number(check.property.numKeys);
-            if(actualKeyCount!==5) {
-                throw new Error(profileLabel+" "+check.channel+" expected 5 keys but AE reported "+actualKeyCount+".");
-            }
-            for(var vk=0;vk<5;vk++) {
-                var actualKeyTime=Number(check.property.keyTime(vk+1));
-                var keyTimeDeltaFrames=Math.abs(actualKeyTime-check.keys[vk].time)*frameRate;
-                if(!isFinite(keyTimeDeltaFrames) || keyTimeDeltaFrames>0.01) {
-                    throw new Error(profileLabel+" "+check.channel+" key "+(vk+1)+" time differed by "+keyTimeDeltaFrames+" frames.");
-                }
-                if(!OBSIDIAN_keyframeValueMatches(check.property.keyValue(vk+1),check.keys[vk].value)) {
-                    throw new Error(profileLabel+" "+check.channel+" key "+(vk+1)+" value did not match the requested value.");
-                }
-            }
+            var check=prepared[vi];
+            OBSIDIAN_transitionRestoreKeys(check.property,check.snapshot,frameRate);
+            if(Number(check.property.numKeys)!==check.snapshot.length+5)throw Error(profileLabel+" "+check.channel+" key count verification failed.");
+            for(var vk=0;vk<5;vk++){var generated=OBSIDIAN_transitionFindKey(check.property,check.keys[vk].time,frameRate);if(!generated||!OBSIDIAN_keyframeValueMatches(check.property.keyValue(generated),check.keys[vk].value))throw Error(profileLabel+" "+check.channel+" generated key verification failed.");}
         }
     } catch (caught) { error=caught; }
     if(error) {
         var restored=0;
-        for(var ri=0;ri<prepared.length;ri++) try {
-            var rp=prepared[ri].property, count=Number(rp.numKeys);
-            if(!isFinite(count)||count>5) continue;
-            for(var rk=count;rk>=1;rk--) rp.removeKey(rk);
-            var originalValue=prepared[ri].originalValue;
-            rp.setValue(originalValue && typeof originalValue.length==="number" ? originalValue.slice(0) : originalValue);
-            if(Number(rp.numKeys)===0 && OBSIDIAN_keyframeValueMatches(rp.value,originalValue)) restored++;
-        } catch(ignoredRestore) {}
+        for(var ri=0;ri<prepared.length;ri++)try{if(OBSIDIAN_transitionRollbackTrack(prepared[ri],frameRate))restored++;}catch(ignoredRestore){}
         if(undoOpen) try{app.endUndoGroup();}catch(ignoredEnd){}
         return restored===prepared.length
             ? "ERROR|"+profileLabel+" failed; generated keyframes were removed. "+OBSIDIAN_cleanText(error)
@@ -2636,6 +2619,13 @@ function OBSIDIAN_pullTransition(outgoingDuration, incomingDuration) {
     if (outgoingFrames < 4 || incomingFrames < 4 || outgoingFrames + incomingFrames > overlapFrames)
         return "REJECTED|Each duration must be at least four frames and their combined duration cannot exceed the available overlap.";
 
+    var frameDuration=1/frameRate;
+    var overlapStartFrame=Math.round(overlapStart*frameRate);
+    var unusedOverlapFrames=overlapFrames-outgoingFrames-incomingFrames;
+    var transitionStartFrame=overlapStartFrame+Math.floor(unusedOverlapFrames/2);
+    var impactFrame=transitionStartFrame+outgoingFrames;
+    var transitionEndFrame=impactFrame+incomingFrames;
+    var startTime=transitionStartFrame*frameDuration,impactTime=impactFrame*frameDuration,endTime=transitionEndFrame*frameDuration;
     var selected = [outgoing, incoming], prepared = [];
     for (var li = 0; li < selected.length; li++) {
         var layer = selected[li];
@@ -2653,8 +2643,8 @@ function OBSIDIAN_pullTransition(outgoingDuration, incomingDuration) {
             if (!prop || typeof prop.setValue !== "function" || typeof prop.setValueAtTime !== "function" ||
                 typeof prop.removeKey !== "function" || typeof prop.keyTime !== "function" ||
                 typeof prop.keyValue !== "function" || typeof prop.setInterpolationTypeAtKey !== "function" ||
-                Number(prop.numKeys) !== 0 || prop.expressionEnabled)
-                return "REJECTED|Existing transform keyframes, expressions, or unsupported properties were preserved.";
+                prop.expressionEnabled)
+                return "REJECTED|Expressions or unsupported transform properties were preserved; expression-driven transforms are not supported.";
             var vectorLength = prop.value && typeof prop.value.length === "number" ? prop.value.length : 0;
             if (vectorLength !== 2 && !(vectorLength === 3 && !layer.threeDLayer))
                 return "REJECTED|Pull 01 requires supported unified 2D Position and Scale properties.";
@@ -2671,24 +2661,20 @@ function OBSIDIAN_pullTransition(outgoingDuration, incomingDuration) {
                 if (prop.dimensionsSeparated || typeIsThreeD || (vectorLength === 3 && !typeIsTwoD))
                     return "REJECTED|Pull 01 requires a unified 2D Position property; no changes were made.";
             }
-            layerTracks[spec.channel] = {
+            if(OBSIDIAN_transitionWindowConflict(prop,startTime,endTime,frameRate))
+                return "REJECTED|A pre-existing "+spec.channel+" keyframe is inside the transition window. Move it outside the window; existing animation was preserved.";
+            var sampleTime=layer===outgoing?startTime:endTime;
+            var sampled=typeof prop.valueAtTime==="function"?prop.valueAtTime(sampleTime,false):prop.value;
+            layerTracks[spec.channel]={
                 property:prop,
-                original:[Number(prop.value[0]),Number(prop.value[1])].concat(vectorLength === 3 ? [Number(prop.value[2])] : []),
-                easeDimensions:spec.channel === "Position" ? 1 : vectorLength
+                original:[Number(sampled[0]),Number(sampled[1])].concat(vectorLength===3?[Number(sampled[2])]:[]),
+                snapshot:OBSIDIAN_transitionSnapshot(prop),
+                easeDimensions:spec.channel==="Position"?1:vectorLength
             };
         }
         prepared.push({layer:layer,tracks:layerTracks});
     }
 
-    var frameDuration = 1 / frameRate;
-    var overlapStartFrame = Math.round(overlapStart * frameRate);
-    var unusedOverlapFrames = overlapFrames - outgoingFrames - incomingFrames;
-    var transitionStartFrame = overlapStartFrame + Math.floor(unusedOverlapFrames / 2);
-    var impactFrame = transitionStartFrame + outgoingFrames;
-    var transitionEndFrame = impactFrame + incomingFrames;
-    var startTime = transitionStartFrame * frameDuration;
-    var impactTime = impactFrame * frameDuration;
-    var endTime = transitionEndFrame * frameDuration;
     var driftDistance = Math.min(Number(comp.width), Number(comp.height)) * 0.008;
 
     for (var pi2 = 0; pi2 < prepared.length; pi2++) {
@@ -2724,17 +2710,19 @@ function OBSIDIAN_pullTransition(outgoingDuration, incomingDuration) {
         for (var wi = 0; wi < prepared.length; wi++) {
             var channels = ["Position","Scale"];
             for (var ci = 0; ci < channels.length; ci++) {
-                var track = prepared[wi].tracks[channels[ci]];
-                for (var ki = 0; ki < 2; ki++) track.property.setValueAtTime(track.keys[ki].time, track.keys[ki].value);
-                for (var kf = 1; kf <= 2; kf++) {
-                    track.property.setInterpolationTypeAtKey(kf, KeyframeInterpolationType.BEZIER, KeyframeInterpolationType.BEZIER);
+                var track=prepared[wi].tracks[channels[ci]];
+                for(var ki=0;ki<2;ki++)track.property.setValueAtTime(track.keys[ki].time,track.keys[ki].value);
+                for(var kf=0;kf<2;kf++){
+                    var generatedIndex=OBSIDIAN_transitionFindKey(track.property,track.keys[kf].time,frameRate);
+                    if(!generatedIndex)throw Error(track.channel+" generated key could not be found.");
+                    track.property.setInterpolationTypeAtKey(generatedIndex,KeyframeInterpolationType.BEZIER,KeyframeInterpolationType.BEZIER);
                     if (typeof track.property.setTemporalEaseAtKey === "function" && typeof KeyframeEase !== "undefined") {
                         var easeIn = [], easeOut = [];
                         for (var ei = 0; ei < track.easeDimensions; ei++) {
                             easeIn.push(new KeyframeEase(0, 75));
                             easeOut.push(new KeyframeEase(0, 75));
                         }
-                        track.property.setTemporalEaseAtKey(kf, easeIn, easeOut);
+                        track.property.setTemporalEaseAtKey(generatedIndex, easeIn, easeOut);
                     }
                 }
             }
@@ -2743,15 +2731,9 @@ function OBSIDIAN_pullTransition(outgoingDuration, incomingDuration) {
             var verifyChannels = ["Position","Scale"];
             for (var vci = 0; vci < verifyChannels.length; vci++) {
                 var check = prepared[vi].tracks[verifyChannels[vci]];
-                if (Number(check.property.numKeys) !== 2)
-                    throw new Error(check.channel + " expected 2 keys but AE reported " + Number(check.property.numKeys) + ".");
-                for (var vk = 0; vk < 2; vk++) {
-                    var deltaFrames = Math.abs(Number(check.property.keyTime(vk + 1)) - check.keys[vk].time) * frameRate;
-                    if (!isFinite(deltaFrames) || deltaFrames > 0.01)
-                        throw new Error(check.channel + " key " + (vk + 1) + " time differed by " + deltaFrames + " frames.");
-                    if (!OBSIDIAN_keyframeValueMatches(check.property.keyValue(vk + 1), check.keys[vk].value))
-                        throw new Error(check.channel + " key " + (vk + 1) + " value did not match the requested value.");
-                }
+                OBSIDIAN_transitionRestoreKeys(check.property,check.snapshot,frameRate);
+                if(Number(check.property.numKeys)!==check.snapshot.length+2)throw Error(check.channel+" key count verification failed.");
+                for(var vk=0;vk<2;vk++){var generated=OBSIDIAN_transitionFindKey(check.property,check.keys[vk].time,frameRate);if(!generated||!OBSIDIAN_keyframeValueMatches(check.property.keyValue(generated),check.keys[vk].value))throw Error(check.channel+" generated key verification failed.");}
             }
         }
     } catch (caught) { error = caught; }
@@ -2763,13 +2745,7 @@ function OBSIDIAN_pullTransition(outgoingDuration, incomingDuration) {
             for (var rci = 0; rci < restoreChannels.length; rci++) try {
                 var restoreTrack = prepared[ri].tracks[restoreChannels[rci]];
                 var restoreProperty = restoreTrack.property;
-                var keyCount = Number(restoreProperty.numKeys);
-                if (!isFinite(keyCount) || keyCount > 2) { restoredLayer = false; continue; }
-                for (var rk = keyCount; rk >= 1; rk--) restoreProperty.removeKey(rk);
-                var original = restoreTrack.original.slice(0);
-                restoreProperty.setValue(original);
-                if (Number(restoreProperty.numKeys) !== 0 || !OBSIDIAN_keyframeValueMatches(restoreProperty.value, original))
-                    restoredLayer = false;
+                if(!OBSIDIAN_transitionRollbackTrack(restoreTrack,frameRate))restoredLayer=false;
             } catch (ignoredRestore) { restoredLayer = false; }
             if (restoredLayer) restored++;
         }
