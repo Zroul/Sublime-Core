@@ -2754,14 +2754,19 @@ function OBSIDIAN_whipPanRight(outgoingDuration, incomingDuration) {
         var sampled=typeof position.valueAtTime==="function"?position.valueAtTime(times[0],false):position.value;
         var base=[Number(sampled[0]),Number(sampled[1])];
         if(positionLength===3)base.push(Number(sampled[2]));
+        function whipPositionValue(x,y){
+            var result=[x,y];
+            if(positionLength===3)result.push(base[2]);
+            return result;
+        }
         prepared.push({layer:layer,position:position,base:base,snapshot:OBSIDIAN_transitionSnapshot(position),
             originalMotionBlur:Boolean(layer.motionBlur),keys:li===0?[
                 {time:times[0],value:base.slice(0)},
-                {time:times[1],value:[base[0]-displacement*0.22,base[1]]},
-                {time:times[2],value:[base[0]-displacement,base[1]]}
+                {time:times[1],value:whipPositionValue(base[0]-displacement*0.22,base[1])},
+                {time:times[2],value:whipPositionValue(base[0]-displacement,base[1])}
             ]:[
-                {time:times[2],value:[base[0]+displacement,base[1]]},
-                {time:times[3],value:[base[0]+displacement*0.22,base[1]]},
+                {time:times[2],value:whipPositionValue(base[0]+displacement,base[1])},
+                {time:times[3],value:whipPositionValue(base[0]+displacement*0.22,base[1])},
                 {time:times[4],value:base.slice(0)}
             ]});
         oldMotionBlur.push(Boolean(layer.motionBlur));
