@@ -3034,7 +3034,7 @@ function OBSIDIAN_applyTextPreset(request) {
     var baseOpacity = Number(opacity.value), basePosition = position.value, baseScale = scale.value;
     if (!isFinite(baseOpacity) || !basePosition || !baseScale || basePosition.length !== 2 || baseScale.length !== 2)
         return "REJECTED|Text Library v1 requires numeric 2D transform values.";
-    var tracks = [], keys = [];
+    var tracks = [], undoOpen = false;
     function addTrack(property, values, times) {
         if (!property || property.expressionEnabled || typeof property.setValueAtTime !== "function" ||
             typeof property.removeKey !== "function" || typeof property.keyTime !== "function" ||
@@ -3045,47 +3045,50 @@ function OBSIDIAN_applyTextPreset(request) {
         var track = { property: property, snapshot: OBSIDIAN_transitionSnapshot(property), keys: [], originalValue: property.value };
         tracks.push(track);
         for (var i = 0; i < values.length; i++) {
-            var time = times[i], value = values[i];
-            property.setValueAtTime(time, value);
-            var key = OBSIDIAN_transitionFindKey(property, time, rate);
+            property.setValueAtTime(times[i], values[i]);
+            var key = OBSIDIAN_transitionFindKey(property, times[i], rate);
             if (!key) throw Error("A generated text animation keyframe could not be located.");
             property.setInterpolationTypeAtKey(key, KeyframeInterpolationType.BEZIER, KeyframeInterpolationType.BEZIER);
-            track.keys.push({ time: time });
-            if (!OBSIDIAN_keyframeValueMatches(property.keyValue(key), value))
+            track.keys.push({ time: times[i], value: values[i] });
+            if (!OBSIDIAN_keyframeValueMatches(property.keyValue(key), values[i]))
                 throw Error("A generated text animation keyframe failed verification.");
         }
     }
-    var t0 = start, t1 = end, mid = start + (end - start) * 0.72;
-    var posStart = [Number(basePosition[0]), Number(basePosition[1])];
-    var posEnd = [Number(basePosition[0]), Number(basePosition[1])];
-    var scaleStart = [Number(baseScale[0]), Number(baseScale[1])];
-    var scaleMid = [Number(baseScale[0]), Number(baseScale[1])];
-    var scaleEnd = [Number(baseScale[0]), Number(baseScale[1])];
-    var opacityValues = [0, baseOpacity], opacityTimes = [t0, t1];
-    if (preset === "clean_rise") { posStart[1] += 42; addTrack(position, [posStart,posEnd], [t0,t1]); addTrack(opacity,opacityValues,opacityTimes); }
-    else if (preset === "cinematic_reveal") { scaleStart[0]*=0.92; scaleStart[1]*=0.92; addTrack(scale,[scaleStart,scaleEnd],[t0,t1]); addTrack(opacity,opacityValues,opacityTimes); }
-    else if (preset === "bold_pop") { scaleStart[0]*=0.72; scaleStart[1]*=0.72; scaleMid[0]*=1.08; scaleMid[1]*=1.08; addTrack(scale,[scaleStart,scaleMid,scaleEnd],[t0,mid,t1]); addTrack(opacity,opacityValues,opacityTimes); }
-    else if (preset === "dynamic_slide") { posStart[0]-=90; addTrack(position,[posStart,posEnd],[t0,t1]); addTrack(opacity,opacityValues,opacityTimes); }
-    else if (preset === "minimal_fade") { addTrack(opacity,opacityValues,opacityTimes); }
-    else if (preset === "saas_reveal") { posStart[1]+=18; scaleStart[0]*=0.96; scaleStart[1]*=0.96; addTrack(position,[posStart,posEnd],[t0,t1]); addTrack(scale,[scaleStart,scaleEnd],[t0,t1]); addTrack(opacity,opacityValues,opacityTimes); }
-    var undoOpen = false;
     try {
-        app.beginUndoGroup("OBSIDIAN - Text Library - " + preset); undoOpen = true;
-        // Track creation is performed inside the undo group in the final edit pass.
-    } catch (beginError) {
-        return "ERROR|Could not start the text animation undo group: " + OBSIDIAN_cleanText(beginError);
-    }
-    try {
+        app.beginUndoGroup("OBSIDIAN - Text Library - " + preset);
+        undoOpen = true;
+        var t0 = start, t1 = end, mid = start + (end - start) * 0.72;
+        var posStart = [Number(basePosition[0]), Number(basePosition[1])];
+        var posEnd = [Number(basePosition[0]), Number(basePosition[1])];
+        var scaleStart = [Number(baseScale[0]), Number(baseScale[1])];
+        var scaleMid = [Number(baseScale[0]), Number(baseScale[1])];
+        var scaleEnd = [Number(baseScale[0]), Number(baseScale[1])];
+        var opacityValues = [0, baseOpacity], opacityTimes = [t0, t1];
+        if (preset === "clean_rise") {
+            posStart[1] += 42; addTrack(position, [posStart,posEnd], [t0,t1]); addTrack(opacity,opacityValues,opacityTimes);
+        } else if (preset === "cinematic_reveal") {
+            scaleStart[0] *= 0.92; scaleStart[1] *= 0.92; addTrack(scale,[scaleStart,scaleEnd],[t0,t1]); addTrack(opacity,opacityValues,opacityTimes);
+        } else if (preset === "bold_pop") {
+            scaleStart[0] *= 0.72; scaleStart[1] *= 0.72; scaleMid[0] *= 1.08; scaleMid[1] *= 1.08;
+            addTrack(scale,[scaleStart,scaleMid,scaleEnd],[t0,mid,t1]); addTrack(opacity,opacityValues,opacityTimes);
+        } else if (preset === "dynamic_slide") {
+            posStart[0] -= 90; addTrack(position,[posStart,posEnd],[t0,t1]); addTrack(opacity,opacityValues,opacityTimes);
+        } else if (preset === "minimal_fade") {
+            addTrack(opacity,opacityValues,opacityTimes);
+        } else if (preset === "saas_reveal") {
+            posStart[1] += 18; scaleStart[0] *= 0.96; scaleStart[1] *= 0.96;
+            addTrack(position,[posStart,posEnd],[t0,t1]); addTrack(scale,[scaleStart,scaleEnd],[t0,t1]); addTrack(opacity,opacityValues,opacityTimes);
+        }
         for (var tr = 0; tr < tracks.length; tr++) {
             var track = tracks[tr];
             for (var ki = 0; ki < track.keys.length; ki++) {
                 var keyIndex = OBSIDIAN_transitionFindKey(track.property, track.keys[ki].time, rate);
-                if (!keyIndex) throw Error("A text animation keyframe disappeared during verification.");
-                if (!OBSIDIAN_keyframeValueMatches(track.property.keyValue(keyIndex), track.property.keyValue(keyIndex)))
-                    throw Error("Text animation verification failed.");
+                if (!keyIndex || !OBSIDIAN_keyframeValueMatches(track.property.keyValue(keyIndex), track.keys[ki].value))
+                    throw Error("A generated text animation keyframe failed final verification.");
             }
         }
-        app.endUndoGroup(); undoOpen = false;
+        app.endUndoGroup();
+        undoOpen = false;
         return "OK|Applied " + preset.replace(/_/g," ").toUpperCase() + " to " + OBSIDIAN_cleanText(layer.name) + " with editable native After Effects keyframes.";
     } catch (editError) {
         var rollbackOK = true;
