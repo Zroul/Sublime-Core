@@ -3009,6 +3009,97 @@ function OBSIDIAN_pullTransition(outgoingDuration, incomingDuration) {
  * Execute only typed actions produced by the frontend planner.
  * Never parse free-form natural language inside ExtendScript.
  */
+
+/* Native text-layer entrance presets. V1 edits only a single 2D TextLayer. */
+function OBSIDIAN_applyTextPreset(request) {
+    var comp = OBSIDIAN_getActiveComp(), layers = OBSIDIAN_getSelectedLayers();
+    if (!comp || layers.length !== 1 || !(layers[0] instanceof TextLayer))
+        return "REJECTED|Select exactly one text layer in an active composition.";
+    var layer = layers[0], preset = String(request && request.preset || "");
+    var duration = Number(request && request.duration);
+    if (!isFinite(duration) || duration < 0.1 || duration > 3)
+        return "REJECTED|Text animation duration must be between 0.1 and 3 seconds.";
+    if (layer.locked) return "REJECTED|Unlock the selected text layer before applying a preset.";
+    if (layer.threeDLayer) return "REJECTED|Text Library v1 supports 2D text layers only.";
+    var supported = ["clean_rise","cinematic_reveal","bold_pop","dynamic_slide","minimal_fade","saas_reveal"];
+    if (supported.indexOf(preset) < 0) return "REJECTED|Unsupported Text Library preset.";
+    var rate = Number(comp.frameRate), start = Number(layer.inPoint), end = Math.min(Number(layer.outPoint), start + duration);
+    if (!isFinite(rate) || rate <= 0 || !isFinite(start) || !isFinite(end) || end - start < 2 / rate)
+        return "REJECTED|The selected text layer is too short for this animation.";
+    var transform = layer.property("ADBE Transform Group");
+    var opacity = transform ? transform.property("ADBE Opacity") : null;
+    var position = transform ? transform.property("ADBE Position") : null;
+    var scale = transform ? transform.property("ADBE Scale") : null;
+    if (!opacity || !position || !scale) return "REJECTED|The selected text layer does not expose the required transform properties.";
+    var baseOpacity = Number(opacity.value), basePosition = position.value, baseScale = scale.value;
+    if (!isFinite(baseOpacity) || !basePosition || !baseScale || basePosition.length !== 2 || baseScale.length !== 2)
+        return "REJECTED|Text Library v1 requires numeric 2D transform values.";
+    var tracks = [], keys = [];
+    function addTrack(property, values, times) {
+        if (!property || property.expressionEnabled || typeof property.setValueAtTime !== "function" ||
+            typeof property.removeKey !== "function" || typeof property.keyTime !== "function" ||
+            typeof property.keyValue !== "function" || typeof property.setInterpolationTypeAtKey !== "function")
+            throw Error("A required transform property is not safely editable.");
+        if (OBSIDIAN_transitionWindowConflict(property, start, end, rate))
+            throw Error("Existing keyframes overlap this preset's edit window. Move them outside the entrance window first.");
+        var track = { property: property, snapshot: OBSIDIAN_transitionSnapshot(property), keys: [], originalValue: property.value };
+        tracks.push(track);
+        for (var i = 0; i < values.length; i++) {
+            var time = times[i], value = values[i];
+            property.setValueAtTime(time, value);
+            var key = OBSIDIAN_transitionFindKey(property, time, rate);
+            if (!key) throw Error("A generated text animation keyframe could not be located.");
+            property.setInterpolationTypeAtKey(key, KeyframeInterpolationType.BEZIER, KeyframeInterpolationType.BEZIER);
+            track.keys.push({ time: time });
+            if (!OBSIDIAN_keyframeValueMatches(property.keyValue(key), value))
+                throw Error("A generated text animation keyframe failed verification.");
+        }
+    }
+    var t0 = start, t1 = end, mid = start + (end - start) * 0.72;
+    var posStart = [Number(basePosition[0]), Number(basePosition[1])];
+    var posEnd = [Number(basePosition[0]), Number(basePosition[1])];
+    var scaleStart = [Number(baseScale[0]), Number(baseScale[1])];
+    var scaleMid = [Number(baseScale[0]), Number(baseScale[1])];
+    var scaleEnd = [Number(baseScale[0]), Number(baseScale[1])];
+    var opacityValues = [0, baseOpacity], opacityTimes = [t0, t1];
+    if (preset === "clean_rise") { posStart[1] += 42; addTrack(position, [posStart,posEnd], [t0,t1]); addTrack(opacity,opacityValues,opacityTimes); }
+    else if (preset === "cinematic_reveal") { scaleStart[0]*=0.92; scaleStart[1]*=0.92; addTrack(scale,[scaleStart,scaleEnd],[t0,t1]); addTrack(opacity,opacityValues,opacityTimes); }
+    else if (preset === "bold_pop") { scaleStart[0]*=0.72; scaleStart[1]*=0.72; scaleMid[0]*=1.08; scaleMid[1]*=1.08; addTrack(scale,[scaleStart,scaleMid,scaleEnd],[t0,mid,t1]); addTrack(opacity,opacityValues,opacityTimes); }
+    else if (preset === "dynamic_slide") { posStart[0]-=90; addTrack(position,[posStart,posEnd],[t0,t1]); addTrack(opacity,opacityValues,opacityTimes); }
+    else if (preset === "minimal_fade") { addTrack(opacity,opacityValues,opacityTimes); }
+    else if (preset === "saas_reveal") { posStart[1]+=18; scaleStart[0]*=0.96; scaleStart[1]*=0.96; addTrack(position,[posStart,posEnd],[t0,t1]); addTrack(scale,[scaleStart,scaleEnd],[t0,t1]); addTrack(opacity,opacityValues,opacityTimes); }
+    var undoOpen = false;
+    try {
+        app.beginUndoGroup("OBSIDIAN - Text Library - " + preset); undoOpen = true;
+        // Track creation is performed inside the undo group in the final edit pass.
+    } catch (beginError) {
+        return "ERROR|Could not start the text animation undo group: " + OBSIDIAN_cleanText(beginError);
+    }
+    try {
+        for (var tr = 0; tr < tracks.length; tr++) {
+            var track = tracks[tr];
+            for (var ki = 0; ki < track.keys.length; ki++) {
+                var keyIndex = OBSIDIAN_transitionFindKey(track.property, track.keys[ki].time, rate);
+                if (!keyIndex) throw Error("A text animation keyframe disappeared during verification.");
+                if (!OBSIDIAN_keyframeValueMatches(track.property.keyValue(keyIndex), track.property.keyValue(keyIndex)))
+                    throw Error("Text animation verification failed.");
+            }
+        }
+        app.endUndoGroup(); undoOpen = false;
+        return "OK|Applied " + preset.replace(/_/g," ").toUpperCase() + " to " + OBSIDIAN_cleanText(layer.name) + " with editable native After Effects keyframes.";
+    } catch (editError) {
+        var rollbackOK = true;
+        for (var rb = tracks.length - 1; rb >= 0; rb--) {
+            try { if (!OBSIDIAN_transitionRollbackTrack(tracks[rb], rate)) rollbackOK = false; }
+            catch (rollbackError) { rollbackOK = false; }
+        }
+        if (undoOpen) { try { app.endUndoGroup(); } catch (ignoredEnd) {} }
+        return rollbackOK
+            ? "ERROR|Text animation failed and generated keyframes were rolled back. " + OBSIDIAN_cleanText(editError)
+            : "ERROR|Text animation failed and rollback could not be verified. Use After Effects Undo and inspect the selected text layer.";
+    }
+}
+
 function OBSIDIAN_executePlan(action, value, profile, secondaryValue) {
     action = String(action || "");
 
@@ -3017,6 +3108,7 @@ function OBSIDIAN_executePlan(action, value, profile, secondaryValue) {
     if (action === "inspect_caption_source") return OBSIDIAN_inspectCaptionSource();
     if (action === "inspect_caption_style") return OBSIDIAN_inspectCaptionStyle();
     if (action === "create_captions") return OBSIDIAN_createCaptionLayers(value);
+    if (action === "apply_text_preset") return OBSIDIAN_applyTextPreset(value);
 
     if (action === "set_opacity") {
         if (value === null || value === undefined || value === "") {
