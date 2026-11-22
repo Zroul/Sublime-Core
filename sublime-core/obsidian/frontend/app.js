@@ -4,6 +4,10 @@ const voiceButton = document.querySelector("#voice");
 const applicationShell = document.querySelector(".obsidian");
 const welcomeOrb = document.querySelector(".welcome-mark");
 const captionsOpenButton = document.querySelector("#captions-open");
+const textLibraryOpenButton = document.querySelector("#text-library-open");
+const textLibraryPanel = document.querySelector("#text-library-panel");
+const textLibraryCloseButton = document.querySelector("#text-library-close");
+const textLibraryDuration = document.querySelector("#text-library-duration");
 const transitionsOpenButton = document.querySelector("#transitions-open");
 const transitionsPanel = document.querySelector("#transitions-panel");
 const transitionsCloseButton = document.querySelector("#transitions-close");
@@ -80,6 +84,45 @@ const panelMenuButton = document.querySelector("#menu");
 const panelMenu = document.querySelector("#panel-menu");
 const themeOptions = Array.from(document.querySelectorAll("[data-aura-theme-option]"));
 
+
+function setTextLibraryPanelOpen(open) {
+  const isOpen = Boolean(open);
+  textLibraryPanel.classList.toggle("hidden", !isOpen);
+  textLibraryOpenButton.setAttribute("aria-expanded", String(isOpen));
+  if (isOpen) textLibraryCloseButton.focus();
+  else textLibraryOpenButton.focus();
+}
+textLibraryOpenButton.addEventListener("click", () => setTextLibraryPanelOpen(true));
+textLibraryCloseButton.addEventListener("click", () => setTextLibraryPanelOpen(false));
+textLibraryPanel.addEventListener("click", (event) => {
+  const button = event.target.closest("[data-text-preset]");
+  if (!button) return;
+  const duration = Number(textLibraryDuration.value);
+  if (!Number.isFinite(duration) || duration < 0.1 || duration > 3) {
+    showResult("Text animation duration must be between 0.1 and 3 seconds.", true);
+    return;
+  }
+  setTextLibraryPanelOpen(false);
+  resetStatus();
+  applyTextPreset(button.getAttribute("data-text-preset"), duration);
+});
+
+function applyTextPreset(preset, duration) {
+  if (commandInFlight || proposalInFlight || activeCaptionRun) {
+    showResult("An OBSIDIAN request is still running. Wait before applying another edit.", true);
+    return;
+  }
+  commandInFlight = true;
+  setProgress("implementing");
+  evalHostAction("apply_text_preset", { preset: preset, duration: duration }).then((hostResult) => {
+    const failed = hostResult.status !== "verified";
+    setProgress(failed ? "failed" : "completed");
+    showResult(hostResult.message, failed);
+  }).catch((error) => {
+    setProgress("failed");
+    showResult("Text animation failed: " + (error && error.message ? error.message : String(error)), true);
+  }).finally(() => { commandInFlight = false; });
+}
 
 function setTransitionsPanelOpen(open) {
   const isOpen = Boolean(open);
