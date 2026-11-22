@@ -2495,3 +2495,52 @@ test("Shake transition rejects combined durations longer than the overlap withou
     for (const track of Object.values(entry)) assert.equal(track.keys.length, 0);
   }
 });
+
+
+test("Text Library applies all six native text presets with editable transform keyframes", () => {
+  const presets = ["clean_rise", "cinematic_reveal", "bold_pop", "dynamic_slide", "minimal_fade", "saas_reveal"];
+  for (const preset of presets) {
+    const { context, comp, undoEvents } = makeContext();
+    const layer = comp.selectedLayers[0];
+    const transform = layer.property("ADBE Transform Group");
+    const opacity = enableAnimationProperty(transform.property("ADBE Opacity"));
+    const position = enableAnimationProperty(transform.property("ADBE Position"));
+    const scale = enableAnimationProperty(transform.property("ADBE Scale"));
+    const result = context.OBSIDIAN_executePlan("apply_text_preset", { preset, duration: 0.45 });
+    assert.match(result, /^OK\\|Applied/);
+    assert.equal(opacity.keys.length, 2);
+    if (preset === "clean_rise" || preset === "dynamic_slide") assert.equal(position.keys.length, 2);
+    if (preset === "cinematic_reveal") assert.equal(scale.keys.length, 2);
+    if (preset === "bold_pop") assert.equal(scale.keys.length, 3);
+    if (preset === "saas_reveal") { assert.equal(position.keys.length, 2); assert.equal(scale.keys.length, 2); }
+    if (preset === "minimal_fade") { assert.equal(position.keys.length, 0); assert.equal(scale.keys.length, 0); }
+    assert.deepEqual(undoEvents.map(([kind]) => kind), ["begin", "end"]);
+  }
+});
+
+test("Text Library rejects non-text selection and invalid duration without edits", () => {
+  const { context, comp } = makeContext();
+  comp.selectedLayers[0] = {};
+  assert.match(context.OBSIDIAN_executePlan("apply_text_preset", { preset: "clean_rise", duration: 0.45 }), /^REJECTED\\|Select exactly one text layer/);
+  const next = makeContext();
+  const layer = next.comp.selectedLayers[0];
+  const transform = layer.property("ADBE Transform Group");
+  enableAnimationProperty(transform.property("ADBE Opacity"));
+  enableAnimationProperty(transform.property("ADBE Position"));
+  enableAnimationProperty(transform.property("ADBE Scale"));
+  assert.match(next.context.OBSIDIAN_executePlan("apply_text_preset", { preset: "clean_rise", duration: 4 }), /^REJECTED\\|Text animation duration/);
+});
+
+test("Text Library rolls back earlier generated tracks if a later property write fails", () => {
+  const { context, comp, undoEvents } = makeContext();
+  const layer = comp.selectedLayers[0];
+  const transform = layer.property("ADBE Transform Group");
+  const position = enableAnimationProperty(transform.property("ADBE Position"));
+  const opacity = enableAnimationProperty(transform.property("ADBE Opacity"), { throwBeforeSetAt: 1 });
+  enableAnimationProperty(transform.property("ADBE Scale"));
+  const result = context.OBSIDIAN_executePlan("apply_text_preset", { preset: "clean_rise", duration: 0.45 });
+  assert.match(result, /^ERROR\\|Text animation failed and generated keyframes were rolled back/);
+  assert.equal(position.keys.length, 0);
+  assert.equal(opacity.keys.length, 0);
+  assert.deepEqual(undoEvents.map(([kind]) => kind), ["begin", "end"]);
+});
