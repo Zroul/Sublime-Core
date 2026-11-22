@@ -1165,3 +1165,13 @@ textarea:focus, input:focus, #command:focus {
 .clip-edits-open { gap: 7px; }
 .clip-edits-panel { max-width: 520px; }
 .clip-edits-panel .transition-family { margin-top: 16px; }
+
+/* OBSIDIAN Text Library v1 */
+.text-library-panel { max-width: 620px; }
+.text-library-duration { display:grid; grid-template-columns:1fr auto; gap:8px; align-items:center; margin:14px 0; color:var(--text-primary); font-size:12px; }
+.text-library-duration span { color:var(--text-muted); font-size:10px; }
+.text-library-duration input { grid-column:1 / -1; width:100%; box-sizing:border-box; padding:10px 11px; border:1px solid rgba(255,255,255,.12); border-radius:9px; color:var(--text-primary); background:rgba(0,0,0,.22); font:inherit; }
+.text-library-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:10px; }
+.text-library-grid .transition-card { min-width:0; margin-top:0; padding:13px; }
+.text-library-grid .transition-description { min-height:30px; margin-bottom:10px; line-height:1.4; }
+@media(max-width:420px){.text-library-grid{grid-template-columns:1fr}.text-library-panel{left:10px;right:10px;padding:14px}}
